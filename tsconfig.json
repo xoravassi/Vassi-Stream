@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    // La cible ES2020 reste compatible avec le moteur JavaScript de Node for Max 16.
+    "target": "ES2020",
+    // Le mode NodeNext controle les imports ESM utilises par le projet.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    // Les declarations du navigateur fournissent TextEncoder et les tableaux binaires.
+    "lib": ["ES2020", "DOM"],
+    // Les declarations Node couvrent le test runner et Buffer dans les tests.
+    "types": ["node"],
+    // Le mode strict refuse les incoherences de types avant l'execution des tests.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    // Ces options gardent un TypeScript directement effacable par le Node de developpement.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    // Cette etape controle les types sans creer de fichiers generes dans le projet.
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "relay/**/*.ts", "tests/**/*.ts"]
+}

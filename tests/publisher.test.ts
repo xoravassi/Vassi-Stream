@@ -1,0 +1,481 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import test from "node:test";
+
+import { decodeAudioPacket } from "../src/protocol/audio-packet.ts";
+import { FakeRelay, waitFor } from "./fake-relay.ts";
+
+// Le code du device reste en CommonJS parce que Node for Max expose max-api par NODE_PATH.
+const require = createRequire(import.meta.url);
+const { Publisher, LIVE, ERROR, RECONNECTING, MAX_BUFFERED_BYTES } = require("../device/node/publisher.js");
+
+const GOOD_TOKEN = "jeton-de-test-tres-secret";
+
+type StateRecord = { state: string; detail: string };
+
+// Cette fonction cree une frame identique a celle que le pont loopback remet a Node.
+function makeFrame(sequence: number, flags = 0): {
+  sequence: number;
+  timestampMicros: bigint;
+  flags: number;
+  payload: Buffer;
+} {
+  const payload = Buffer.alloc(60);
+  for (let index = 0; index < payload.length; index += 1) {
+    payload[index] = (sequence + index) & 0xff;
+  }
+
+  return {
+    sequence,
+    timestampMicros: BigInt(sequence) * 20000n,
+    flags,
+    payload,
+  };
+}
+
+// Cette fonction cree un publisher branche sur un faux relais, avec des delais courts.
+// `timings` remplace les durees du protocole, trop longues pour un test.
+function makePublisher(relayUrl: string, token: string, timings?: Record<string, number>) {
+  const states: StateRecord[] = [];
+  const encoderActions: string[] = [];
+  const attempts: number[] = [];
+  const publisher = new Publisher({
+    onState: (state: string, detail: string) => states.push({ state, detail }),
+    onEncoder: (action: string) => encoderActions.push(action),
+    loadConfig: () => ({ relayUrl, publisherToken: token }),
+    // Les paliers reels vont de 1 a 30 secondes : un test ne peut pas les attendre.
+    // Le numero de tentative est conserve : c'est lui qui montre le recul du backoff.
+    delayFor: (attempt: number) => {
+      attempts.push(attempt);
+      return 20;
+    },
+    timings,
+  });
+
+  return { publisher, states, encoderActions, attempts };
+}
+
+// Ce test couvre le chemin nominal demande par la roadmap : token accepte, `stream_start`,
+// puis une frame binaire valide et identique octet pour octet au payload de l'encodeur.
+test("authentifie le publisher puis envoie stream_start et une frame valide", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, states, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start({ bitrate: 256000, latencyProfile: "balanced" });
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  // L'encodeur ne demarre qu'apres l'acceptation du token : c'est la regle du bloc 6.
+  assert.deepEqual(encoderActions, ["start"]);
+  assert.deepEqual(states.map((entry) => entry.state), ["CONNECTING", "LIVE"]);
+
+  const frame = makeFrame(0);
+  assert.equal(publisher.sendFrame(frame), true);
+  await waitFor(() => relay.received.binaryMessages.length === 1, "premiere frame recue");
+
+  const [start] = relay.messagesOfType("stream_start");
+  assert.ok(start !== undefined);
+  assert.equal(start.codec, "opus");
+  assert.equal(start.protocolVersion, 1);
+  assert.equal(start.bitrate, 256000);
+  assert.equal(start.sampleRate, 48000);
+  assert.equal(start.channels, 2);
+  assert.equal(start.frameDurationMs, 20);
+  assert.equal(start.latencyProfile, "balanced");
+
+  // Le relais doit voir l'ordre exact : authentification, ouverture de session, puis audio.
+  assert.deepEqual(
+    relay.received.jsonMessages.map((message) => message.type),
+    ["publisher_auth", "stream_start"],
+  );
+
+  const packet = decodeAudioPacket(relay.received.binaryMessages[0]!);
+  assert.equal(packet.header.sessionId, start.sessionId);
+  assert.equal(packet.header.sequenceNumber, 0);
+  assert.equal(packet.header.timestampMicros, 0n);
+  assert.equal(packet.header.flags, 0);
+  assert.deepEqual(Buffer.from(packet.payload), frame.payload);
+});
+
+// Ce test verifie que les numeros du pont sont ramenes a zero sur la session, avec leurs trous.
+test("conserve les trous de sequence et l'avance des timestamps", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  // La premiere frame de la session ne porte pas le numero zero du pont : le publisher rebase.
+  publisher.sendFrame(makeFrame(400));
+  publisher.sendFrame(makeFrame(401));
+  // Trois frames manquent : le trou doit rester visible pour le player.
+  publisher.sendFrame(makeFrame(405, 1));
+  await waitFor(() => relay.received.binaryMessages.length === 3, "trois frames recues");
+
+  const packets = relay.received.binaryMessages.map((bytes) => decodeAudioPacket(bytes).header);
+  assert.deepEqual(packets.map((header) => header.sequenceNumber), [0, 1, 5]);
+  assert.deepEqual(packets.map((header) => header.timestampMicros), [0n, 20000n, 100000n]);
+  assert.deepEqual(packets.map((header) => header.flags), [0, 0, 1]);
+});
+
+// Ce test verifie qu'un mauvais token donne une erreur lisible et ne fuite jamais le secret.
+test("refuse un mauvais token sans exposer le token", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, states, encoderActions } = makePublisher(url, "mauvais-jeton-prive");
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === ERROR, "publisher en erreur");
+
+  const lastState = states[states.length - 1]!;
+  assert.equal(lastState.state, ERROR);
+  assert.match(lastState.detail, /token refuse par le relais/);
+  assert.match(lastState.detail, /invalid_token/);
+
+  // Aucun etat ne doit contenir le token, ni le bon ni celui qui a ete refuse.
+  const allDetails = states.map((entry) => entry.detail).join(" ");
+  assert.doesNotMatch(allDetails, /mauvais-jeton-prive/);
+  assert.doesNotMatch(allDetails, new RegExp(GOOD_TOKEN));
+
+  // L'encodeur ne doit jamais avoir demarre, et aucune reconnexion ne doit etre tentee.
+  assert.equal(encoderActions.includes("start"), false);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(relay.connectionsSeen, 1);
+  assert.equal(publisher.state, ERROR);
+});
+
+// Ce test verifie qu'une coupure du relais provoque une reconnexion et une nouvelle session.
+test("reconnecte apres une coupure et cree une nouvelle session", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "premiere session en direct");
+  const firstSessionId = publisher.session.sessionId;
+
+  relay.cutCurrentConnection();
+  await waitFor(() => publisher.state === RECONNECTING, "passage en reconnexion");
+
+  // L'encodeur doit etre arrete avant toute tentative de reconnexion.
+  assert.deepEqual(encoderActions, ["start", "stop"]);
+
+  await waitFor(() => publisher.state === LIVE, "seconde session en direct");
+  const secondSessionId = publisher.session.sessionId;
+
+  assert.notEqual(secondSessionId, firstSessionId);
+  assert.equal(relay.connectionsSeen, 2);
+  assert.deepEqual(encoderActions, ["start", "stop", "start"]);
+
+  // Le publisher passe en direct des qu'il a ecrit `stream_start` : l'attente porte donc sur le
+  // relais, qui recoit ce message un instant plus tard.
+  await waitFor(() => relay.messagesOfType("stream_start").length === 2, "second stream_start recu");
+  const starts = relay.messagesOfType("stream_start");
+  assert.notEqual(starts[0]!.sessionId, starts[1]!.sessionId);
+
+  // La nouvelle session repart de zero : le player jette proprement l'ancien flux.
+  publisher.sendFrame(makeFrame(900));
+  await waitFor(() => relay.received.binaryMessages.length === 1, "frame de la seconde session");
+  const header = decodeAudioPacket(relay.received.binaryMessages[0]!).header;
+  assert.equal(header.sessionId, secondSessionId);
+  assert.equal(header.sequenceNumber, 0);
+});
+
+// Ce test verifie le cas ou l'objet natif repart de zero au milieu d'un live, par exemple apres
+// un `reset` dans Max. Un numero de sequence ne doit jamais reculer pour un listener : le publisher
+// ouvre donc une nouvelle session, sans relancer l'encodeur, ce qui bouclerait sans fin.
+test("ouvre une nouvelle session quand l'encodeur repart de zero", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+  const firstSessionId = publisher.session.sessionId;
+
+  publisher.sendFrame(makeFrame(500));
+  publisher.sendFrame(makeFrame(501));
+  // L'encodeur redemarre : ses numeros et ses timestamps repartent de zero.
+  publisher.sendFrame(makeFrame(0));
+  publisher.sendFrame(makeFrame(1));
+
+  await waitFor(() => relay.received.binaryMessages.length === 4, "quatre frames recues");
+
+  const secondSessionId = publisher.session.sessionId;
+  assert.notEqual(secondSessionId, firstSessionId);
+
+  // L'encodeur n'est pas relance : sinon sa numerotation repartirait encore de zero.
+  assert.deepEqual(encoderActions, ["start"]);
+  assert.equal(publisher.stats.sessions, 2);
+
+  const headers = relay.received.binaryMessages.map((bytes) => decodeAudioPacket(bytes).header);
+  assert.deepEqual(headers.map((header) => header.sessionId), [
+    firstSessionId,
+    firstSessionId,
+    secondSessionId,
+    secondSessionId,
+  ]);
+  assert.deepEqual(headers.map((header) => header.sequenceNumber), [0, 1, 0, 1]);
+  assert.deepEqual(headers.map((header) => header.flags), [0, 0, 1, 0]);
+
+  // L'ancienne session est fermee proprement avant l'ouverture de la nouvelle.
+  const stops = relay.messagesOfType("stream_stop");
+  assert.equal(stops.length, 1);
+  assert.equal(stops[0]!.sessionId, firstSessionId);
+});
+
+// Ce test verifie que l'arret envoie `stream_stop` avant de fermer la connexion.
+test("ferme la session avec stream_stop", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+  const sessionId = publisher.session.sessionId;
+
+  publisher.stop("user_stop");
+  await waitFor(() => relay.messagesOfType("stream_stop").length === 1, "stream_stop recu");
+
+  const stop = relay.messagesOfType("stream_stop")[0]!;
+  assert.equal(stop.sessionId, sessionId);
+  assert.equal(stop.reason, "user_stop");
+  assert.equal(publisher.state, "STOPPED");
+
+  // L'encodeur est arrete avant l'envoi de `stream_stop` : plus rien ne peut arriver apres.
+  assert.equal(encoderActions[encoderActions.length - 1], "stop");
+});
+
+// Ce test verifie qu'aucune frame n'est envoyee tant que la session n'est pas ouverte.
+test("jette les frames recues hors session", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  // Le pont loopback tourne des l'ouverture du device : des frames arrivent avant tout live.
+  assert.equal(publisher.sendFrame(makeFrame(1)), false);
+  assert.equal(publisher.stats.framesDropped, 1);
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  // La premiere frame de la session porte le bit de discontinuite pose par les frames jetees ?
+  // Non : une nouvelle session impose deja la remise a zero du player, le bit repart a zero.
+  publisher.sendFrame(makeFrame(2));
+  await waitFor(() => relay.received.binaryMessages.length === 1, "frame recue");
+  assert.equal(decodeAudioPacket(relay.received.binaryMessages[0]!).header.flags, 0);
+});
+
+// Ce test verifie que l'audio ancien n'est jamais accumule dans la sortie WebSocket.
+test("abandonne une frame quand la sortie reseau est en retard", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  // La sortie reseau est simulee comme saturee : le publisher doit jeter au lieu d'empiler.
+  Object.defineProperty(publisher.socket, "bufferedAmount", {
+    configurable: true,
+    get: () => MAX_BUFFERED_BYTES + 1,
+  });
+
+  assert.equal(publisher.sendFrame(makeFrame(10)), false);
+  assert.equal(publisher.stats.framesDropped, 1);
+  assert.equal(publisher.stats.framesSent, 0);
+
+  // La sortie se libere : la frame suivante part et porte le bit de discontinuite.
+  Object.defineProperty(publisher.socket, "bufferedAmount", {
+    configurable: true,
+    get: () => 0,
+  });
+
+  assert.equal(publisher.sendFrame(makeFrame(11)), true);
+  await waitFor(() => relay.received.binaryMessages.length === 1, "frame recue apres retard");
+  assert.equal(decodeAudioPacket(relay.received.binaryMessages[0]!).header.flags, 1);
+});
+
+// Ce test verifie qu'un relais qui repete `auth_ok` pendant un live ne relance rien. Sans cette
+// regle, chaque repetition ouvrirait une session de plus et redemarrerait l'objet natif.
+test("ignore une reponse d'authentification repetee pendant un live", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+  const sessionId = publisher.session.sessionId;
+
+  relay.sendToCurrentConnection({ type: "auth_ok", protocolVersion: 1 });
+  relay.sendToCurrentConnection({ type: "auth_error", protocolVersion: 1, reason: "invalid_token" });
+  // Un message qui arrive apres celui-ci prouve que les deux precedents ont ete traites.
+  relay.sendToCurrentConnection({ type: "server_error", protocolVersion: 1, reason: "invalid_packet" });
+  await waitFor(() => publisher.detail.includes("invalid_packet"), "server_error traite");
+
+  assert.equal(publisher.state, LIVE);
+  assert.equal(publisher.session.sessionId, sessionId);
+  assert.equal(publisher.stats.sessions, 1);
+  assert.deepEqual(encoderActions, ["start"]);
+  assert.equal(relay.messagesOfType("stream_start").length, 1);
+});
+
+// Ce test verifie que le device teste lui-meme la liaison. Le faux relais n'envoie aucun ping :
+// sans le ping du publisher et le pong qui lui repond, le compte a rebours du silence couperait
+// une connexion pourtant vivante.
+test("garde la connexion vivante avec son propre ping", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  // Le silence est plus court que la duree du test : seuls les pongs peuvent le repousser.
+  const { publisher } = makePublisher(url, GOOD_TOKEN, { heartbeatMs: 20, silenceMs: 200 });
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  await waitFor(() => relay.pingsSeen >= 3, "pings recus par le relais");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
+  assert.equal(publisher.state, LIVE);
+  assert.equal(relay.connectionsSeen, 1);
+});
+
+// Ce test verifie qu'un relais qui accepte le token puis coupe aussitot n'est pas rappele en
+// boucle a la seconde. Le compteur de paliers ne repart de zero qu'apres une connexion stable.
+test("espace les tentatives quand le relais coupe juste apres l'authentification", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  relay.cutAfterAuth = true;
+  // Aucune connexion ne tiendra une seconde : le seuil de stabilite ne sera jamais atteint.
+  const { publisher, attempts } = makePublisher(url, GOOD_TOKEN, { stableMs: 1000 });
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => attempts.length >= 4, "quatre tentatives programmees");
+
+  // Chaque coupure fait monter le palier au lieu de le remettre a zero.
+  assert.deepEqual(attempts.slice(0, 4), [0, 1, 2, 3]);
+});
+
+// Ce test verifie qu'une connexion saine efface l'historique des paliers : la premiere coupure
+// apres un long direct est retentee tout de suite, sans heriter d'un incident ancien.
+test("repart du premier palier apres une connexion stable", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  // Toute connexion etablie est jugee stable : c'est le cas normal d'un live qui dure.
+  const { publisher, attempts } = makePublisher(url, GOOD_TOKEN, { stableMs: 0 });
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "premiere session en direct");
+  relay.cutCurrentConnection();
+  await waitFor(() => publisher.state === LIVE && relay.connectionsSeen === 2, "seconde session");
+  relay.cutCurrentConnection();
+  await waitFor(() => attempts.length >= 2, "deux tentatives programmees");
+
+  assert.deepEqual(attempts.slice(0, 2), [0, 0]);
+});
+
+// Ce test verifie qu'un arret n'annonce qu'une seule fois l'arret de l'encodeur et de l'etat.
+// La fermeture de la connexion arrive apres coup : elle ne doit plus rien decider.
+test("n'annonce l'arret qu'une seule fois", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, states, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  publisher.stop("user_stop");
+  await waitFor(() => relay.messagesOfType("stream_stop").length === 1, "stream_stop recu");
+  // La fermeture reelle de la connexion arrive apres le `stream_stop` : ce delai la couvre.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  assert.deepEqual(encoderActions, ["start", "stop"]);
+  assert.deepEqual(states.map((entry) => entry.state), ["CONNECTING", "LIVE", "STOPPED"]);
+});
+
+// Ce test verifie qu'une frame impossible a encoder ne coute que cette frame. Le pont remet ses
+// frames depuis un evenement de socket : une exception y arreterait tout le processus Node.
+test("jette une frame impossible a encoder sans couper le live", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  // Un payload vide, et un payload plus grand qu'une frame Opus, n'existent pas en protocole v1.
+  const empty = makeFrame(20);
+  empty.payload = Buffer.alloc(0);
+  assert.equal(publisher.sendFrame(empty), false);
+
+  const huge = makeFrame(21);
+  huge.payload = Buffer.alloc(2000, 7);
+  assert.equal(publisher.sendFrame(huge), false);
+
+  assert.equal(publisher.stats.framesDropped, 2);
+  assert.equal(publisher.state, LIVE);
+
+  // La frame suivante part normalement et signale l'audio perdu. Elle ouvre la chronologie de la
+  // session : les frames refusees ne l'ont pas ancree, donc elle porte bien la sequence zero.
+  assert.equal(publisher.sendFrame(makeFrame(22)), true);
+  await waitFor(() => relay.received.binaryMessages.length === 1, "frame suivante recue");
+
+  const header = decodeAudioPacket(relay.received.binaryMessages[0]!).header;
+  assert.equal(header.flags, 1);
+  assert.equal(header.sequenceNumber, 0);
+  assert.equal(header.timestampMicros, 0n);
+});

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vassi Stream - test du moteur audio</title>
+    <style>
+      /* Cette page est un outil de verification, pas la page publique. Son apparence reste brute :
+         le bloc 9 fabrique la vraie interface. */
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0 auto;
+        max-width: 40rem;
+        padding: 2rem 1rem;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.5rem 1.25rem;
+        margin-right: 0.5rem;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 12rem 1fr;
+        gap: 0.25rem 1rem;
+        font-variant-numeric: tabular-nums;
+      }
+      dt {
+        color: #555;
+      }
+      dd {
+        margin: 0;
+        font-weight: 600;
+      }
+      ol {
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Test du moteur audio Vassi Stream</h1>
+
+    <p>
+      Cette page rejoue la fixture Opus produite par l'encodeur du device : un sinus 440 Hz a gauche
+      et 880 Hz a droite. Elle sert a verifier les quatre points du bloc 8 que Node ne peut pas
+      verifier.
+    </p>
+
+    <p>
+      <button id="play" type="button">Play</button>
+      <button id="pause" type="button">Pause</button>
+      <button id="cut" type="button">Simuler une coupure de 3 s</button>
+    </p>
+
+    <dl>
+      <dt>Etat</dt>
+      <dd id="state">-</dd>
+      <dt>Session</dt>
+      <dd id="session">-</dd>
+      <dt>Seuil de buffer</dt>
+      <dd id="target">-</dd>
+      <dt>SharedArrayBuffer</dt>
+      <dd id="shared">-</dd>
+      <dt>Paquets recus</dt>
+      <dd id="packets">0</dd>
+      <dt>Son en attente</dt>
+      <dd id="buffer">0 ms</dd>
+      <dt>Derniere erreur</dt>
+      <dd id="error">aucune</dd>
+    </dl>
+
+    <p>
+      Si le son ne sort pas, ces deux compteurs disent ou regarder. « Paquets recus » a zero signifie
+      que rien n'arrive du relais. « Son en attente » a zero alors que les paquets montent signifie
+      que le decodage ne remboite pas. Les deux qui montent avec un etat bloque en
+      <strong>BUFFERING</strong> signifient que le seuil n'est pas atteint.
+    </p>
+
+    <ol>
+      <li>Au chargement, l'etat doit passer a <strong>READY</strong>.</li>
+      <li>
+        Play doit afficher <strong>BUFFERING</strong> puis <strong>PLAYING</strong>, et le son doit
+        sortir en stereo : le grave a gauche, l'aigu a droite.
+      </li>
+      <li>Pause doit couper le son immediatement et afficher <strong>PAUSED</strong>.</li>
+      <li>
+        La coupure simulee doit donner <strong>OFFLINE</strong> puis un retour automatique en
+        <strong>BUFFERING</strong> et <strong>PLAYING</strong>, avec une nouvelle session.
+      </li>
+    </ol>
+
+    <script type="module">
+      import { AudioPlayer } from "/src/player/index.ts";
+
+      const champs = {
+        state: document.getElementById("state"),
+        session: document.getElementById("session"),
+        target: document.getElementById("target"),
+        shared: document.getElementById("shared"),
+        packets: document.getElementById("packets"),
+        buffer: document.getElementById("buffer"),
+        error: document.getElementById("error"),
+      };
+
+      champs.shared.textContent = self.crossOriginIsolated ? "disponible" : "absent, mode messages";
+
+      const reponse = await fetch("/control/relay");
+      const { listenerUrl } = await reponse.json();
+
+      const player = new AudioPlayer(
+        {
+          relayUrl: listenerUrl,
+          workerUrl: new URL("/src/player/decode-worker.js", location.href),
+          workletUrl: new URL("/src/player/pcm-worklet.js", location.href),
+        },
+        (status) => {
+          champs.state.textContent = status.state;
+          champs.session.textContent = status.session ? String(status.session.sessionId) : "aucune";
+          champs.target.textContent = status.session ? `${status.session.targetBufferMs} ms` : "-";
+          champs.error.textContent = status.errorReason ?? "aucune";
+        },
+      );
+
+      player.connect();
+
+      // Ces deux compteurs changent trop souvent pour passer par les changements d'etat : ils sont
+      // relus quatre fois par seconde.
+      setInterval(() => {
+        champs.packets.textContent = String(player.packetsReceived);
+        champs.buffer.textContent = `${Math.round(player.bufferedMs)} ms`;
+      }, 250);
+
+      document.getElementById("play").addEventListener("click", () => {
+        player.play().catch((error) => {
+          champs.error.textContent = String(error);
+        });
+      });
+
+      document.getElementById("pause").addEventListener("click", () => player.pause());
+      document.getElementById("cut").addEventListener("click", () => fetch("/control/cut"));
+    </script>
+  </body>
+</html>

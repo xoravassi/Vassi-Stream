@@ -1,0 +1,16 @@
+# L'image du relais ne contient que le serveur et le module de protocole partage.
+node_modules
+relay/node_modules
+device
+patchers
+externals
+assets
+scripts
+tests
+docs
+.local
+coverage
+*.md
+*.mxe64
+*.obj
+*.pdb

@@ -1,0 +1,19 @@
+# Les dependances de developpement restent installees uniquement sur la machine locale.
+node_modules/
+
+# Les rapports de couverture restent des resultats temporaires de test.
+coverage/
+
+# Les outils locaux comme le Max SDK copie depuis Downloads restent propres a cette machine.
+.local/
+
+# Les fichiers intermediaires du compilateur Visual Studio restent locaux.
+*.obj
+*.pdb
+
+# Le token de publication ne doit jamais entrer dans le depot. Sa place normale est hors du
+# projet, mais cette regle protege aussi une configuration pointee ici par erreur.
+publisher.json
+
+# Ableton ecrit ses analyses de forme d'onde a cote des fichiers audio.
+*.asd
