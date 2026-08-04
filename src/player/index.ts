@@ -1,7 +1,14 @@
 // Ce fichier est la seule surface publique du moteur audio. Le bloc 9 n'importe rien d'autre :
 // les composants Svelte restent ainsi separes du fonctionnement interne du player.
 
-export { AudioPlayer, type PlayerUrls } from "./audio-player.ts";
-export { PlayerStateMachine, type PlayerState, type PlayerStatus } from "./player-state.ts";
+export { AudioPlayer, type PlayerDeps, type PlayerUrls } from "./audio-player.ts";
+export { PlayerStateMachine, LATE_MARGIN_MS, type PlayerState, type PlayerStatus } from "./player-state.ts";
+export {
+  explainPlayer,
+  type AudioStage,
+  type DiagnosticArea,
+  type PlayerDiagnostics,
+  type PlayerVerdict,
+} from "./player-diagnostics.ts";
 export { targetBufferMs, type LiveSession, type StreamState } from "./player-protocol.ts";
 export { ListenerSocket, backoffDelayMs } from "./listener-socket.ts";

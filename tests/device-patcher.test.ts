@@ -1,0 +1,536 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+// Ce nombre est le code ASCII « audi » : il dit a Live que le device est un effet audio.
+// Un autre code ferait apparaitre le device dans la mauvaise categorie du navigateur d'Ableton.
+const AMXD_AUDIO_EFFECT = 1633771873;
+
+// Ce fichier verifie le device Max for Live sans ouvrir Max.
+//
+// Un patcher est un objet JSON : ses objets, ses cables et ses positions se lisent et se
+// verifient comme n'importe quelle donnee. Ce qui suit couvre exactement ce qu'un oeil ne voit
+// pas a l'ouverture : un cable qui pointe vers une sortie inexistante, un message que le script
+// Node ne comprend pas, une couleur figee qui ne suivrait pas le theme d'Ableton, ou un token
+// qui partirait dans le fichier de morceau.
+//
+// Ces tests portent sur le fichier reellement livre. Ils restent donc valables apres une retouche
+// faite dans Max, ce qui est le moment ou ils servent le plus.
+
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const PATCHER = JSON.parse(readFileSync(`${ROOT}patchers/vassi-stream.maxpat`, "utf8")).patcher;
+const NODE_SOURCE = readFileSync(`${ROOT}device/node/index.js`, "utf8");
+
+// La hauteur d'un device Live ne se choisit pas : elle vaut 169 pixels pour tous les devices.
+const DEVICE_HEIGHT = 169;
+
+type Box = {
+  id: string;
+  maxclass: string;
+  varname?: string;
+  text?: string;
+  numinlets: number;
+  numoutlets: number;
+  presentation?: number;
+  presentation_rect?: number[];
+  fontsize?: number;
+  parameter_enable?: number;
+  saved_attribute_attributes?: { valueof: Record<string, unknown> };
+};
+
+const boxes: Box[] = PATCHER.boxes.map((entry: { box: Box }) => entry.box);
+const lines: { source: [string, number]; destination: [string, number] }[] = PATCHER.lines.map(
+  (entry: { patchline: { source: [string, number]; destination: [string, number] } }) => entry.patchline,
+);
+const byId = new Map(boxes.map((box) => [box.id, box]));
+
+// Cette fonction rend le texte d'un objet, vide pour les objets d'interface.
+function textOf(box: Box): string {
+  return typeof box.text === "string" ? box.text : "";
+}
+
+// Cette fonction rend la position d'un objet dans le device : gauche, haut, largeur, hauteur.
+function rectOf(box: Box): [number, number, number, number] {
+  return box.presentation_rect as [number, number, number, number];
+}
+
+// Cette fonction rend les reglages Live d'un objet : positions nommees, visibilite, valeur de
+// depart. Elle rend un objet vide pour ce qui n'est pas un parametre.
+function parameterOf(box: Box): Record<string, unknown> {
+  return (box.saved_attribute_attributes?.valueof as Record<string, unknown>) ?? {};
+}
+
+// Cette fonction suit les cables depuis une sortie et rend les identifiants de tout ce qu'elle
+// atteint, de proche en proche. Elle sert a verifier qu'un signal arrive bien la ou il faut sans
+// dependre du chemin exact : ajouter un objet intermediaire ne casse pas le test.
+//
+// Un message `set ...` arrete la marche. C'est toute la raison d'etre de ce mot dans Max : il pose
+// une valeur sur une commande sans la lui faire renvoyer. Une marche qui le traverserait ferait
+// croire qu'un bouton repose par le device previent le script Node, c'est-a-dire l'inverse de ce
+// que le device fait.
+function reachedFrom(id: string, outlet: number): string[] {
+  const seen: string[] = [];
+  const queue = lines.filter((line) => line.source[0] === id && line.source[1] === outlet);
+
+  while (queue.length > 0) {
+    const line = queue.shift()!;
+    const source = byId.get(line.source[0]);
+    const target = byId.get(line.destination[0]);
+    if (target === undefined || seen.includes(target.id)) {
+      continue;
+    }
+
+    seen.push(target.id);
+    if (source !== undefined && /^set(\s|$)/.test(textOf(source))) {
+      continue;
+    }
+
+    queue.push(...lines.filter((next) => next.source[0] === target.id));
+  }
+
+  return seen;
+}
+
+// Ce test verifie que chaque cable relie deux objets qui existent, sur des prises qui existent.
+// Max supprime silencieusement un cable impossible : le device s'ouvrirait sans erreur et sans
+// fonctionner.
+test("chaque cable relie des prises reelles", () => {
+  for (const line of lines) {
+    const source = byId.get(line.source[0]);
+    const destination = byId.get(line.destination[0]);
+
+    assert.ok(source, `objet source inconnu : ${line.source[0]}`);
+    assert.ok(destination, `objet destination inconnu : ${line.destination[0]}`);
+    assert.ok(
+      line.source[1] < source.numoutlets,
+      `${line.source[0]} n'a pas de sortie ${line.source[1]}`,
+    );
+    assert.ok(
+      line.destination[1] < destination.numinlets,
+      `${line.destination[0]} n'a pas d'entree ${line.destination[1]}`,
+    );
+  }
+});
+
+// Ce test verifie l'unicite des identifiants et des noms. Un doublon de nom rendrait la bascule
+// entre les deux pages imprevisible : `script show` designe un objet par son nom.
+test("les identifiants et les noms sont uniques", () => {
+  const ids = boxes.map((box) => box.id);
+  const names = boxes.map((box) => box.varname).filter((name): name is string => name !== undefined);
+
+  assert.equal(new Set(ids).size, ids.length, "deux objets portent le meme identifiant");
+  assert.equal(new Set(names).size, names.length, "deux objets portent le meme nom");
+});
+
+// Ce test verifie qu'aucune couleur n'est figee dans le device.
+//
+// C'est la seule chose a faire pour que l'interface suive le theme d'Ableton : les objets `live.*`
+// utilisent des couleurs dynamiques par defaut. Ecrire une couleur, meme celle du theme du moment,
+// la fige pour tous les autres themes.
+test("aucune couleur n'est ecrite dans le device", () => {
+  const written: string[] = [];
+
+  for (const box of boxes) {
+    for (const key of Object.keys(box)) {
+      if (key.toLowerCase().includes("color")) {
+        written.push(`${box.id}.${key}`);
+      }
+    }
+  }
+
+  assert.deepEqual(written, [], "des couleurs figees empecheraient le suivi du theme");
+  assert.equal(PATCHER.bgcolor, undefined, "le fond du device doit venir du theme de Live");
+});
+
+// Ce test verifie la forme du device : presentation a l'ouverture, largeur fixee, et objets
+// entierement contenus dans la surface que Live accorde.
+test("le device tient dans la surface accordee par Live", () => {
+  assert.equal(PATCHER.openinpresentation, 1, "le device doit s'ouvrir sur sa presentation");
+  assert.equal(PATCHER.devicewidth, 320);
+
+  for (const box of boxes) {
+    if (box.presentation !== 1) {
+      continue;
+    }
+
+    const rect = box.presentation_rect;
+    assert.ok(Array.isArray(rect) && rect.length === 4, `${box.id} est presente sans position`);
+
+    const [left, top, width, height] = rect as [number, number, number, number];
+
+    for (const value of rect) {
+      assert.equal(Number.isInteger(value), true, `${box.id} a une position a virgule : ${value}`);
+    }
+
+    assert.ok(left >= 0 && top >= 0, `${box.id} sort par le haut ou par la gauche`);
+    assert.ok(left + width <= PATCHER.devicewidth, `${box.id} depasse a droite`);
+    assert.ok(top + height <= DEVICE_HEIGHT, `${box.id} depasse en bas`);
+  }
+});
+
+// Ce test verifie les deux reglages enregistres avec le morceau : trois positions nommees chacun,
+// Studio et Equilibree par defaut, et des noms longs figes.
+//
+// Le nom long identifie le parametre dans le fichier `.als`. Le changer ferait perdre le reglage
+// de tous les projets deja enregistres.
+test("les deux reglages ont trois positions et les bons defauts", () => {
+  const quality = byId.get("quality-menu");
+  const latency = byId.get("latency-menu");
+
+  for (const menu of [quality, latency]) {
+    assert.ok(menu, "un reglage manque");
+    assert.equal(menu.maxclass, "live.menu");
+    assert.equal(menu.parameter_enable, 1, `${menu.id} doit etre un parametre enregistre`);
+
+    const values = parameterOf(menu);
+    assert.equal((values.parameter_enum as string[]).length, 3);
+    assert.equal(values.parameter_type, 2, "un choix nomme est un parametre de type Enum");
+    assert.equal(values.parameter_initial_enable, 1);
+    assert.equal(values.parameter_invisible, 1, "les deux reglages se gardent avec le morceau");
+  }
+
+  const qualityValues = parameterOf(quality!);
+  const latencyValues = parameterOf(latency!);
+
+  const qualityChoices = qualityValues.parameter_enum as string[];
+  const latencyChoices = latencyValues.parameter_enum as string[];
+  const qualityStart = (qualityValues.parameter_initial as number[])[0] ?? -1;
+  const latencyStart = (latencyValues.parameter_initial as number[])[0] ?? -1;
+
+  assert.equal(qualityChoices[qualityStart], "Studio 256");
+  assert.match(String(latencyChoices[latencyStart]), /quilibr/);
+  assert.equal(qualityValues.parameter_longname, "Qualite");
+  assert.equal(latencyValues.parameter_longname, "Latence");
+});
+
+// Ce test verifie qu'un projet rouvert ne relance jamais un direct tout seul.
+//
+// Le bouton retient sa position, sinon il ne pourrait pas s'allumer. Trois choses l'empechent de
+// la rapporter d'un projet a l'autre : le parametre est cache, donc Live ne le range pas dans le
+// morceau ; sa valeur de depart est posee a zero ; et l'ouverture du device lui renvoie `set 0`,
+// qui repose le bouton sans rien emettre. La derniere suffirait, les deux autres evitent que le
+// bouton s'affiche allume le temps du chargement.
+test("le bouton Lancer ne peut pas se rallumer a l'ouverture d'un projet", () => {
+  const button = byId.get("start-toggle");
+
+  assert.ok(button);
+  assert.equal(button.maxclass, "live.text");
+
+  const parameter = parameterOf(button);
+  assert.equal(parameter.parameter_invisible, 2, "le bouton doit rester cache de Live");
+  assert.equal(parameter.parameter_initial_enable, 1);
+  assert.deepEqual(parameter.parameter_initial, [0], "le bouton doit demarrer arrete");
+
+  // `live.thisdevice` annonce le chargement. Le chemin qui part de la doit reposer le bouton.
+  const atLoad = reachedFrom("device-ready", 0);
+  const reset = atLoad.find((id) => textOf(byId.get(id)!) === "set 0" && reachedFrom(id, 0).includes("start-toggle"));
+  assert.ok(reset, "le chargement du device doit reposer le bouton Lancer");
+
+  // Et rien de ce que le chargement declenche ne doit parler du direct au script Node.
+  const told = atLoad.filter((id) => textOf(byId.get(id)!).startsWith("prepend live"));
+  assert.deepEqual(told, [], "le chargement du device ne doit annoncer aucun direct");
+});
+
+// Ce test verifie que le choix de la page tient dans un parametre.
+//
+// C'est le defaut de la premiere version : la bascule etait un `live.text` en interrupteur sans
+// parametre attache, donc sans valeur ou retenir sa position. Le meme 1 repartait a chaque clic,
+// et la page des reglages ne se refermait plus jamais. Un `live.tab` sort le numero de l'onglet
+// choisi, ce qui ne peut pas se bloquer.
+test("les deux pages se choisissent par un onglet qui retient sa position", () => {
+  const tabs = byId.get("page-tabs");
+
+  assert.ok(tabs, "le device doit porter des onglets");
+  assert.equal(tabs.maxclass, "live.tab");
+  assert.equal(tabs.parameter_enable, 1, "sans parametre, l'onglet ne retient pas sa position");
+
+  const parameter = parameterOf(tabs);
+  assert.equal((parameter.parameter_enum as string[]).length, 2, "il y a deux pages");
+  assert.equal(parameter.parameter_invisible, 2, "la page ouverte ne regarde pas le morceau");
+
+  // Le numero de l'onglet doit atteindre les deux pages : la bascule marche dans les deux sens.
+  const reached = reachedFrom("page-tabs", 0);
+  const scripts = boxes.filter((box) => box.maxclass === "message" && textOf(box).includes("script "));
+
+  assert.equal(scripts.length, 2, "il faut un message par page");
+  for (const script of scripts) {
+    assert.ok(reached.includes(script.id), `l'onglet n'atteint pas ${script.id}`);
+  }
+});
+
+// Ce test verifie que le champ du token ne garde aucun contenu dans le fichier livre.
+// Le token vit dans un fichier propre a la machine ; il ne doit pas pouvoir partir avec un projet.
+test("le champ du token ne contient rien", () => {
+  const field = byId.get("token-field");
+
+  assert.ok(field);
+  assert.equal(field.maxclass, "textedit");
+  assert.equal(field.text, undefined);
+  assert.equal(field.parameter_enable, undefined, "un champ texte n'est pas un parametre Live");
+});
+
+// Ce test verifie que le chemin du script Node est relatif au device. Un chemin absolu ne
+// fonctionnerait que sur la machine ou le device a ete construit.
+test("le script Node est designe par un chemin relatif", () => {
+  const node = boxes.find((box) => textOf(box).startsWith("node.script"));
+
+  assert.ok(node, "le device doit contenir un objet node.script");
+  assert.doesNotMatch(textOf(node), /[A-Za-z]:[\\/]/, "chemin absolu dans le device");
+  assert.match(textOf(node), /node\/index\.js/);
+  assert.match(textOf(node), /@autostart 1/, "le script demarre a l'ouverture du device");
+});
+
+// Ce test verifie que chaque message envoye a Node est un message que Node comprend.
+// Une faute de frappe ici ne produit aucune erreur visible : le bouton ne ferait simplement rien.
+test("chaque message envoye a Node possede un handler", () => {
+  const handlers = new Set(
+    [...NODE_SOURCE.matchAll(/Max\.addHandler\("([^"]+)"/g)].map((match) => match[1]),
+  );
+
+  assert.ok(handlers.size > 0, "aucun handler trouve dans le script Node");
+
+  const sent = new Set<string>();
+  for (const line of lines) {
+    if (line.destination[0] !== "node") {
+      continue;
+    }
+
+    const source = byId.get(line.source[0]);
+    assert.ok(source, `objet source inconnu : ${line.source[0]}`);
+
+    const words = textOf(source).split(/\s+/);
+    sent.add(String(textOf(source).startsWith("prepend ") ? words[1] : words[0]));
+  }
+
+  assert.ok(sent.size >= 6, `trop peu de messages relies au script Node : ${[...sent].join(", ")}`);
+
+  for (const word of sent) {
+    assert.ok(handlers.has(word), `le script Node n'a pas de handler pour « ${word} »`);
+  }
+});
+
+// Ce test verifie l'inverse : chaque mot attendu par l'aiguillage du patcher est bien un mot que
+// Node envoie. Un mot en trop laisserait un libelle vide sans que rien ne le signale.
+test("chaque mot attendu par le patcher est envoye par Node", () => {
+  const emitted = new Set([...NODE_SOURCE.matchAll(/send\(\s*"([^"]+)"/g)].map((match) => match[1]));
+  const route = boxes.find((box) => textOf(box).startsWith("route "));
+
+  assert.ok(route, "le patcher doit aiguiller les messages de Node");
+
+  const selectors = textOf(route).split(/\s+/).slice(1);
+  assert.equal(route.numoutlets, selectors.length + 1, "l'aiguillage doit avoir une sortie de reste");
+
+  for (const selector of selectors) {
+    assert.ok(emitted.has(selector), `Node n'envoie jamais « ${selector} »`);
+  }
+});
+
+// Ces quatre objets ne changent pas avec la page : les onglets, l'adresse du relais en bas, et les
+// deux traits qui les separent du reste. Tout le reste doit appartenir a une page et une seule.
+const ALWAYS_SHOWN = ["page-tabs", "head-rule", "foot-rule", "config-line"];
+
+// Ce test verifie la bascule entre les deux pages : chaque objet visible appartient a une page et
+// une seule, sauf les objets des deux bandeaux qui restent toujours a l'ecran.
+test("chaque objet visible appartient a une page", () => {
+  const shown = boxes
+    .filter((box) => box.presentation === 1)
+    .map((box) => box.varname)
+    .filter((name): name is string => name !== undefined);
+  const scripts = boxes
+    .filter((box) => box.maxclass === "message" && textOf(box).includes("script "))
+    .map((box) => textOf(box));
+
+  assert.equal(scripts.length, 2, "il faut un message par page");
+
+  const named = new Set<string>();
+  for (const script of scripts) {
+    for (const order of script.split(",")) {
+      const parts = order.trim().split(/\s+/);
+      const action = String(parts[1]);
+      const target = String(parts[2]);
+
+      assert.match(action, /^(hide|show)$/, `ordre inattendu : ${order}`);
+      assert.ok(byId.has(target) || shown.includes(target), `objet inconnu : ${target}`);
+      named.add(target);
+    }
+  }
+
+  const missing = shown.filter((name) => !ALWAYS_SHOWN.includes(name) && !named.has(name));
+  assert.deepEqual(missing, [], "ces objets visibles ne sont sur aucune page");
+
+  const hiddenTwice = ALWAYS_SHOWN.filter((name) => named.has(name));
+  assert.deepEqual(hiddenTwice, [], "ces objets doivent rester visibles sur les deux pages");
+
+  // Chaque page cache exactement ce que l'autre montre.
+  const [first, second] = scripts.map((script) =>
+    script
+      .split(",")
+      .map((order) => order.trim().split(/\s+/))
+      .filter((parts) => parts[1] === "show")
+      .map((parts) => parts[2])
+      .sort(),
+  );
+  assert.notDeepEqual(first, second, "les deux pages montrent la meme chose");
+});
+
+// Ce test verifie que rien ne se chevauche sur une meme page.
+//
+// C'est le defaut qui se voit le plus vite et que le code voit le moins : deux objets poses au
+// meme endroit se recouvrent, et seul celui dessine en dernier reste lisible. Les deux pages
+// occupent la meme surface, donc la comparaison se fait page par page, bandeaux compris.
+test("aucun objet n'en recouvre un autre sur une meme page", () => {
+  const scripts = boxes
+    .filter((box) => box.maxclass === "message" && textOf(box).includes("script "))
+    .map((box) =>
+      textOf(box)
+        .split(",")
+        .map((order) => order.trim().split(/\s+/))
+        .filter((parts) => parts[1] === "show")
+        .map((parts) => String(parts[2])),
+    );
+
+  for (const page of scripts) {
+    const together = [...ALWAYS_SHOWN, ...page]
+      .map((name) => boxes.find((box) => box.varname === name))
+      .filter((box): box is Box => box !== undefined);
+
+    for (let first = 0; first < together.length; first += 1) {
+      for (let second = first + 1; second < together.length; second += 1) {
+        const one = together[first]!;
+        const other = together[second]!;
+        const [ax, ay, aw, ah] = rectOf(one);
+        const [bx, by, bw, bh] = rectOf(other);
+        const overlaps = ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+
+        assert.equal(overlaps, false, `${one.varname} recouvre ${other.varname}`);
+      }
+    }
+  }
+});
+
+// Ce test verifie les marges et les tailles reprises des devices d'Ableton.
+//
+// Ces nombres ne sont pas des choix de gout. Les marges egales a gauche et a droite sont une
+// recommandation d'Ableton ; les hauteurs sont celles des prototypes d'objets livres avec Max, que
+// les devices de Live utilisent tels quels. Un menu de 20 pixels au lieu de 15 se voit tout de
+// suite a cote d'un menu d'Ableton, et c'est le genre d'ecart qu'une relecture ne rattrape pas.
+test("le device reprend les marges et les tailles d'Ableton", () => {
+  const MARGIN = 8;
+  const shown = boxes.filter((box) => box.presentation === 1);
+  const rects = shown.map((box) => rectOf(box));
+
+  assert.equal(Math.min(...rects.map(([left]) => left)), MARGIN, "marge de gauche");
+  assert.equal(
+    PATCHER.devicewidth - Math.max(...rects.map(([left, , width]) => left + width)),
+    MARGIN,
+    "la marge de droite doit egaler celle de gauche",
+  );
+
+  // Les hauteurs natives, prises dans `object-prototypes/m4l` de Max. Le bouton du direct n'est
+  // pas dans cette liste : il est plus haut expres, c'est la commande principale du device.
+  const NATIVE = new Map([
+    ["live.menu", 15],
+    ["live.tab", 17],
+  ]);
+
+  for (const box of shown) {
+    const height = NATIVE.get(box.maxclass);
+    if (height !== undefined) {
+      assert.equal(rectOf(box)[3], height, `${box.varname} n'a pas la hauteur d'un ${box.maxclass} de Live`);
+    }
+  }
+
+  for (const box of shown.filter((entry) => entry.maxclass === "live.text")) {
+    assert.equal(rectOf(box)[3], 15, `${box.varname} n'a pas la hauteur d'un bouton de Live`);
+  }
+});
+
+// Ce test verifie que chaque libelle a la hauteur de boite que Live donne a sa police.
+//
+// La regle est relevee sur les 78 devices Max for Live livres avec Live 11, et elle n'y souffre
+// aucune exception : un libelle occupe sa police plus huit pixels. 10 points dans 18 pixels (449
+// fois), 9 dans 17 (122), 8 dans 15, 11 dans 19, 12 dans 20, 16 dans 24.
+//
+// Une boite plus courte rogne le texte. C'etait le defaut de la deuxieme version — des libelles de
+// 9 points dans des boites de 12 pixels — et il ne se voyait ni dans le code, ni dans la maquette,
+// seulement dans Live.
+test("chaque libelle a la hauteur de boite de sa police", () => {
+  const labels = boxes.filter((box) => box.presentation === 1 && box.maxclass === "live.comment");
+
+  assert.ok(labels.length >= 6, "le device doit porter des libelles");
+
+  for (const box of labels) {
+    const size = box.fontsize ?? PATCHER.default_fontsize;
+    assert.equal(
+      rectOf(box)[3],
+      size + 8,
+      `${box.varname} est en ${size} points dans une boite de ${rectOf(box)[3]} pixels`,
+    );
+  }
+});
+
+// Ce test verifie le fichier que Vassi depose reellement sur la piste Master.
+//
+// Un `.amxd` est un conteneur simple : des blocs de quatre lettres suivis de leur taille, puis le
+// patcher en JSON. Le test le relit octet par octet et compare son contenu au patcher livre : le
+// device et le patcher ne peuvent donc pas diverger sans que cela se voie.
+test("le fichier depose dans Ableton contient bien ce patcher", () => {
+  const container = readFileSync(`${ROOT}device/Vassi Stream.amxd`);
+  const chunks = new Map<string, Buffer>();
+
+  let offset = 0;
+  while (offset + 8 <= container.length) {
+    const name = container.toString("ascii", offset, offset + 4);
+    const size = container.readUInt32LE(offset + 4);
+    chunks.set(name, container.subarray(offset + 8, offset + 8 + size));
+    offset += 8 + size;
+  }
+
+  assert.equal(offset, container.length, "le conteneur ne se termine pas sur un bloc complet");
+  assert.deepEqual([...chunks.keys()], ["ampf", "meta", "ptch"]);
+
+  const inside = JSON.parse(chunks.get("ptch")!.toString("utf8")).patcher;
+  assert.equal(inside.project.amxdtype, AMXD_AUDIO_EFFECT);
+  assert.equal(inside.boxes.length, PATCHER.boxes.length);
+  assert.equal(inside.lines.length, PATCHER.lines.length);
+  assert.equal(inside.devicewidth, PATCHER.devicewidth);
+  assert.equal(inside.openinpresentation, 1);
+});
+
+// Ce test verifie qu'aucun token ne se cache dans le fichier livre. C'est la derniere barriere :
+// le device part avec le projet, le token ne doit jamais y entrer.
+test("le fichier depose ne contient aucun token", () => {
+  const container = readFileSync(`${ROOT}device/Vassi Stream.amxd`, "latin1");
+
+  assert.doesNotMatch(container, /publisherToken/);
+  assert.doesNotMatch(container, /relaytoken [^"]/, "aucune valeur de token ne doit etre figee");
+});
+
+// Ce test verifie le verrouillage des deux reglages pendant un direct.
+//
+// Le verrou suit l'etat annonce par le publisher, jamais la position du bouton. Apres une erreur,
+// le publisher s'arrete de lui-meme : un verrou pose par le bouton resterait ferme, et Vassi ne
+// pourrait plus changer de qualite sans recliquer deux fois.
+test("les reglages se verrouillent pendant un direct et se liberent apres", () => {
+  const select = boxes.find((box) => textOf(box).startsWith("sel STOPPED"));
+  assert.ok(select, "le patcher doit traduire les etats du publisher");
+
+  // Les etats d'un direct en cours ferment les deux reglages.
+  for (const outlet of [1, 2, 3]) {
+    const reached = reachedFrom(select.id, outlet);
+    assert.ok(reached.includes("lock"), `l'etat ${outlet} doit fermer les reglages`);
+    assert.ok(reached.includes("active-prepend"), `l'etat ${outlet} n'atteint pas les reglages`);
+    assert.ok(reached.includes("quality-menu"), `l'etat ${outlet} n'atteint pas la qualite`);
+    assert.ok(reached.includes("latency-menu"), `l'etat ${outlet} n'atteint pas la latence`);
+  }
+
+  // Arret et erreur les rouvrent, et reposent le bouton sans le renvoyer.
+  for (const outlet of [0, 4]) {
+    const reached = reachedFrom(select.id, outlet);
+    assert.ok(reached.includes("unlock"), `l'etat ${outlet} doit rouvrir les reglages`);
+    assert.ok(reached.includes("toggle-reset"), `l'etat ${outlet} doit reposer le bouton`);
+    assert.ok(reached.includes("start-toggle"), `l'etat ${outlet} n'atteint pas le bouton`);
+    assert.equal(textOf(byId.get("toggle-reset")!), "set 0", "le bouton doit se reposer sans se renvoyer");
+  }
+});

@@ -171,13 +171,21 @@ test("reconnecte apres une coupure et cree une nouvelle session", async (t) => {
   await waitFor(() => publisher.state === LIVE, "premiere session en direct");
   const firstSessionId = publisher.session.sessionId;
 
+  // Le publisher passe en direct des qu'il a ecrit `stream_start`, donc avant que le relais l'ait
+  // lu. Couper la connexion a cet instant emporterait le message avec elle, et le compte de deux
+  // `stream_start` plus bas ne serait jamais atteint. L'attente porte donc sur le relais.
+  await waitFor(() => relay.messagesOfType("stream_start").length === 1, "premier stream_start recu");
+
   relay.cutCurrentConnection();
   await waitFor(() => publisher.state === RECONNECTING, "passage en reconnexion");
 
   // L'encodeur doit etre arrete avant toute tentative de reconnexion.
   assert.deepEqual(encoderActions, ["start", "stop"]);
 
-  await waitFor(() => publisher.state === LIVE, "seconde session en direct");
+  // Cette attente couvre le premier palier de l'escalier de reconnexion, une seconde plus ou moins
+  // vingt pour cent, puis l'ouverture d'une connexion et l'authentification. La limite est large :
+  // ce test mesure la reconnexion du publisher, pas la charge de la machine qui l'execute.
+  await waitFor(() => publisher.state === LIVE, "seconde session en direct", 15000);
   const secondSessionId = publisher.session.sessionId;
 
   assert.notEqual(secondSessionId, firstSessionId);
@@ -478,4 +486,34 @@ test("jette une frame impossible a encoder sans couper le live", async (t) => {
   assert.equal(header.flags, 1);
   assert.equal(header.sequenceNumber, 0);
   assert.equal(header.timestampMicros, 0n);
+});
+
+// Ce test verifie qu'un double clic sur Lancer ne cree qu'une seule session.
+//
+// Le bouton du device est un interrupteur : deux clics rapides donnent 1 puis 0 puis 1. Mais un
+// clic maintenu, une commande MIDI repetee ou une automation peuvent aussi envoyer deux fois la
+// meme demande. Une seconde session ouverte par erreur ferait perdre sa place a la premiere sur
+// le relais, qui donne la place au dernier publisher authentifie.
+test("un second Lancer ne cree pas de seconde session", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher, states, encoderActions } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start({ bitrate: 256000, latencyProfile: "balanced" });
+  publisher.start({ bitrate: 128000, latencyProfile: "low" });
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+  publisher.start({ bitrate: 128000, latencyProfile: "low" });
+
+  await waitFor(() => relay.messagesOfType("stream_start").length === 1, "une seule ouverture");
+
+  // La demande ignoree ne doit rien changer : ni la qualite, ni l'encodeur, ni l'etat affiche.
+  const [start] = relay.messagesOfType("stream_start");
+  assert.equal(start!.bitrate, 256000);
+  assert.deepEqual(encoderActions, ["start"]);
+  assert.deepEqual(states.map((entry) => entry.state), ["CONNECTING", "LIVE"]);
+  assert.equal(publisher.stats.sessions, 1);
 });

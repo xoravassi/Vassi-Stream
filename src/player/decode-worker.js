@@ -30,6 +30,34 @@ export class FrameDecoder {
     // Les paquets sont traites l'un apres l'autre : la remise a zero du decodeur est asynchrone, et
     // deux frames ne doivent jamais entrer dans le decodeur en meme temps.
     this.chain = Promise.resolve();
+    // Ces compteurs ne servent qu'au diagnostic. Ils repondent a la seule question que le thread
+    // principal ne peut pas trancher seul : les paquets qui arrivent produisent-ils du son ?
+    this.accepted = 0;
+    this.decoded = 0;
+    this.refused = 0;
+    this.discontinuities = 0;
+    this.lastRefusal = null;
+  }
+
+  // Cette methode rend les compteurs du decodeur.
+  stats() {
+    return {
+      accepted: this.accepted,
+      decoded: this.decoded,
+      refused: this.refused,
+      discontinuities: this.discontinuities,
+      lastRefusal: this.lastRefusal,
+    };
+  }
+
+  // Cette methode jette le son en attente sans changer de session ni de decodeur.
+  //
+  // Elle sert quand le thread audio a pris du retard : le son garde en file est trop vieux pour un
+  // direct. Le numero de sequence est oublie, sinon la frame suivante passerait pour un trou et
+  // ferait rebufferiser une deuxieme fois.
+  flush() {
+    this.sink.clear();
+    this.lastSequence = null;
   }
 
   // Cette methode cree le decodeur Opus. Elle decrit un flux stereo couple, le seul que la v1
@@ -88,20 +116,22 @@ export class FrameDecoder {
     try {
       header = inspectAudioPacket(bytes);
     } catch (error) {
-      this.notify({ type: "refused", reason: error instanceof Error ? error.message : "invalid_packet" });
+      this.refuse(error instanceof Error ? error.message : "invalid_packet");
       return;
     }
 
     // Un paquet d'une autre session appartient a un direct precedent : il ne doit pas entrer dans
     // le son du direct courant.
     if (header.sessionId !== this.sessionId) {
-      this.notify({ type: "refused", reason: "session_mismatch" });
+      this.refuse("session_mismatch");
       return;
     }
 
     if (!this.accepting) {
       return;
     }
+
+    this.accepted += 1;
 
     // Deux evenements produisent une discontinuite. Le device pose le bit apres une perte locale.
     // Le relais, lui, ne modifie jamais un paquet : quand il abandonne les paquets d'un auditeur en
@@ -116,10 +146,25 @@ export class FrameDecoder {
       // decoder la frame marquee. Rien ne remplace la duree abandonnee.
       this.sink.clear();
       await this.resetDecoder();
+      this.discontinuities += 1;
       this.notify({ type: "discontinuity", reason: marked ? "flag" : "sequence_gap" });
     }
 
+    // La remise a zero du decodeur est asynchrone : une nouvelle session ou une pause a pu arriver
+    // pendant ce temps. Cette frame appartient alors au direct precedent, et l'ecrire deposerait
+    // vingt millisecondes de son perime en tete d'une file que la session neuve vient de vider.
+    if (header.sessionId !== this.sessionId || !this.accepting) {
+      return;
+    }
+
     this.decode(bytes.subarray(bytes.byteLength - header.payloadSize));
+  }
+
+  // Cette methode compte un paquet inutilisable et le signale une fois.
+  refuse(reason) {
+    this.refused += 1;
+    this.lastRefusal = reason;
+    this.notify({ type: "refused", reason });
   }
 
   // Cette methode decode une frame Opus et depose les deux canaux dans la file.
@@ -131,12 +176,13 @@ export class FrameDecoder {
     const result = this.decoder.decodeFrame(payload);
 
     if (result.samplesDecoded <= 0) {
-      this.notify({ type: "refused", reason: "opus_decode_failed" });
+      this.refuse("opus_decode_failed");
       return;
     }
 
     const left = result.channelData[0];
     const right = result.channelData[1] ?? left;
+    this.decoded += 1;
     this.sink.write(left, right, result.samplesDecoded);
   }
 
@@ -160,8 +206,11 @@ export function createSharedSink(buffer, capacityFrames) {
 }
 
 // Cette fonction cree le depot qui transfere chaque bloc au processeur audio par un port. C'est le
-// chemin utilise quand `SharedArrayBuffer` n'est pas disponible. Les deux tableaux sont transferes,
-// donc aucun echantillon n'est recopie.
+// chemin utilise quand `SharedArrayBuffer` n'est pas disponible.
+//
+// Le decodeur reutilise ses propres tableaux d'une frame a l'autre : les echantillons sont donc
+// copies une fois, puis le tampon de cette copie est transfere. Le transfert evite la copie que la
+// remise du message ferait autrement, ce qui ramene le mode messages a une seule copie par frame.
 export function createPortSink(port) {
   return {
     clear: () => port.postMessage({ type: "clear" }),
@@ -179,6 +228,9 @@ export function createPortSink(port) {
 if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
   let decoder = null;
   let workletPort = null;
+  // Les compteurs partent une fois par seconde, pas a chaque paquet : ils servent a un affichage
+  // humain, et cinquante messages par seconde sur le thread principal ne diraient rien de plus.
+  let sinceStats = 0;
 
   self.onmessage = async (event) => {
     const message = event.data;
@@ -215,8 +267,20 @@ if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScop
       return;
     }
 
+    if (message.type === "flush") {
+      decoder.flush();
+      return;
+    }
+
     if (message.type === "packet") {
       decoder.push(new Uint8Array(message.packet));
+      sinceStats += 1;
+
+      if (sinceStats >= 50) {
+        sinceStats = 0;
+        self.postMessage({ type: "stats", ...decoder.stats() });
+      }
+
       return;
     }
 

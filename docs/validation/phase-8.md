@@ -62,15 +62,15 @@ Resultat :
 
 ```text
 TypeScript errors 0
-tests 206
-pass 206
+tests 207
+pass 207
 fail 0
 OK: tous les tests natifs de la queue audio passent
 OK: tous les tests natifs Opus passent
 OK: tous les tests natifs du pont loopback passent
 ```
 
-Le bloc ajoute 46 tests aux 160 existants. La suite complete a ete lancee trois fois de suite sans
+Le bloc ajoute 46 tests aux 161 existants. La suite complete a ete lancee trois fois de suite sans
 echec, pour verifier que les tests qui mesurent des delais reels ne dependent pas de la charge de la
 machine.
 
@@ -117,7 +117,7 @@ avoir besoin.
 
 ## La fixture
 
-`npm run fixture:opus` construit `scripts/native/make_opus_fixture.cpp` et le lance sur
+`npm.cmd run fixture:opus` construit `scripts/native/make_opus_fixture.cpp` et le lance sur
 `assets/audio/vassi-stereo-test-48k-24bit.wav`.
 
 Cet outil utilise `source/audio_encoder.cpp`, c'est-a-dire le meme resampler et le meme encodeur que
@@ -154,20 +154,112 @@ sortir, sans message d'erreur.
 branche sur le vrai relais. Il verrouille l'ordre de demarrage, les deux chemins de transport, et le
 fait que la session parte avant le premier paquet.
 
+## Defaut trouve au premier lancement reel
+
+Le premier essai de la page par Vassi a arrete le serveur de test avant toute ecoute :
+
+```text
+Error: ENOENT: no such file or directory, open '...\vassi-stream\favicon.ico'
+Emitted 'error' event on ReadStream instance
+```
+
+Un navigateur demande `/favicon.ico` tout seul sur chaque page. Le serveur essayait de lire ce
+fichier absent, et un flux de lecture signale un fichier absent par un **evenement**, pas par une
+exception : le `try` qui entourait l'appel ne pouvait pas le voir, donc Node terminait le processus.
+N'importe quelle adresse inconnue produisait le meme arret.
+
+`scripts/player-fixture.js` repond maintenant `204` a `/favicon.ico`, branche un gestionnaire
+d'erreur sur chaque flux de lecture, et n'ecrit l'en-tete `200` qu'apres l'ouverture reussie du
+fichier. Le defaut ne touchait que l'outil de verification, jamais le moteur audio.
+
 ## Verification a l'oreille, a faire avec Vassi
+
+### Ableton n'intervient pas dans ce test
+
+Ce test se fait **Ableton ferme**. La question « comment ecouter le navigateur si le son vient du
+master d'Ableton » ne se pose pas ici : le bloc 8 ne verifie pas la chaine complete, il verifie la
+moitie navigateur toute seule.
+
+`npm.cmd run player:fixture` fabrique un direct entier sans Ableton et sans reseau :
+
+```text
+tests/fixtures/stereo-440-880-256k.vsa1     le son enregistre a l'avance
+        │  rejoue a 50 paquets par seconde par scripts/fixture-publisher.js
+        ▼
+relais local du bloc 7, sur 127.0.0.1        le vrai relais, pas une imitation
+        ▼
+page de test dans le navigateur              le vrai moteur audio du bloc 8
+```
+
+La fixture remplace le device pour trois raisons :
+
+- **Ce sont les memes octets.** Elle est produite par `scripts/native/make_opus_fixture.cpp`, qui
+  utilise `source/audio_encoder.cpp`, c'est-a-dire le resampler et l'encodeur du device. Le
+  navigateur recoit exactement ce qu'un vrai live lui enverrait.
+- **Le signal est connu.** 440 Hz a gauche, 880 Hz a droite. Une inversion des canaux, un canal
+  perdu ou un flux devenu mono s'entendent en une seconde. Sur de la musique, ces trois pannes
+  passeraient inapercues.
+- **Le signal est identique a chaque essai.** Firefox, Safari et le mode sans `SharedArrayBuffer`
+  entendent la meme chose, donc une difference vient du navigateur et de rien d'autre.
+
+Rien d'autre n'est requis : ni Ableton, ni Max, ni le VPS, ni Internet. Un navigateur suffit.
+
+### Le vrai cas du son double, a partir du bloc 10
+
+La question reste juste des que le device envoie vraiment le master, c'est-a-dire au bloc 10 puis au
+bloc 11. Le son direct d'Ableton et le son du navigateur sortent alors des memes enceintes, decales
+d'environ 400 ms : on entend un echo, et plus aucun jugement de qualite n'est possible. Trois
+facons de separer les deux sons, de la plus simple a la plus realiste.
+
+**1. Baisser le fader Master d'Ableton.** Sur une piste, la chaine de devices passe *avant* le
+volume de la piste. Le device est sur le Master, donc il capte le signal avant le fader Master :
+mettre ce fader a `-inf` coupe les enceintes sans rien changer a ce que le device encode.
+
+L'erreur a eviter : **couper les pistes, elles, coupe aussi le stream.** Un clic sur l'activateur
+jaune d'une piste, sur son Mute ou sur un Solo ailleurs retire le son avant le Master, donc avant le
+device. Seul le fader Master convient.
+
+Cette regle se confirme en dix secondes avec les compteurs deja affiches par le device : fader
+Master a `-inf`, `Signal L/R`, `Encodees` et `Envoyees` doivent continuer de monter. Si elles se
+figent, la regle ne s'applique pas a cette version de Live et il faut passer au point 2.
+
+**2. Deux sorties audio separees.** Ableton sur l'interface audio en ASIO, le navigateur sur la
+sortie Windows ordinaire. C'est souvent deja le cas sans rien faire : un pilote ASIO prend
+l'interface en exclusivite, donc Windows envoie Firefox ailleurs. Le choix par application se fait
+dans **Parametres → Systeme → Son → Mixeur de volume**. Ecouter l'un ou l'autre devient alors
+physique : le casque sur l'interface pour Ableton, les enceintes pour le navigateur.
+
+**3. Une deuxieme machine.** Un telephone ou une tablette sur le meme Wi-Fi ouvre la page pendant
+qu'Ableton joue. C'est la situation reelle du professeur, et c'est la seule des trois qui verifie
+aussi que le flux sort bien de la machine. C'est la methode du bloc 11.
+
+Deux remarques qui evitent des inquietudes inutiles :
+
+- **Aucun risque de larsen.** La capture est interne au device, sur le master ; aucun micro
+  n'intervient. Les deux sons peuvent cohabiter sans jamais s'auto-alimenter.
+- **Le decalage se mesure.** Au bloc 11, laisser les deux sons audibles et
+  declencher une percussion seche donne la latence a l'oreille ; un telephone qui enregistre les
+  deux coups la donne au chiffre pres. C'est prevu la, pas ici.
+
+### Marche a suivre
 
 Ouvrir un terminal dans le dossier du projet et lancer :
 
 ```powershell
-npm run player:fixture
+npm.cmd run player:fixture
 ```
 
-Trois lignes s'affichent. Laisser cette fenetre ouverte :
+Le `.cmd` compte. Sous Windows, `npm` tout court est un script PowerShell, et PowerShell refuse par
+defaut d'executer des scripts : `npm run player:fixture` echoue avec « l'execution de scripts est
+desactivee sur ce systeme ». `npm.cmd` est le meme programme par son autre entree, toujours acceptee.
+
+Quelques lignes s'affichent. Laisser cette fenetre ouverte :
 
 ```text
 Page de test : http://127.0.0.1:8123/
 Relais local : ws://127.0.0.1:51956/listener
-Sans SharedArrayBuffer : VASSI_NO_ISOLATION=1 npm run player:fixture
+Sans SharedArrayBuffer : $env:VASSI_NO_ISOLATION = "1"; npm.cmd run player:fixture
+Depuis une autre machine : $env:VASSI_HOST = "0.0.0.0"; npm.cmd run player:fixture
 ```
 
 Le script demarre un relais, y branche un publisher qui rejoue la fixture en boucle, et sert la page
@@ -184,19 +276,42 @@ Quatre observations, dans cet ordre :
 
 Arreter le script avec `Ctrl+C` dans la fenetre du terminal.
 
-A refaire dans Safari, le navigateur du professeur, puis une derniere fois sans isolation :
+### Les trois passages a faire
+
+| Passage | Commande | Ce qu'il prouve |
+|---|---|---|
+| Firefox, mode partage | `npm.cmd run player:fixture` | le chemin normal : `SharedArrayBuffer`, le worker ecrit directement dans la file lue par le thread audio |
+| Firefox, mode messages | `$env:VASSI_NO_ISOLATION = "1"; npm.cmd run player:fixture` | la page reste utilisable sur un site non isole, ou `SharedArrayBuffer` n'existe pas |
+| Safari | voir ci-dessous | le navigateur du professeur, le plus strict sur le demarrage du son et sur les modules de worklet |
+
+Le deuxieme passage retire les en-tetes COOP et COEP : la page affiche alors
+« SharedArrayBuffer : absent, mode messages ». Les quatre observations doivent donner le meme
+resultat.
+
+### Comment atteindre Safari
+
+Safari n'existe pas sous Windows, et la page n'est servie qu'a la machine qui lance le script. Deux
+chemins, et ils ne verifient pas la meme chose.
+
+**Depuis le Mac lui-meme, si le depot peut y etre copie.** `git clone`, `npm install`, puis
+`npm run player:fixture` — sans `.cmd`, macOS n'a pas le probleme des scripts PowerShell. C'est le
+seul chemin qui verifie les deux modes sous Safari.
+
+**Depuis le Mac vers cette machine, sur le meme Wi-Fi.** Lancer ici :
 
 ```powershell
-$env:VASSI_NO_ISOLATION = "1"; npm run player:fixture
+$env:VASSI_HOST = "0.0.0.0"; npm.cmd run player:fixture
 ```
 
-Cette execution retire les en-tetes COOP et COEP : la page affiche alors
-« SharedArrayBuffer : absent, mode messages ». Les quatre observations doivent donner le meme
-resultat. C'est ce qui prouve que la page reste utilisable sur un site non isole.
+Le script affiche alors une adresse en `http://192.168.x.x:8123/` a ouvrir sur le Mac. Une seule
+chose est a savoir : une page servie en `http://` depuis une autre machine **n'est pas un contexte
+securise**, donc `SharedArrayBuffer` y est absent quoi qu'il arrive. Ce chemin verifie Safari en
+mode messages seulement — ce qui reste l'essentiel, puisque c'est le mode dans lequel la page
+publique tournera si le site n'est pas isole.
 
 ### Si le son ne sort pas
 
-La page affiche deux compteurs faits pour cela.
+La page affiche des compteurs faits pour cela.
 
 | Ce que la page montre | Ou est le probleme |
 |---|---|
@@ -204,6 +319,10 @@ La page affiche deux compteurs faits pour cela.
 | Paquets qui montent, « Son en attente » a 0 | le decodage ne rend rien ; regarder la console du navigateur |
 | Les deux montent, etat bloque sur `BUFFERING` | le seuil n'est jamais atteint ; noter la valeur de « Son en attente » |
 | Etat `ERROR` | la ligne « Derniere erreur » donne la raison |
+
+Le bloc 8b ajoute a cette page un verdict et un journal horodate, qui rangent la panne d'eux-memes
+entre reseau, decodage et contexte audio. La marche a suivre complete de l'essai long est dans
+`docs/validation/phase-8b.md`.
 
 ## Bloc precedent
 
@@ -216,7 +335,9 @@ et le socket du player s'y branche tel quel.
 - Le son n'a pas encore ete entendu. Tout ce qui precede la sortie audio est verifie, mais
   `AudioContext` et `AudioWorklet` n'existent pas sous Node.
 - Safari n'a pas ete teste. C'est le navigateur le plus strict sur le demarrage du son et sur les
-  modules de worklet, et c'est celui du professeur.
+  modules de worklet, et c'est celui du professeur. Atteint depuis le reseau local, il ne peut etre
+  verifie qu'en mode messages : une page en `http://` venue d'une autre machine n'est pas un
+  contexte securise.
 - Le mode sans `SharedArrayBuffer` est ecrit et servi, mais son comportement sous charge reelle n'est
   pas mesure.
 - La page de test n'est pas la page publique. Elle sert les fichiers du projet en effacant les

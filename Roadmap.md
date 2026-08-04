@@ -131,7 +131,7 @@ Une note courte dans `docs/validation/` est utile mais non obligatoire. Les long
 - [x] Choisir le navigateur utilisé par Vassi et celui du professeur pour le premier test.
 - [x] Préparer un court fichier audio stéréo de test.
 - [x] Noter l’URL publique du site cible : `https://www.vassi.click`.
-- [ ] Tester WSS sur l’URL exacte du relais quand le relais existe. L’outil est prêt : `npm run relay:check -- https://live.vassi.click` vérifie la santé, la connexion listener et le refus d’un publisher sans token. Reste à faire après le déploiement.
+- [ ] Tester WSS sur l’URL exacte du relais quand le relais existe. L’outil est prêt : `npm.cmd run relay:check -- https://live.vassi.click` vérifie la santé, la connexion listener et le refus d’un publisher sans token. Reste à faire après le déploiement.
 
 ### Vérification courte
 
@@ -290,7 +290,7 @@ La conception complète est dans `docs/publisher-node.md`.
 
 - [x] Créer les modules simples : configuration, protocole, WebSocket, reconnexion et adaptateur Max API.
 - [x] Utiliser `max-api` et `ws` avec versions verrouillées. `ws@8.21.1` est épinglé exactement des deux côtés ; `max-api` reste fourni par Node for Max via `NODE_PATH`, il n’existe pas sur npm sous une forme utilisable hors de Max.
-- [x] Lire URL et token depuis une configuration persistante non commité : `%APPDATA%\Vassi Stream\publisher.json`, écrit par `npm run config:publisher`. Le token est débarrassé de ses espaces de début et de fin : un token collé depuis un gestionnaire de mots de passe en emporte souvent un.
+- [x] Lire URL et token depuis une configuration persistante non commité : `%APPDATA%\Vassi Stream\publisher.json`, écrit par `npm.cmd run config:publisher`. Le token est débarrassé de ses espaces de début et de fin : un token collé depuis un gestionnaire de mots de passe en emporte souvent un.
 - [x] Implémenter les états `STOPPED`, `CONNECTING`, `LIVE`, `RECONNECTING` et `ERROR`.
 - [x] Authentifier le publisher avant de démarrer l’encodeur.
 - [x] Envoyer `stream_start` avant la première frame audio.
@@ -306,7 +306,7 @@ La conception complète est dans `docs/publisher-node.md`.
 
 ### Terminé
 
-- [x] **Bloc 6 validé.** `npm run check` : 99 tests, 0 échec. Détail dans `docs/validation/phase-6.md`.
+- [x] **Bloc 6 validé.** `npm.cmd run check` : 99 tests, 0 échec. Détail dans `docs/validation/phase-6.md`.
 
 ## Bloc 7 — Créer le relais Sliplane
 
@@ -325,7 +325,7 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 ### À faire
 
 - [x] Créer les endpoints WebSocket publisher et listener.
-- [x] Stocker le token publisher dans une variable d’environnement Sliplane. Le relais refuse de démarrer sans token d’au moins 32 caractères ; `npm run token:new` en produit un.
+- [x] Stocker le token publisher dans une variable d’environnement Sliplane. Le relais refuse de démarrer sans token d’au moins 32 caractères ; `npm.cmd run token:new` en produit un.
 - [x] Refuser les frames avant authentification et `stream_start`.
 - [x] N’accepter qu’un publisher à la fois : le dernier authentifié prend la place, les connexions sans token sont limitées à quatre et fermées après cinq secondes.
 - [x] Garder seulement la configuration de session, jamais l’historique audio.
@@ -346,7 +346,7 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 
 ### Terminé
 
-- [x] **Bloc 7 validé en local.** `npm run check` : 206 tests, 0 échec après les corrections de revue. Détail dans `docs/validation/phase-7.md`.
+- [x] **Bloc 7 validé en local.** `npm.cmd run check` : 207 tests, 0 échec après les corrections de revue. Détail dans `docs/validation/phase-7.md`.
 
 ## Bloc 8 — Créer le moteur audio navigateur
 
@@ -378,21 +378,60 @@ tests importent ce même fichier, donc la file n'existe qu'en un seul exemplaire
 
 ### Vérification courte
 
-Ces quatre points demandent une oreille et un navigateur : `npm run player:fixture` sert la page de
+Ces quatre points demandent une oreille et un navigateur : `npm.cmd run player:fixture` sert la page de
 test et rejoue la fixture Opus produite par l'encodeur réel du device à travers un vrai relais local.
 
-- [ ] Une fixture Opus est entendue en stéréo dans le navigateur choisi. Le décodage lui-même est déjà vérifié sous Node : la fixture ressort à 440 Hz à gauche et 880 Hz à droite, mesuré sur les échantillons décodés.
-- [ ] Play attend le buffer puis lance le son.
-- [ ] Pause arrête le son et reprise repart du direct.
-- [ ] Une coupure simulée produit un rebuffer, pas un crash. Le bouton de la page coupe le publisher pendant trois secondes.
+- [x] Une fixture Opus est entendue en stéréo dans le navigateur choisi. Le décodage lui-même est déjà vérifié sous Node : la fixture ressort à 440 Hz à gauche et 880 Hz à droite, mesuré sur les échantillons décodés.
+- [x] Play attend le buffer puis lance le son.
+- [x] Pause arrête le son et reprise repart du direct.
+- [x] Une coupure simulée produit un rebuffer, pas un crash. Le bouton de la page coupe le publisher pendant trois secondes.
 
 ### Terminé
 
-- [ ] **Bloc 8 validé.** Le code est écrit et testé : `npm run check` donne 206 tests, 0 échec, dont le décodage d'une vraie fixture Opus jusqu'aux échantillons et le socket listener branché sur le vrai relais. Reste l'écoute dans Firefox et dans Safari, à faire avec Vassi : `npm run player:fixture`. Détail dans `docs/validation/phase-8.md`.
+- [x] **Bloc 8 validé.** Le code est écrit et testé : `npm.cmd run check` donne 207 tests, 0 échec, dont le décodage d'une vraie fixture Opus jusqu'aux échantillons et le socket listener branché sur le vrai relais. Reste l'écoute dans Firefox et dans Safari, à faire avec Vassi : `npm.cmd run player:fixture`. Détail dans `docs/validation/phase-8.md`.
+
+## Bloc 8b — Durcir la robustesse du moteur audio navigateur
+
+**Dépendances :** bloc 8.
+
+**But :** valider le moteur audio dans des conditions proches du vrai usage et corriger les failles de robustesse avant de brancher la page publique.
+
+La conception complète est dans `docs/player-web.md`, sections « Dérive de retard », « Panne et
+seconde chance » et « Diagnostics ».
+
+**Décision sur l'outil de vérification.** Le premier essai de la page dans Firefox a trouvé trois
+défauts, tous dans l'outil de test et aucun dans le moteur : le serveur s'arrêtait sur une adresse
+inconnue, le publisher de fixture envoyait 32 paquets par seconde au lieu de 50, et une coupure
+simulée lançait deux reconnexions concurrentes. Les trois donnaient au moteur l'apparence d'une
+panne. L'outil de test est donc tenu au même niveau d'exigence que le reste du code : corrigé,
+mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/validation/phase-8b.md`.
+
+### À faire
+
+- [ ] Vérifier le lancement et la reprise sur Firefox et Safari, y compris le premier clic, le buffer initial et la reprise après coupure. Les trois passages et la façon d'atteindre Safari sont décrits dans `docs/validation/phase-8.md`. Reste à faire avec Vassi.
+- [ ] Faire un essai de 15 à 30 minutes avec plusieurs pauses, reprises et reconnexions réseau courtes. L'outil est prêt : la page a un bouton de coupures automatiques et un journal horodaté à copier.
+- [ ] Tester le mode sans `SharedArrayBuffer` sous charge réelle et mesurer la stabilité du transport par `MessagePort`. La mesure existe : le compteur « Blocs abandonnés » monte quand un port ne suit plus et reste à zéro en mémoire partagée.
+- [x] Corriger l'outil de vérification : arrêt du serveur sur une adresse inconnue, débit du publisher de fixture, double reconnexion après une coupure demandée.
+- [x] Ajouter des diagnostics utiles côté moteur : paquets reçus, underruns, dernière erreur, dernière session et état du worker/worklet. `diagnostics()` rend les compteurs, `explainPlayer()` les range entre réseau, décodage et contexte audio.
+- [x] Durcir les transitions critiques : arrêt pendant le chargement, fermeture pendant une reconnexion, contexte audio suspendu, worker en erreur.
+- [x] Rattraper la dérive de retard. Un contexte audio arrêté par le système laisse le décodeur remplir la file, et la lecture reprend alors définitivement en retard. Au-delà du seuil du profil plus une seconde, le son en attente est jeté et la lecture repart du direct.
+- [x] Laisser une seconde chance après une panne : un nouveau clic sur Play démonte tout et rebâtit, au lieu de bloquer la page jusqu'au rechargement.
+- [x] Vérifier que les cas de panne n’endommagent ni la session ni la file PCM, et que le direct reprend proprement après récupération.
+
+### Vérification courte
+
+- [ ] Le son sort correctement dans Firefox et Safari sans crash ni état bloqué.
+- [ ] Une coupure courte puis un retour du relais provoquent un rebuffer, puis une reprise propre.
+- [ ] Le mode sans `SharedArrayBuffer` reste utilisable et ne produit pas de boucle ni de blocage.
+- [x] Les diagnostics affichés permettent de distinguer un problème réseau, un problème de décodage et un problème de contexte audio. `explainPlayer()` est une fonction pure : chaque famille est vérifiée sous Node sur un cas réel, et la cause en amont l'emporte quand plusieurs symptômes coexistent.
+
+### Terminé
+
+- [ ] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 263 tests, 0 échec. Restent l'essai long et les trois passages navigateur, à faire avec Vassi. Détail dans `docs/validation/phase-8b.md`.
 
 ## Bloc 9 — Créer la page Svelte `/live`
 
-**Dépendances :** bloc 8.
+**Dépendances :** bloc 8 et bloc 8b.
 
 **But :** rendre le player utilisable publiquement avec une interface minimale.
 
@@ -400,7 +439,7 @@ test et rejoue la fixture Opus produite par l'encodeur réel du device à traver
 
 - [ ] Ajouter la route `/suivi-live` au site Svelte existant.
 - [ ] Isoler le moteur audio des composants visuels.
-- [ ] Afficher les états : Pas prêt, Prêt, Bufferisation, Lecture, Reconnexion et Erreur.
+- [ ] Afficher les états : Hors ligne, Prêt, Chargement, Lecture, Reconnexion et Erreur.
 - [ ] Ajouter un bouton Play/Pause accessible.
 - [ ] Créer AudioContext seulement après une action utilisateur.
 - [ ] Ajouter les en-têtes COOP/COEP si `SharedArrayBuffer` est utilisé.
@@ -408,7 +447,7 @@ test et rejoue la fixture Opus produite par l'encodeur réel du device à traver
 
 ### Vérification courte
 
-- [ ] Sans publisher, la page affiche Pas prêt.
+- [ ] Sans publisher, la page affiche Hors ligne.
 - [ ] Avec publisher, elle affiche Prêt puis Lecture après clic sur Play.
 - [ ] Le bouton Pause coupe réellement le son.
 - [ ] Le bundle navigateur ne contient aucun token publisher.
@@ -423,25 +462,45 @@ test et rejoue la fixture Opus produite par l'encodeur réel du device à traver
 
 **But :** rendre tout le système utilisable depuis le seul device Ableton.
 
+La conception complète est dans `docs/device-max.md`.
+
+**Décision sur la construction du patcher.** Le device compte 64 objets et 77 câbles, soit plusieurs
+milliers de lignes de JSON que personne ne relirait. Il est donc décrit par du code, dans
+`scripts/device-patcher/`, et écrit par `npm.cmd run device:build`. Une fois le device ouvert dans
+Max, c'est le `.maxpat` qui fait foi : Vassi peut y déplacer les objets et enregistrer. Les tests
+portent sur le fichier livré, pas sur le générateur, donc ils restent valables après une retouche
+faite dans Max — c'est le moment où ils servent le plus.
+
+**Décision sur le thème.** L'interface suit le thème d'Ableton par une règle négative : aucune
+couleur n'est écrite nulle part. Les objets `live.*` utilisent des couleurs dynamiques par défaut
+dans un device Max for Live ; une couleur écrite à la main, même identique au thème du moment, la
+figerait pour tous les autres thèmes. Les libellés sont des `live.comment`, qui suivent le thème,
+et non des `comment` ordinaires, qui ne le suivent pas.
+
 ### À faire
 
-- [ ] Créer le device final avec `plugin~ -> plugout~` direct et `vassi.encoder~` en branche de capture.
-- [ ] Démarrer `node.script` automatiquement à l’ouverture du device, sans démarrer le live.
-- [ ] Ajouter un `live.toggle` Lancer/Arrêter.
-- [ ] Faire en sorte que l'UI du device soit conforme et indisociables visuellement des devices natifs Ableton Live (couleurs, layout, espacements, labels, logique, typographies etc)
-- [ ] Ajouter les dials Qualité et Latence à trois positions chacun et afficher les valeurs sélectionnées en texte.
-- [ ] Définir Studio et Équilibrée comme valeurs par défaut.
-- [ ] Verrouiller les dials pendant un live pour la v1.
-- [ ] Afficher Arrêté, Connexion, Live, Reconnexion ou Erreur.
-- [ ] Démarrer dans cet ordre : connexion, authentification, `stream_start`, puis encodeur.
-- [ ] Arrêter dans cet ordre : encodeur, `stream_stop`, nettoyage de session.
-- [ ] Bloquer les doubles clics qui créeraient deux sessions.
-- [ ] Rendre l’adresse du relais et le token modifiables depuis le device, dans deux champs texte et un bouton Enregistrer. Installer le système sur un nouvel ordinateur doit se faire sans ouvrir de terminal : poser le device, coller deux valeurs, cliquer. C’est le seul but de cette ligne.
-- [ ] Garder le token hors de l’état sauvegardé du device. Ableton enregistre l’état d’un device dans le projet `.als` ; un token qui y entrerait partirait avec le projet à chaque partage ou sauvegarde en ligne. Le token va dans `%APPDATA%\Vassi Stream\publisher.json`, propre à la machine, et le device n’en affiche jamais que les quatre derniers caractères.
-- [ ] Afficher dans le device si la configuration est présente et si le relais répond, pour qu’une erreur de collage se voie tout de suite.
-- [ ] Documenter la configuration initiale de l’URL et du token sans commiter le secret.
+- [x] Créer le device final avec `plugin~ -> plugout~` direct et `vassi.encoder~` en branche de capture.
+- [x] Démarrer `node.script` automatiquement à l’ouverture du device, sans démarrer le live. `live.thisdevice` attend le chargement complet, puis 1,5 s, puis demande le port et l'état de la configuration. Rien ne se connecte au relais.
+- [x] Ajouter un bouton Lancer/Arrêter. Un `live.text` en mode interrupteur, dessiné en style LCD : c'est la commande principale du device, elle mérite la surface d'un bouton plutôt qu'une case à cocher.
+- [x] Basculer entre la page du direct et la page des réglages par des onglets `live.tab`. La première version employait un bouton unique qui changeait de texte ; sans paramètre attaché, il n'avait aucune valeur où retenir sa position, renvoyait le même 1 à chaque clic, et la page des réglages ne se refermait plus jamais.
+- [ ] Faire en sorte que l'UI du device soit conforme et indisociables visuellement des devices natifs Ableton Live (couleurs, layout, espacements, labels, logique, typographies etc). Le device n'utilise que des objets `live.*`, la police Ableton Sans, et des positions entières. Les tailles sont celles des prototypes d'objets livrés avec Max (`resources/object-prototypes/m4l`), les marges sont égales des deux côtés, et trois tests gardent ces règles sur le fichier livré. **À confirmer à l'œil avec Vassi.**
+- [ ] Faire en sorte que l'UI du device suive le thème de couleur Ableton configuré par l'utilisateur, comme les autres devices natifs (Live 11 / Live 12). Aucune couleur n'est écrite, et un test le vérifie sur le fichier livré. **À confirmer en changeant de thème dans Live.**
+- [x] Pouvoir juger la mise en page sans ouvrir Ableton. `npm.cmd run device:preview` dessine les deux pages dans les deux thèmes de Live à partir du `.maxpat` : une maquette ne remplace pas Max, mais elle montre les débordements et les alignements de travers, ce qu'une relecture de coordonnées ne fait pas.
+- [x] Ajouter les réglages Qualité et Latence à trois positions chacun et afficher les valeurs sélectionnées en texte. Deux `live.menu` de type Enum : c'est ce que Live pose devant un choix nommé, et « Équilibrée 400 ms » ne tient pas dans les 44 pixels d'un dial d'Ableton.
+- [x] Définir Studio et Équilibrée comme valeurs par défaut.
+- [x] Verrouiller les deux réglages pendant un live pour la v1. Le verrou suit l'état annoncé par le publisher : fermé en Connexion, Live et Reconnexion, ouvert en Arrêté et Erreur. Une panne rend donc les réglages, et repose le bouton, au lieu de laisser croire à un direct qui n'existe plus.
+- [x] Afficher Arrêté, Connexion, Live, Reconnexion ou Erreur.
+- [x] Démarrer dans cet ordre : connexion, authentification, `stream_start`, puis encodeur.
+- [x] Arrêter dans cet ordre : encodeur, `stream_stop`, nettoyage de session.
+- [x] Bloquer les doubles clics qui créeraient deux sessions. Le refus vit dans `publisher.js` et non dans le patch : une commande MIDI répétée ou une automation demanderaient la même chose qu'un double clic.
+- [x] Rendre l’adresse du relais et le token modifiables depuis le device, dans deux champs texte et un bouton Enregistrer. Installer le système sur un nouvel ordinateur doit se faire sans ouvrir de terminal : poser le device, coller deux valeurs, cliquer. C’est le seul but de cette ligne.
+- [x] Garder le token hors de l’état sauvegardé du device. Ableton enregistre l’état d’un device dans le projet `.als` ; un token qui y entrerait partirait avec le projet à chaque partage ou sauvegarde en ligne. Le token va dans `%APPDATA%\Vassi Stream\publisher.json`, propre à la machine, et le device n’en affiche jamais que les quatre derniers caractères.
+- [x] Afficher dans le device si la configuration est présente et si le relais répond, pour qu’une erreur de collage se voie tout de suite. Le bouton Tester le relais interroge la route publique `/health` : aucun token ne circule pour cette vérification.
+- [x] Documenter la configuration initiale de l’URL et du token sans commiter le secret. `docs/device-max.md`, section « Installer sur un nouvel ordinateur ».
 
 ### Vérification courte
+
+Ces quatre points demandent Ableton et le relais déployé.
 
 - [ ] Un clic démarre un live et la page devient prête.
 - [ ] Un clic d’arrêt coupe le flux et la page repasse hors ligne.
@@ -450,7 +509,7 @@ test et rejoue la fixture Opus produite par l'encodeur réel du device à traver
 
 ### Terminé
 
-- [ ] **Bloc 10 validé.**
+- [ ] **Bloc 10 validé.** Le code est écrit et testé : `npm.cmd run check` donne 303 tests, 0 échec. Reste la première ouverture dans Ableton, à faire avec Vassi. Détail dans `docs/validation/phase-10.md`.
 
 ## Bloc 11 — Vérifier le parcours réel et livrer
 

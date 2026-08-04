@@ -142,6 +142,10 @@ Coherence du projet :
 
 - meme version exacte de `ws` dans le relais, le device et les tests ;
 - l'image Docker copie bien le relais et le module de protocole partage, et lance `relay/main.ts` ;
+- le relais demarre reellement depuis la seule liste de fichiers declaree par le `Dockerfile`.
+  `tests/relay-image.test.ts` lit ce fichier, reconstruit sa disposition dans un dossier temporaire,
+  y lance le relais et interroge sa route de sante. Les autres tests tournent depuis la racine du
+  projet, ou tout est present : eux seuls ne verraient pas une ligne `COPY` manquante ;
 - aucun fichier du relais n'ecrit dans la console ni ne journalise le token ;
 - `inspectAudioPacket` applique exactement les memes regles que la lecture complete d'un paquet.
 

@@ -3,7 +3,8 @@
 const Max = require("max-api");
 const { FrameBridge } = require("./frame-bridge.js");
 const { Publisher } = require("./publisher.js");
-const { describeConfig } = require("./publisher-config.js");
+const { ConfigEditor } = require("./config-editor.js");
+const { checkRelay } = require("./relay-health.js");
 const protocol = require("./publisher-protocol.js");
 
 // Ces tableaux traduisent les trois positions des dials du device en valeurs du protocole.
@@ -53,6 +54,24 @@ function publishBridgeStatus(state, detail) {
 	send("status", state, detail);
 }
 
+// Cet editeur tient les deux champs du panneau de reglages : adresse du relais et token.
+const editor = new ConfigEditor();
+
+// Cette fonction publie l'etat de la configuration vers le device.
+// Une seule phrase part vers Max : le patcher n'a alors qu'a l'afficher, sans assembler de texte.
+//
+// L'adresse deja enregistree remplit aussi le champ du panneau de reglages, pour qu'une
+// correction parte de ce qui est en place. Le token, lui, n'est jamais renvoye : le champ reste
+// vide, et seuls ses quatre derniers caracteres apparaissent dans la phrase.
+function publishConfig() {
+	const status = editor.deviceStatus();
+	send("config", status.text);
+
+	if (status.relayUrl !== "") {
+		send("urlfield", status.relayUrl);
+	}
+}
+
 const publisher = new Publisher({
 	// L'etat du relais sort sur un mot different de celui du pont : les deux restent lisibles
 	// separement dans le device, et le patch du bloc 5 continue de fonctionner sans modification.
@@ -98,9 +117,48 @@ Max.addHandler("latency", (value) => {
 });
 
 // Ce handler decrit la configuration du relais sans jamais sortir le token.
+// L'indice remplace le token : quatre caracteres suffisent a reconnaitre un collage reussi.
 Max.addHandler("config", () => {
-	const description = describeConfig();
-	send("config", description.ready ? 1 : 0, description.relayUrl, description.detail);
+	publishConfig();
+});
+
+// Ces deux handlers recoivent les champs du panneau de reglages. Rien n'est encore ecrit :
+// le token reste dans le brouillon jusqu'au clic sur Enregistrer.
+Max.addHandler("relayurl", (...parts) => {
+	editor.setRelayUrl(...parts);
+});
+
+Max.addHandler("relaytoken", (...parts) => {
+	editor.setToken(...parts);
+});
+
+// Ce handler enregistre les champs tapes puis reannonce l'etat de la configuration.
+// Un champ laisse vide garde sa valeur precedente : corriger l'adresse ne demande pas le token.
+//
+// L'etat part avant le resultat : le device affiche les deux au meme endroit, et c'est le
+// resultat de l'enregistrement qui doit rester visible.
+Max.addHandler("saveconfig", () => {
+	const result = editor.apply();
+	publishConfig();
+	send("saved", result.ok ? 1 : 0, result.text);
+});
+
+// Ce handler demande au relais s'il repond, par sa route publique de sante.
+// La verification n'utilise aucun token : une erreur de collage d'adresse se voit tout de suite,
+// sans qu'un secret circule sur le reseau pour la trouver.
+Max.addHandler("checkrelay", () => {
+	const status = editor.deviceStatus();
+
+	if (!status.ready) {
+		send("relay", status.text);
+		return;
+	}
+
+	send("relay", "verification en cours");
+	checkRelay(status.relayUrl).then(
+		(result) => send("relay", result.detail),
+		() => send("relay", "verification impossible")
+	);
 });
 
 // Ce handler permet au patch de relire les compteurs a tout moment.
@@ -166,6 +224,9 @@ bridge
 	.then((port) => {
 		send("port", port);
 		publishBridgeStatus("stopped", "aucun encodeur connecte");
+		// L'etat de la configuration part sans attendre de question : le device montre des
+		// l'ouverture s'il manque une adresse ou un token, avant tout clic sur Lancer.
+		publishConfig();
 	})
 	.catch((error) => {
 		publishBridgeStatus("error", error.message);

@@ -94,6 +94,50 @@ test("produit du silence et compte le manque quand la file est vide", () => {
   assert.equal(ring.underruns, 1);
 });
 
+// Ce test verifie qu'un creux compte une fois, et non une fois par bloc.
+//
+// La carte son demande un bloc toutes les 2,7 ms, et le thread principal ne relit le compteur que
+// toutes les 40 ms : un seul trou entendu ajouterait une quinzaine d'unites. Le nombre affiche a
+// l'auditeur ne dirait alors plus rien de la gravite, et la regle « la file s'est videe depuis le
+// dernier rapport » compterait quinze fois le meme evenement.
+test("compte un manque de donnees par creux, pas par bloc", () => {
+  const ring = makeRing();
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+
+  // Quatre lectures de suite sur une file vide : c'est un seul creux.
+  for (let lecture = 0; lecture < 4; lecture += 1) {
+    ring.read(left, right);
+  }
+
+  assert.equal(ring.underruns, 1);
+
+  // La file se remplit de nouveau et sert deux lectures completes : le creux est termine.
+  const source = block(1, 8);
+  ring.write(source.left, source.right);
+  assert.equal(ring.read(left, right), 4);
+  assert.equal(ring.read(left, right), 4);
+  assert.equal(ring.underruns, 1);
+
+  // Le creux suivant est bien un evenement nouveau.
+  ring.read(left, right);
+  ring.read(left, right);
+  assert.equal(ring.underruns, 2);
+});
+
+// Ce test verifie qu'une lecture servie a moitie compte comme un creux : le silence ajoute en fin de
+// bloc s'entend autant qu'un bloc entierement vide.
+test("compte un manque de donnees des qu'un bloc n'est pas servi en entier", () => {
+  const ring = makeRing();
+  const source = block(1, 3);
+  ring.write(source.left, source.right);
+
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+  assert.equal(ring.read(left, right), 3);
+  assert.equal(ring.underruns, 1);
+});
+
 // Ce test verifie que vider la file laisse toute la place disponible. C'est ce qui se passe a chaque
 // nouvelle session et a chaque discontinuite.
 test("libere toute la place quand la file est videe", () => {
@@ -105,6 +149,53 @@ test("libere toute la place quand la file est videe", () => {
 
   assert.equal(ring.available, 0);
   const suivant = block(50, 7);
+  assert.equal(ring.write(suivant.left, suivant.right), true);
+});
+
+// Ce test verifie que vider la file resiste a un consommateur qui avance au meme instant.
+//
+// Le producteur lit l'index de lecture puis ecrit l'index d'ecriture : entre les deux, le thread
+// audio peut avoir avance. L'index d'ecriture se retrouve alors derriere celui de lecture, et la
+// file, qui compte a l'envers dans ce cas, se croit pleine. Le seuil de lecture est atteint
+// immediatement et l'auditeur entend toute la memoire perimee, jusqu'a trois secondes.
+//
+// Ce test place cette avance exactement dans l'intervalle, en remplacant `Atomics.load` le temps
+// d'un vidage.
+test("vide la file meme si le consommateur avance pendant le vidage", () => {
+  const ring = makeRing(16);
+  const source = block(1, 10);
+  ring.write(source.left, source.right);
+
+  // Le consommateur a deja lu quatre echantillons quand le vidage commence.
+  const sortie = { left: new Float32Array(4), right: new Float32Array(4) };
+  ring.read(sortie.left, sortie.right);
+
+  const vraiLoad = Atomics.load;
+  let avanceFaite = false;
+
+  // Cette version avance l'index de lecture une seule fois, juste apres que le producteur l'a lu.
+  Atomics.load = ((tableau: Int32Array, index: number): number => {
+    const valeur = vraiLoad(tableau, index);
+
+    if (index === 1 && !avanceFaite) {
+      avanceFaite = true;
+      Atomics.store(tableau, 1, valeur + 3);
+    }
+
+    return valeur;
+  }) as typeof Atomics.load;
+
+  try {
+    ring.clear();
+  } finally {
+    Atomics.load = vraiLoad;
+  }
+
+  assert.equal(avanceFaite, true, "le test doit avoir place une avance dans l'intervalle");
+  assert.equal(ring.available, 0, "la file doit etre vide, et non pleine a l'envers");
+
+  // Et elle reste utilisable : la place entiere est disponible pour le son neuf.
+  const suivant = block(50, 15);
   assert.equal(ring.write(suivant.left, suivant.right), true);
 });
 

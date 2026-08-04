@@ -38,10 +38,18 @@ lit les messages JSON, transfere les octets binaires au worker et pilote la mach
 | `src/player/pcm-worklet.js` | file PCM partagee et processeur AudioWorklet |
 | `src/player/pcm-worklet.d.ts` | types de la file PCM pour le code TypeScript |
 | `src/player/decode-worker.js` | decodage Opus hors du thread principal |
+| `src/player/decode-worker-host.ts` | creation, ordres et destruction du worker, vus du thread principal |
 | `src/player/player-protocol.ts` | lecture des messages JSON recus par un listener |
+| `src/player/player-state.ts` | machine d'etats, sans dependance au navigateur |
+| `src/player/player-diagnostics.ts` | rangement d'une panne entre reseau, decodage et audio |
 | `src/player/listener-socket.ts` | connexion WebSocket, separation JSON / binaire, reconnexion |
-| `src/player/audio-player.ts` | machine d'etats, assemblage, Play et Pause |
+| `src/player/browser-audio.ts` | contexte audio, processeur, worker : les pieces du navigateur |
+| `src/player/audio-player.ts` | assemblage, compteurs, Play et Pause |
 | `src/player/index.ts` | seule surface publique utilisee par le bloc 9 |
+
+Un seul fichier a besoin d'un navigateur, `browser-audio.ts`, et il ne prend aucune decision. Tout
+ce qui decide — la machine d'etats, la lecture du protocole, le rangement des pannes — se teste sous
+Node.
 
 La validation de l'en-tete binaire n'est pas reecrite : elle vient de `src/protocol/audio-packet.ts`,
 le module deja partage par le device et le relais. Une seule definition d'un paquet valide existe
@@ -130,7 +138,7 @@ regularite compte plus que le debit.
 | `PLAYING` | le son sort | file vide → `REBUFFERING` ; `pause()` → `PAUSED` ; fin du direct → `OFFLINE` |
 | `REBUFFERING` | le son etait lance, la file s'est videe | seuil atteint → `PLAYING` |
 | `PAUSED` | l'auditeur a coupe le son | `play()` → `BUFFERING` |
-| `ERROR` | panne definitive | seul un nouvel appel a `start()` en sort |
+| `ERROR` | panne | un nouveau `play()` demonte tout et rebatit |
 
 `READY` et `PAUSED` sont deux etats differents pour l'auditeur : le premier veut dire « le direct est
 la, cliquez sur Play », le second « vous avez coupe le son vous-meme ».
@@ -186,6 +194,71 @@ Quand la file se vide pendant `PLAYING`, le processeur audio ecrit du silence et
 `underrun`. Il n'invente rien et ne repete pas le dernier bloc : une repetition s'entend plus qu'un
 court silence. Le thread principal voit le compteur avancer et repasse en `REBUFFERING`.
 
+## Derive de retard
+
+Le manque de donnees a un symetrique moins visible : la file qui grossit.
+
+Un contexte audio peut s'arreter sans que la page le demande — onglet mis en arriere-plan, appel
+telephonique sur un appareil Apple, peripherique de sortie debranche. Le processeur audio cesse
+alors d'etre appele, mais le decodeur, lui, continue de remplir la file. Quand le thread audio
+revient, la file contient plusieurs secondes de son : l'auditeur reprendrait la lecture en retard de
+tout ce temps, definitivement, et rien ne le signalerait.
+
+Au-dela du seuil du profil plus une seconde, le player considere donc que la file contient du son
+trop vieux pour un direct. Il demande au decodeur de la vider, puis rebufferise. La reprise se fait
+sur le son du moment.
+
+Cet ordre passe par un compteur, `flushId`, et non par un evenement : le moteur compare la valeur
+recue a la derniere appliquee. Un ordre perdu ou double n'a donc aucun effet.
+
+## Panne et seconde chance
+
+Une panne definitive qui oblige a recharger la page est une mauvaise reponse a un incident
+passager : un `AudioContext` refuse par le systeme, un peripherique change en cours de route, un
+WebAssembly qui n'a pas voulu se compiler du premier coup. Un nouveau clic sur Play demonte tout ce
+qui a ete construit — worker, noeud, contexte — puis recommence a neuf.
+
+Trois pannes sont surveillees en plus du demarrage :
+
+- **le worker meurt pendant le direct.** Le branchement d'erreur pose au demarrage ne sert plus une
+  fois la promesse resolue ; un second branchement le remplace, sinon la page resterait en lecture
+  sans le moindre son et sans message.
+- **la fermeture arrive pendant le chargement.** `close()` attend le demarrage en cours avant de
+  demonter. Sans cette attente, un contexte audio et un worker naitraient apres la fermeture et
+  personne ne les fermerait ; le son continuerait de sortir d'une page disparue.
+- **le contexte est suspendu.** Le player tente de le reprendre. Safari annonce `interrupted` la ou
+  les autres annoncent `suspended` : les deux sont traites de la meme facon.
+
+## Diagnostics
+
+De l'exterieur, les trois pannes possibles se ressemblent : le son ne sort pas. `diagnostics()` rend
+les compteurs, et `explainPlayer()` les range en une phrase.
+
+| Famille | Ce qui la designe |
+|---|---|
+| `network` | la connexion est perdue, ou un direct est annonce sans qu'aucun paquet n'arrive depuis deux secondes |
+| `decode` | les paquets arrivent et sont acceptes, mais aucune frame n'en sort |
+| `audio` | le contexte n'est pas `running`, ou le processeur n'a plus annonce de niveau depuis une demi-seconde |
+| `idle` | le moteur attend : pas de direct, son pas encore demande, ou pause |
+| `ok` | rien a signaler |
+
+L'ordre des regles compte : la cause la plus en amont l'emporte. Un relais muet produit forcement
+une file vide, donc il faut le reconnaitre avant de conclure a une panne de decodage.
+
+`explainPlayer` est une fonction pure. Chaque famille se verifie sous Node, panne par panne, dans
+`tests/player-diagnostics.test.ts`.
+
+Les compteurs viennent de trois endroits, chacun le seul a savoir ce qu'il compte :
+
+| Compteur | Origine |
+|---|---|
+| paquets recus, date du dernier | thread principal, a la reception du socket |
+| paquets acceptes, frames decodees, refus, discontinuites | worker, remontes une fois par seconde |
+| son en attente, manques de donnees, blocs abandonnes | processeur audio, avec chaque niveau annonce |
+
+Les blocs abandonnes sont la mesure directe du mode messages sous charge : un `MessagePort` qui
+n'arrive plus a suivre les fait monter, la memoire partagee non.
+
 ## Reconnexion
 
 Le socket listener applique le meme escalier que le publisher : `1, 2, 4, 8, 16, 30` secondes, avec
@@ -212,9 +285,16 @@ Les parties calculables sont testees sous Node avec `node --test` :
 - la file PCM : ecriture, lecture, file pleine, file vide, comptage des manques ;
 - la lecture des messages JSON du relais et les seuils de latence ;
 - le decodage d'une vraie fixture Opus produite par l'encodeur du device, jusqu'aux echantillons ;
-- le socket listener branche sur le vrai relais du bloc 7.
+- le socket listener branche sur le vrai relais du bloc 7 ;
+- le rangement d'une panne entre reseau, decodage et contexte audio ;
+- les pannes elles-memes : fermeture pendant le chargement, decodeur qui ne demarre pas, worker qui
+  meurt en cours de direct, contexte suspendu, derive de retard.
 
 Le reste, `AudioContext` et `AudioWorklet`, n'existe pas sous Node. Il se verifie dans un navigateur
-avec `npm run player:fixture`, qui sert une page de test et rejoue la fixture Opus a travers un vrai
-relais local. Cette page couvre les quatre verifications courtes du bloc : son stereo, attente du
-buffer avant lecture, pause reelle, et coupure simulee suivie d'un rebuffer.
+avec `npm.cmd run player:fixture`, qui sert une page de test et rejoue la fixture Opus a travers un vrai
+relais local. Cette page couvre les quatre verifications courtes du bloc — son stereo, attente du
+buffer avant lecture, pause reelle, coupure simulee suivie d'un rebuffer — et l'essai long du bloc
+8b, avec son verdict, ses compteurs par famille et son journal horodate.
+
+Ableton n'intervient dans aucune de ces verifications : la fixture porte les octets du vrai
+encodeur du device, donc le navigateur recoit exactement ce qu'un direct lui enverrait.

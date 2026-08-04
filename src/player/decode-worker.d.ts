@@ -10,6 +10,15 @@ export type DecoderNote = {
   reason: string;
 };
 
+// Ce type rassemble les compteurs de diagnostic du decodeur.
+export type DecoderStats = {
+  accepted: number;
+  decoded: number;
+  refused: number;
+  discontinuities: number;
+  lastRefusal: string | null;
+};
+
 // Ce type decrit le depot d'echantillons : file partagee ou envoi par un port.
 export type PcmSink = {
   clear: () => void;
@@ -24,7 +33,13 @@ export declare class FrameDecoder {
   stop(): void;
   setSession(sessionId: number): void;
   setAccepting(accepting: boolean): void;
+  flush(): void;
   push(bytes: Uint8Array): Promise<void>;
+  stats(): DecoderStats;
+  // Cette methode applique `OPUS_RESET_STATE`. Elle est asynchrone, et c'est la seule attente au
+  // milieu du traitement d'une frame : les tests s'en servent pour placer un evenement exactement
+  // dans cet intervalle.
+  resetDecoder(): Promise<void>;
 }
 
 // Cette fonction cree le depot qui ecrit dans la memoire partagee avec le processeur audio.

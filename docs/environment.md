@@ -84,7 +84,7 @@ Un service Sliplane porte son propre domaine, et `www.vassi.click` appartient de
 Le relais se configure comme service HTTP public derriere le proxy TLS de Sliplane : c'est ce qui rend les adresses `wss://` disponibles. La marche a suivre complete est dans `docs/deploiement-sliplane.md`.
 
 Verification restante :
-- tester une route WebSocket `wss://...` une fois le relais deploye, avec `npm run relay:check -- https://live.vassi.click`.
+- tester une route WebSocket `wss://...` une fois le relais deploye, avec `npm.cmd run relay:check -- https://live.vassi.click`.
 
 ## Recherche Internet effectuee
 
@@ -104,4 +104,4 @@ Points retenus :
 ## A confirmer par Vassi
 
 - La confirmation du sous-domaine `live.vassi.click` pour le relais.
-- Le test Safari quand la page `/live` existe. Le moteur audio du bloc 8 se teste des maintenant avec `npm run player:fixture`.
+- Le test Safari quand la page `/live` existe. Le moteur audio du bloc 8 se teste des maintenant avec `npm.cmd run player:fixture`.

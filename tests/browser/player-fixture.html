@@ -10,23 +10,34 @@
       body {
         font-family: system-ui, sans-serif;
         margin: 0 auto;
-        max-width: 40rem;
+        max-width: 46rem;
         padding: 2rem 1rem;
         line-height: 1.5;
       }
       h1 {
         font-size: 1.25rem;
       }
+      h2 {
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #555;
+        margin: 1.5rem 0 0.5rem;
+      }
       button {
         font: inherit;
-        padding: 0.5rem 1.25rem;
-        margin-right: 0.5rem;
+        padding: 0.5rem 1rem;
+        margin: 0 0.5rem 0.5rem 0;
+      }
+      button[aria-pressed="true"] {
+        outline: 3px solid #333;
       }
       dl {
         display: grid;
-        grid-template-columns: 12rem 1fr;
+        grid-template-columns: 14rem 1fr;
         gap: 0.25rem 1rem;
         font-variant-numeric: tabular-nums;
+        margin: 0;
       }
       dt {
         color: #555;
@@ -34,6 +45,35 @@
       dd {
         margin: 0;
         font-weight: 600;
+      }
+      #verdict {
+        padding: 0.75rem 1rem;
+        border-left: 6px solid #999;
+        background: #f4f4f4;
+        font-weight: 600;
+      }
+      #verdict[data-area="ok"] {
+        border-color: #2b7a2b;
+      }
+      #verdict[data-area="idle"] {
+        border-color: #999;
+      }
+      #verdict[data-area="network"],
+      #verdict[data-area="decode"],
+      #verdict[data-area="audio"] {
+        border-color: #b00;
+        background: #fdf0f0;
+      }
+      #journal {
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        line-height: 1.45;
+        white-space: pre;
+        overflow: auto;
+        max-height: 18rem;
+        background: #f7f7f7;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
       }
       ol {
         color: #333;
@@ -45,16 +85,21 @@
 
     <p>
       Cette page rejoue la fixture Opus produite par l'encodeur du device : un sinus 440 Hz a gauche
-      et 880 Hz a droite. Elle sert a verifier les quatre points du bloc 8 que Node ne peut pas
-      verifier.
+      et 880 Hz a droite. <strong>Ableton n'intervient pas</strong> : le son vient d'un fichier
+      enregistre a l'avance, rejoue a travers un vrai relais local.
     </p>
 
     <p>
       <button id="play" type="button">Play</button>
       <button id="pause" type="button">Pause</button>
-      <button id="cut" type="button">Simuler une coupure de 3 s</button>
+      <button id="cut" type="button">Coupure de 3 s</button>
+      <button id="cut-long" type="button">Coupure de 30 s</button>
+      <button id="soak" type="button" aria-pressed="false">Coupures automatiques : non</button>
     </p>
 
+    <p id="verdict" data-area="idle">-</p>
+
+    <h2>Direct</h2>
     <dl>
       <dt>Etat</dt>
       <dd id="state">-</dd>
@@ -64,21 +109,60 @@
       <dd id="target">-</dd>
       <dt>SharedArrayBuffer</dt>
       <dd id="shared">-</dd>
+      <dt>Duree de l'essai</dt>
+      <dd id="uptime">0 min 00 s</dd>
+    </dl>
+
+    <h2>Reseau</h2>
+    <dl>
+      <dt>Connexion au relais</dt>
+      <dd id="connected">-</dd>
       <dt>Paquets recus</dt>
       <dd id="packets">0</dd>
+      <dt>Dernier paquet</dt>
+      <dd id="since-packet">-</dd>
+    </dl>
+
+    <h2>Decodage</h2>
+    <dl>
+      <dt>Paquets acceptes</dt>
+      <dd id="accepted">0</dd>
+      <dt>Frames decodees</dt>
+      <dd id="decoded">0</dd>
+      <dt>Paquets refuses</dt>
+      <dd id="refused">0</dd>
+      <dt>Discontinuites</dt>
+      <dd id="discontinuities">0</dd>
+      <dt>Derniere refus</dt>
+      <dd id="last-refusal">aucun</dd>
+    </dl>
+
+    <h2>Audio</h2>
+    <dl>
+      <dt>Moteur audio</dt>
+      <dd id="audio-stage">-</dd>
+      <dt>Contexte audio</dt>
+      <dd id="context-state">-</dd>
       <dt>Son en attente</dt>
       <dd id="buffer">0 ms</dd>
+      <dt>Manques de donnees</dt>
+      <dd id="underruns">0</dd>
+      <dt>Blocs abandonnes</dt>
+      <dd id="overflows">0</dd>
+      <dt>Dernier niveau annonce</dt>
+      <dd id="since-level">-</dd>
       <dt>Derniere erreur</dt>
       <dd id="error">aucune</dd>
     </dl>
 
+    <h2>Journal</h2>
     <p>
-      Si le son ne sort pas, ces deux compteurs disent ou regarder. « Paquets recus » a zero signifie
-      que rien n'arrive du relais. « Son en attente » a zero alors que les paquets montent signifie
-      que le decodage ne remboite pas. Les deux qui montent avec un etat bloque en
-      <strong>BUFFERING</strong> signifient que le seuil n'est pas atteint.
+      <button id="copy" type="button">Copier le journal</button>
+      <button id="clear" type="button">Vider</button>
     </p>
+    <div id="journal"></div>
 
+    <h2>Ce qu'il faut observer</h2>
     <ol>
       <li>Au chargement, l'etat doit passer a <strong>READY</strong>.</li>
       <li>
@@ -87,28 +171,61 @@
       </li>
       <li>Pause doit couper le son immediatement et afficher <strong>PAUSED</strong>.</li>
       <li>
-        La coupure simulee doit donner <strong>OFFLINE</strong> puis un retour automatique en
+        Une coupure doit donner <strong>OFFLINE</strong> puis un retour automatique en
         <strong>BUFFERING</strong> et <strong>PLAYING</strong>, avec une nouvelle session.
+      </li>
+      <li>
+        Pour l'essai long : activer les coupures automatiques, laisser tourner quinze a trente
+        minutes, puis copier le journal. « Manques de donnees » doit rester bas et le verdict revenir
+        a chaque fois sur <strong>rien a signaler</strong>.
       </li>
     </ol>
 
     <script type="module">
-      import { AudioPlayer } from "/src/player/index.ts";
+      import { AudioPlayer, explainPlayer } from "/src/player/index.ts";
 
-      const champs = {
-        state: document.getElementById("state"),
-        session: document.getElementById("session"),
-        target: document.getElementById("target"),
-        shared: document.getElementById("shared"),
-        packets: document.getElementById("packets"),
-        buffer: document.getElementById("buffer"),
-        error: document.getElementById("error"),
-      };
+      const champs = {};
+
+      for (const element of document.querySelectorAll("dd[id], #verdict")) {
+        champs[element.id] = element;
+      }
+
+      const journal = document.getElementById("journal");
+      const debut = Date.now();
+      const lignes = [];
+
+      // Cette fonction ecrit une ligne horodatee. Le journal sert a l'essai long : ce qui s'est
+      // passe pendant une demi-heure ne tient dans aucune memoire, et un compteur seul ne dit pas
+      // dans quel ordre les choses sont arrivees.
+      function noter(texte) {
+        const seconds = Math.floor((Date.now() - debut) / 1000);
+        const horodatage = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+
+        lignes.push(`${horodatage}  ${texte}`);
+
+        if (lignes.length > 300) {
+          lignes.shift();
+        }
+
+        journal.textContent = lignes.join("\n");
+        journal.scrollTop = journal.scrollHeight;
+      }
+
+      // Cette fonction met une duree en forme, ou rend un tiret quand il n'y en a pas encore.
+      function duree(ms) {
+        return ms === null ? "-" : `il y a ${(ms / 1000).toFixed(1)} s`;
+      }
 
       champs.shared.textContent = self.crossOriginIsolated ? "disponible" : "absent, mode messages";
+      noter(`page chargee, SharedArrayBuffer ${self.crossOriginIsolated ? "disponible" : "absent"}`);
 
       const reponse = await fetch("/control/relay");
       const { listenerUrl } = await reponse.json();
+
+      // Ces deux valeurs evitent les lignes en double : un ordre de vidage voyage avec l'etat, donc
+      // le moteur previent parfois sans avoir change d'etat.
+      let dernierEtat = null;
+      let dernierVidage = 0;
 
       const player = new AudioPlayer(
         {
@@ -117,30 +234,110 @@
           workletUrl: new URL("/src/player/pcm-worklet.js", location.href),
         },
         (status) => {
-          champs.state.textContent = status.state;
-          champs.session.textContent = status.session ? String(status.session.sessionId) : "aucune";
-          champs.target.textContent = status.session ? `${status.session.targetBufferMs} ms` : "-";
-          champs.error.textContent = status.errorReason ?? "aucune";
+          if (status.flushId !== dernierVidage) {
+            dernierVidage = status.flushId;
+            noter("retard detecte : le son en attente est jete, la lecture repart du direct");
+          }
+
+          if (status.state !== dernierEtat) {
+            dernierEtat = status.state;
+            const session = status.session ? String(status.session.sessionId) : "aucune";
+            noter(`etat ${status.state}, session ${session}`);
+          }
         },
       );
 
       player.connect();
 
-      // Ces deux compteurs changent trop souvent pour passer par les changements d'etat : ils sont
-      // relus quatre fois par seconde.
+      let derniereFamille = null;
+
+      // Ces valeurs changent trop souvent pour passer par les changements d'etat : elles sont
+      // relues quatre fois par seconde.
       setInterval(() => {
-        champs.packets.textContent = String(player.packetsReceived);
-        champs.buffer.textContent = `${Math.round(player.bufferedMs)} ms`;
+        const info = player.diagnostics();
+        const verdict = explainPlayer(info);
+        const seconds = Math.floor((Date.now() - debut) / 1000);
+
+        champs.state.textContent = info.state;
+        champs.session.textContent = info.sessionId === null ? "aucune" : String(info.sessionId);
+        champs.target.textContent = `${info.targetBufferMs} ms`;
+        champs.uptime.textContent = `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, "0")} s`;
+
+        champs.connected.textContent = info.connected ? "ouverte" : "perdue";
+        champs.packets.textContent = String(info.packets);
+        champs["since-packet"].textContent = duree(info.sincePacketMs);
+
+        champs.accepted.textContent = String(info.accepted);
+        champs.decoded.textContent = String(info.decoded);
+        champs.refused.textContent = String(info.refused);
+        champs.discontinuities.textContent = String(info.discontinuities);
+        champs["last-refusal"].textContent = info.lastRefusal ?? "aucun";
+
+        champs["audio-stage"].textContent = info.audio;
+        champs["context-state"].textContent = info.contextState ?? "pas encore cree";
+        champs.buffer.textContent = `${Math.round(info.bufferedMs)} ms`;
+        champs.underruns.textContent = String(info.underruns);
+        champs.overflows.textContent = String(info.overflows);
+        champs["since-level"].textContent = duree(info.sinceLevelMs);
+        champs.error.textContent = info.errorReason ?? "aucune";
+
+        champs.verdict.textContent = verdict.message;
+        champs.verdict.dataset.area = verdict.area;
+
+        if (verdict.area !== derniereFamille) {
+          derniereFamille = verdict.area;
+          noter(`verdict ${verdict.area} : ${verdict.message}`);
+        }
       }, 250);
 
       document.getElementById("play").addEventListener("click", () => {
-        player.play().catch((error) => {
-          champs.error.textContent = String(error);
-        });
+        noter("clic sur Play");
+        player.play().catch((error) => noter(`Play a echoue : ${error}`));
       });
 
-      document.getElementById("pause").addEventListener("click", () => player.pause());
-      document.getElementById("cut").addEventListener("click", () => fetch("/control/cut"));
+      document.getElementById("pause").addEventListener("click", () => {
+        noter("clic sur Pause");
+        player.pause();
+      });
+
+      // Cette fonction demande une coupure du direct au serveur de test.
+      async function couper(ms) {
+        noter(`coupure de ${ms / 1000} s demandee`);
+        await fetch(`/control/cut?ms=${ms}`).catch((error) => noter(`coupure impossible : ${error}`));
+      }
+
+      document.getElementById("cut").addEventListener("click", () => couper(3000));
+      document.getElementById("cut-long").addEventListener("click", () => couper(30000));
+
+      // Ce bouton fait l'essai long tout seul : une coupure toutes les deux minutes, de duree
+      // variable, pendant que Vassi laisse la page tourner et ecoute.
+      const soak = document.getElementById("soak");
+      let minuteur = null;
+
+      soak.addEventListener("click", () => {
+        if (minuteur !== null) {
+          clearInterval(minuteur);
+          minuteur = null;
+          soak.setAttribute("aria-pressed", "false");
+          soak.textContent = "Coupures automatiques : non";
+          noter("coupures automatiques arretees");
+          return;
+        }
+
+        minuteur = setInterval(() => couper(Math.random() < 0.5 ? 3000 : 12000), 120000);
+        soak.setAttribute("aria-pressed", "true");
+        soak.textContent = "Coupures automatiques : oui";
+        noter("coupures automatiques toutes les 2 min");
+      });
+
+      document.getElementById("copy").addEventListener("click", () => {
+        void navigator.clipboard.writeText(lignes.join("\n"));
+      });
+
+      document.getElementById("clear").addEventListener("click", () => {
+        lignes.length = 0;
+        journal.textContent = "";
+      });
     </script>
   </body>
 </html>

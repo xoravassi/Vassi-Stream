@@ -81,6 +81,29 @@ function writeConfig(values) {
 	return file;
 }
 
+// Cette fonction enregistre une correction venue du device : deux textes, dont l'un ou l'autre
+// peut etre vide. Un champ vide garde la valeur deja enregistree, parce que corriger l'adresse ne
+// doit pas obliger a recoller le token, et l'inverse.
+//
+// La fusion vit ici, avec le reste de ce qui touche au token. Le panneau de reglages ne connait
+// ainsi ni le nom des champs du fichier, ni la valeur du token deja en place : il ne fait que
+// transmettre ce qui vient d'etre tape.
+function updateConfig({ relayUrl = "", token = "" }) {
+	let current = { relayUrl: "", publisherToken: "" };
+
+	try {
+		current = readConfig();
+	} catch (error) {
+		// Le premier enregistrement n'a rien a completer : les deux champs doivent alors etre
+		// remplis, et `writeConfig` dira lequel manque.
+	}
+
+	return writeConfig({
+		relayUrl: relayUrl !== "" ? relayUrl : current.relayUrl,
+		publisherToken: token !== "" ? token : current.publisherToken
+	});
+}
+
 // Cette fonction reserve le fichier a son proprietaire. Windows ignore ces droits POSIX : la
 // protection y vient deja de `%APPDATA%`, propre a chaque compte.
 function restrictToOwner(file) {
@@ -100,10 +123,27 @@ function restrictToOwner(file) {
 function describeConfig() {
 	try {
 		const config = readConfig();
-		return { ready: true, relayUrl: config.relayUrl, detail: "configuration lue" };
+		return {
+			ready: true,
+			relayUrl: config.relayUrl,
+			tokenHint: tokenHint(config.publisherToken),
+			detail: "configuration lue"
+		};
 	} catch (error) {
-		return { ready: false, relayUrl: "", detail: error.message };
+		return { ready: false, relayUrl: "", tokenHint: "", detail: error.message };
 	}
+}
+
+// Cette fonction reduit un token a ses quatre derniers caracteres.
+// C'est assez pour reconnaitre le bon token apres un collage, et trop peu pour le reconstituer.
+// Un token trop court pour cet indice n'en recoit aucun : il vaut mieux ne rien montrer que
+// montrer presque tout.
+function tokenHint(token) {
+	if (typeof token !== "string" || token.length < 8) {
+		return "";
+	}
+
+	return token.slice(-4);
 }
 
 // Cette fonction accepte une adresse chiffree partout, et une adresse en clair seulement en local.
@@ -144,4 +184,4 @@ function normalizeToken(value) {
 	return value.trim();
 }
 
-module.exports = { configPath, readConfig, writeConfig, describeConfig };
+module.exports = { configPath, readConfig, writeConfig, updateConfig, describeConfig };

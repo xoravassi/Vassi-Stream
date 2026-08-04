@@ -1,50 +1,93 @@
+import { BrowserAudio } from "./browser-audio.ts";
 import { ListenerSocket } from "./listener-socket.ts";
+import type { DiagnosticArea, PlayerDiagnostics } from "./player-diagnostics.ts";
 import { PlayerStateMachine, type PlayerStatus } from "./player-state.ts";
-import { createPcmBuffer, PCM_CAPACITY_FRAMES, PCM_PROCESSOR_NAME, PCM_SAMPLE_RATE } from "./pcm-worklet.js";
 
-// Ce module assemble le moteur audio : la connexion, le worker de decodage, la file PCM et le
-// processeur audio. Il ne contient aucune decision : la machine d'etats decide, ce module execute.
+// Ce module assemble le moteur audio : la connexion au relais, la machine d'etats, les pieces du
+// navigateur et les compteurs de diagnostic.
 //
-// C'est la seule partie du bloc 8 qui a besoin d'un navigateur. Tout ce qui se calcule sans lui est
-// dans `player-state.ts`, `player-protocol.ts` et `pcm-worklet.js`, et se teste sous Node.
+// Il ne contient aucune decision et ne touche jamais a un echantillon. La machine d'etats decide,
+// `browser-audio.ts` execute, ce module fait passer les ordres de l'une a l'autre et compte ce qui
+// traverse.
 
-// Ce type decrit les adresses des deux fichiers charges dans leur propre contexte. Le bloc 9 les
-// fournit avec `new URL(..., import.meta.url)` pour que le bundler du site les emette lui-meme :
-// rien n'est telecharge depuis un CDN.
+// Ce type decrit les adresses dont le moteur a besoin. Le bloc 9 fournit les deux dernieres avec
+// `new URL(..., import.meta.url)` pour que le bundler du site les emette lui-meme : rien n'est
+// telecharge depuis un CDN.
 export type PlayerUrls = {
   relayUrl: string;
   workerUrl: URL | string;
   workletUrl: URL | string;
 };
 
+// Ce type decrit la seule piece remplacable du player, pour que les tests mesurent des durees sans
+// attendre reellement.
+export type PlayerDeps = {
+  now: () => number;
+};
+
 // Cette classe est la surface utilisee par la page `/live`.
 export class AudioPlayer {
-  private urls: PlayerUrls;
+  private now: () => number;
   private machine: PlayerStateMachine;
   private socket: ListenerSocket;
-  private worker: Worker | null = null;
-  private context: AudioContext | null = null;
-  private node: AudioWorkletNode | null = null;
-  private pcmBuffer: ArrayBufferLike | null = null;
-  private shared = false;
-  private starting: Promise<void> | null = null;
-  private lastSessionId = 0;
-  private lastCommands = { accepting: false, playing: false };
-  // Ces deux valeurs ne servent qu'au diagnostic. Elles repondent aux deux questions posees quand
-  // le son ne sort pas : les paquets arrivent-ils, et la file se remplit-elle ?
-  private packets = 0;
+  private audio: BrowserAudio;
+  private closed = false;
+
+  // Cette famille retient d'ou venait la panne, que le message d'erreur seul ne dit pas toujours.
+  private failedArea: DiagnosticArea | null = null;
+
+  // Ces compteurs ne servent qu'au diagnostic. Ils repondent aux trois questions posees quand le
+  // son ne sort pas : les paquets arrivent-ils, sont-ils decodes, le thread audio tourne-t-il ?
+  private counters = {
+    packets: 0,
+    accepted: 0,
+    decoded: 0,
+    refused: 0,
+    discontinuities: 0,
+    underruns: 0,
+    overflows: 0,
+  };
+  private lastRefusal: string | null = null;
+  private lastPacketAt: number | null = null;
+  private lastLevelAt: number | null = null;
   private bufferMs = 0;
 
-  constructor(urls: PlayerUrls, onChange: (status: PlayerStatus) => void = () => {}) {
-    this.urls = urls;
+  // Ces deux valeurs suivent la session en cours. La date d'annonce sert quand aucun paquet n'est
+  // encore arrive : sans elle, un direct annonce qui n'envoie jamais rien — la panne reseau la plus
+  // franche — ne se distinguerait pas d'un direct qui vient de commencer.
+  private announcedSessionId = 0;
+  private liveSince: number | null = null;
+
+  constructor(urls: PlayerUrls, onChange: (status: PlayerStatus) => void = () => {}, deps: Partial<PlayerDeps> = {}) {
+    this.now = deps.now ?? (() => Date.now());
+
     this.machine = new PlayerStateMachine((status) => {
       this.applyCommands(status);
       onChange(status);
     });
 
+    this.audio = new BrowserAudio(urls, {
+      onLevel: (availableMs, underruns, overflows) => this.handleLevel(availableMs, underruns, overflows),
+      onDiscontinuity: () => this.machine.discontinuity(),
+      onRefusal: (reason) => {
+        this.lastRefusal = reason;
+      },
+      // Ces compteurs viennent du worker et le remplacent en entier : ils decrivent le worker
+      // vivant, y compris quand celui-ci vient de naitre et n'a donc encore rien compte.
+      onStats: (stats) => {
+        this.counters.accepted = stats.accepted;
+        this.counters.decoded = stats.decoded;
+        this.counters.refused = stats.refused;
+        this.counters.discontinuities = stats.discontinuities;
+        this.lastRefusal = stats.lastRefusal;
+      },
+      onFailure: (area, reason) => this.fail(area, reason),
+    }, this.now);
+
     this.socket = new ListenerSocket(urls.relayUrl, {
       onState: (state) => {
         this.machine.setStream(state);
+        this.trackSession();
         this.announceSession();
       },
       onPacket: (packet) => this.sendPacket(packet),
@@ -59,13 +102,48 @@ export class AudioPlayer {
 
   // Cette methode rend le nombre de paquets audio recus du relais depuis la connexion.
   get packetsReceived(): number {
-    return this.packets;
+    return this.counters.packets;
   }
 
   // Cette methode rend la quantite de son en attente dans la file, en millisecondes, telle que le
   // processeur audio l'a annoncee la derniere fois.
   get bufferedMs(): number {
     return this.bufferMs;
+  }
+
+  // Cette methode rend tout ce que le moteur sait de lui-meme. `explainPlayer` la lit pour ranger
+  // une panne entre reseau, decodage et contexte audio.
+  diagnostics(): PlayerDiagnostics {
+    const status = this.machine.status();
+    const at = this.now();
+
+    return {
+      state: status.state,
+      sessionId: status.session === null ? null : status.session.sessionId,
+      targetBufferMs: this.machine.targetBufferMs(),
+      shared: this.audio.shared,
+
+      connected: this.socket.connected,
+      packets: this.counters.packets,
+      sincePacketMs: this.lastPacketAt === null ? null : at - this.lastPacketAt,
+      sinceLiveMs: this.liveSince === null ? null : at - this.liveSince,
+
+      accepted: this.counters.accepted,
+      decoded: this.counters.decoded,
+      refused: this.counters.refused,
+      lastRefusal: this.lastRefusal,
+      discontinuities: this.counters.discontinuities,
+
+      audio: this.audio.stage,
+      contextState: this.audio.contextState,
+      bufferedMs: this.bufferMs,
+      underruns: this.counters.underruns,
+      overflows: this.counters.overflows,
+      sinceLevelMs: this.lastLevelAt === null ? null : at - this.lastLevelAt,
+
+      errorReason: status.errorReason,
+      errorArea: this.failedArea,
+    };
   }
 
   // Cette methode ouvre la connexion au relais. Elle ne cree aucun contexte audio : les navigateurs
@@ -76,30 +154,37 @@ export class AudioPlayer {
 
   // Cette methode ferme tout : connexion, worker, contexte audio.
   async close(): Promise<void> {
+    this.closed = true;
     this.socket.stop();
-    this.worker?.postMessage({ type: "stop" });
-    this.worker?.terminate();
-    this.worker = null;
-    this.node?.port.postMessage({ type: "stop" });
-    this.node?.disconnect();
-    this.node = null;
-
-    if (this.context !== null) {
-      await this.context.close();
-      this.context = null;
-    }
+    await this.audio.close();
   }
 
   // Cette methode traite le clic sur Play. Le contexte audio est cree ici, au premier clic, parce
   // que c'est le seul moment ou le navigateur autorise le son.
   async play(): Promise<void> {
-    await this.startAudio();
-
-    // Un contexte cree pendant un onglet en arriere-plan demarre suspendu.
-    if (this.context !== null && this.context.state === "suspended") {
-      await this.context.resume();
+    if (this.closed) {
+      return;
     }
 
+    // Une panne passagere ne doit pas bloquer la page jusqu'au rechargement. Les pieces en panne
+    // sont jetees, puis la machine sort de l'erreur et le demarrage recommence a neuf.
+    if (this.machine.status().state === "ERROR") {
+      await this.audio.stop();
+      this.failedArea = null;
+      this.machine.recover();
+    }
+
+    await this.audio.start();
+
+    if (this.closed || this.audio.stage !== "RUNNING") {
+      return;
+    }
+
+    // Les pieces sont neuves : elles ignorent la session en cours et les ordres deja donnes.
+    this.announceSession();
+    this.applyCommands(this.machine.status());
+
+    await this.audio.resume();
     this.machine.play();
   }
 
@@ -108,156 +193,74 @@ export class AudioPlayer {
     this.machine.pause();
   }
 
-  // Cette methode cree le contexte audio, le processeur et le worker, une seule fois.
-  private async startAudio(): Promise<void> {
-    if (this.starting !== null) {
-      return this.starting;
-    }
-
-    this.starting = this.buildAudio().catch((error: unknown) => {
-      this.starting = null;
-      this.machine.fail(error instanceof Error ? error.message : "audio_start_failed");
-      throw error;
-    });
-
-    return this.starting;
+  // Cette methode enregistre le niveau annonce par le processeur audio et le remet a la machine.
+  private handleLevel(availableMs: number, underruns: number, overflows: number): void {
+    this.bufferMs = availableMs;
+    this.counters.underruns = underruns;
+    this.counters.overflows = overflows;
+    // Cette date est la preuve que le thread audio tourne encore. Un contexte suspendu cesse
+    // d'appeler le processeur, donc plus aucun niveau n'arrive.
+    this.lastLevelAt = this.now();
+    this.machine.reportLevel(availableMs, underruns);
   }
 
-  private async buildAudio(): Promise<void> {
-    // `crossOriginIsolated` dit si la page a recu les en-tetes COOP et COEP. Sans eux,
-    // `SharedArrayBuffer` n'existe pas, et les echantillons passent par un port.
-    this.shared = typeof globalThis.crossOriginIsolated === "boolean" && globalThis.crossOriginIsolated;
-    this.pcmBuffer = createPcmBuffer(this.shared);
-
-    // Le contexte demande explicitement 48 kHz, le taux du protocole. Le navigateur reechantillonne
-    // seul si sa sortie tourne a un autre taux.
-    const context = new AudioContext({ sampleRate: PCM_SAMPLE_RATE, latencyHint: "playback" });
-    this.context = context;
-
-    await context.audioWorklet.addModule(this.urls.workletUrl.toString());
-
-    // En mode messages, ce canal relie directement le worker au processeur audio. Le thread
-    // principal ne fait que remettre chaque extremite a son proprietaire.
-    const channel = this.shared ? null : new MessageChannel();
-
-    const node = new AudioWorkletNode(context, PCM_PROCESSOR_NAME, {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [2],
-      processorOptions: { buffer: this.pcmBuffer, capacityFrames: PCM_CAPACITY_FRAMES },
-    });
-
-    // Le port du canal ne peut pas voyager dans les options de construction : celles-ci sont
-    // copiees, et un `MessagePort` se transfere, il ne se copie pas. Il part donc par le port du
-    // noeud, qui accepte une liste de transfert.
-    if (channel !== null) {
-      node.port.postMessage({ type: "port", port: channel.port2 }, [channel.port2]);
-    }
-
-    node.port.onmessage = (event: MessageEvent) => {
-      const message = event.data as { type: string; availableMs: number; underruns: number };
-
-      if (message.type === "level") {
-        this.bufferMs = message.availableMs;
-        this.machine.reportLevel(message.availableMs, message.underruns);
-      }
-    };
-
-    node.connect(context.destination);
-    this.node = node;
-
-    await this.startWorker(channel);
-    this.announceSession();
-    this.applyCommands(this.machine.status());
-  }
-
-  // Cette methode demarre le worker de decodage et attend que le WebAssembly Opus soit pret.
-  private async startWorker(channel: MessageChannel | null): Promise<void> {
-    const worker = new Worker(this.urls.workerUrl, { type: "module" });
-    this.worker = worker;
-
-    const ready = new Promise<void>((resolve, reject) => {
-      worker.onmessage = (event: MessageEvent) => {
-        const message = event.data as { type: string; reason?: string };
-
-        if (message.type === "ready") {
-          worker.onmessage = (next: MessageEvent) => this.handleWorkerMessage(next);
-          resolve();
-          return;
-        }
-
-        if (message.type === "error") {
-          reject(new Error(message.reason ?? "opus_start_failed"));
-        }
-      };
-
-      worker.onerror = () => reject(new Error("worker_failed"));
-    });
-
-    if (channel === null) {
-      worker.postMessage({ type: "configure", buffer: this.pcmBuffer, capacityFrames: PCM_CAPACITY_FRAMES });
-    } else {
-      worker.postMessage({ type: "configure", port: channel.port1 }, [channel.port1]);
-    }
-
-    await ready;
-  }
-
-  // Cette methode traite ce que le worker signale pendant le direct.
-  private handleWorkerMessage(event: MessageEvent): void {
-    const message = event.data as { type: string; reason?: string };
-
-    if (message.type === "discontinuity") {
-      this.machine.discontinuity();
-    }
-  }
-
-  // Cette methode transmet un paquet au worker sans le lire. Le tampon est transfere : le thread
-  // principal ne recopie aucun octet audio.
-  private sendPacket(packet: ArrayBuffer): void {
-    this.packets += 1;
-    this.worker?.postMessage({ type: "packet", packet }, [packet]);
-  }
-
-  // Cette methode previent le worker d'un changement de session.
-  //
-  // Elle ne retient que ce qu'elle a reellement envoye. La connexion s'ouvre avant le premier clic
-  // sur Play, donc une session est deja connue quand le worker naît : si cette methode notait la
-  // session sans pouvoir la transmettre, le worker garderait la session zero, refuserait chaque
-  // paquet pour session etrangere, et aucun son ne sortirait jamais.
-  private announceSession(): void {
-    const worker = this.worker;
-
-    if (worker === null) {
+  // Cette methode declare une panne en retenant sa famille.
+  private fail(area: DiagnosticArea, reason: string): void {
+    if (this.closed) {
       return;
     }
 
+    this.failedArea = area;
+    this.machine.fail(reason);
+  }
+
+  // Cette methode compte un paquet recu et le transmet aux pieces du navigateur.
+  private sendPacket(packet: ArrayBuffer): void {
+    this.counters.packets += 1;
+    this.lastPacketAt = this.now();
+    this.audio.sendPacket(packet);
+  }
+
+  // Cette methode note le moment ou une nouvelle session commence.
+  //
+  // Le compteur de paquets repart de rien : les paquets du direct precedent ne disent rien de
+  // celui-ci, et les garder ferait passer un nouveau direct muet pour un direct qui parle.
+  private trackSession(): void {
     const session = this.machine.status().session;
     const sessionId = session === null ? 0 : session.sessionId;
 
-    if (sessionId === this.lastSessionId) {
+    if (sessionId === this.announcedSessionId) {
       return;
     }
 
-    this.lastSessionId = sessionId;
-    worker.postMessage({ type: "session", sessionId });
+    this.announcedSessionId = sessionId;
+    this.lastPacketAt = null;
+    this.liveSince = sessionId === 0 ? null : this.now();
   }
 
-  // Cette methode traduit l'etat en deux ordres : le decodeur remplit-il la file, le processeur
-  // audio la consomme-t-il. Chaque ordre n'est envoye que lorsqu'il change, et n'est retenu que
-  // lorsqu'il part reellement.
-  private applyCommands(status: PlayerStatus): void {
-    const worker = this.worker;
-    const node = this.node;
+  // Cette methode transmet la session courante au decodeur.
+  private announceSession(): void {
+    const session = this.machine.status().session;
+    this.audio.setSession(session === null ? 0 : session.sessionId);
+  }
 
-    if (worker !== null && status.accepting !== this.lastCommands.accepting) {
-      this.lastCommands.accepting = status.accepting;
-      worker.postMessage({ type: "accepting", accepting: status.accepting });
+  // Cette methode traduit l'etat en trois ordres : le decodeur remplit-il la file, le son en attente
+  // doit-il etre jete, le processeur audio consomme-t-il la file.
+  //
+  // L'ordre protege la file. Un arret de lecture part en premier : vider une file que le processeur
+  // audio lit encore lui fait rendre du silence pendant un bloc ou deux, ce qui compte des manques de
+  // donnees qui n'en sont pas et peut faire rebufferiser pour rien. Une reprise de lecture part en
+  // dernier, quand la file est deja dans l'etat voulu.
+  private applyCommands(status: PlayerStatus): void {
+    if (!status.playing) {
+      this.audio.setPlaying(false);
     }
 
-    if (node !== null && status.playing !== this.lastCommands.playing) {
-      this.lastCommands.playing = status.playing;
-      node.port.postMessage({ type: status.playing ? "play" : "pause" });
+    this.audio.setAccepting(status.accepting);
+    this.audio.applyFlush(status.flushId);
+
+    if (status.playing) {
+      this.audio.setPlaying(true);
     }
   }
 }

@@ -134,6 +134,52 @@ test("la page de test sert du JavaScript, jamais des annotations de type", async
   assert.ok(!source.includes(": PlayerStatus"));
 });
 
+// Ce test verifie que chaque champ que le script remplit existe reellement dans la page.
+//
+// Un identifiant mal ecrit ne provoque aucune erreur visible : le compteur reste simplement fige a
+// sa valeur de depart. Pendant une ecoute, cela ressemble a une panne du moteur alors que seule
+// l'affichage est casse — et c'est justement sur ces compteurs que le diagnostic repose.
+test("la page de test ne remplit que des champs qui existent", async () => {
+  const page = await (await fetch(`${BASE}/`)).text();
+
+  const identifiants = new Set<string>();
+  const declares = /\bid="([^"]+)"/g;
+  let trouve = declares.exec(page);
+
+  while (trouve !== null) {
+    identifiants.add(trouve[1] as string);
+    trouve = declares.exec(page);
+  }
+
+  // Les champs remplis a travers le tableau `champs` ne sont collectes que parmi les `dd[id]` et le
+  // verdict : un identifiant pose ailleurs ne serait jamais atteint.
+  const collectes = new Set<string>(["verdict"]);
+  const cellules = /<dd id="([^"]+)"/g;
+  let cellule = cellules.exec(page);
+
+  while (cellule !== null) {
+    collectes.add(cellule[1] as string);
+    cellule = cellules.exec(page);
+  }
+
+  const utilises = /champs(?:\.([A-Za-z][\w]*)|\["([^"]+)"\])/g;
+  let usage = utilises.exec(page);
+
+  while (usage !== null) {
+    const nom = (usage[1] ?? usage[2]) as string;
+    assert.ok(collectes.has(nom), `champ inconnu remplit par le script : ${nom}`);
+    usage = utilises.exec(page);
+  }
+
+  const cherches = /getElementById\("([^"]+)"\)/g;
+  let cherche = cherches.exec(page);
+
+  while (cherche !== null) {
+    assert.ok(identifiants.has(cherche[1] as string), `element introuvable : ${cherche[1]}`);
+    cherche = cherches.exec(page);
+  }
+});
+
 // Ce test verifie que la page recoit les en-tetes qui rendent `SharedArrayBuffer` disponible, et
 // qu'ils peuvent etre retires pour verifier aussi le chemin par messages.
 test("la page de test isole la page par defaut", async () => {

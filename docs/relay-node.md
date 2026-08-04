@@ -58,7 +58,7 @@ Toute la configuration passe par des variables d'environnement, comme le prevoit
 
 Un token absent ou plus court que 32 caracteres arrete le demarrage. Un relais sans token accepterait
 n'importe quel publisher : il vaut mieux qu'il ne demarre pas du tout, avec une raison lisible dans
-les journaux Sliplane. `npm run token:new` tire un token de 64 caracteres.
+les journaux Sliplane. `npm.cmd run token:new` tire un token de 64 caracteres.
 
 ## Authentification
 
@@ -199,13 +199,13 @@ force intervient au bout de cinq secondes si un socket ne se ferme pas.
 1. Creer un service public a partir du depot ; le `Dockerfile` a la racine est utilise
    automatiquement.
 2. Ajouter la variable `VASSI_PUBLISHER_TOKEN`, marquee comme secret, avec la valeur produite par
-   `npm run token:new`.
+   `npm.cmd run token:new`.
 3. Laisser `PORT` a `8080` ou choisir une autre valeur entre 8080 et 65535.
 4. Regler le chemin du controle de sante sur `/health`.
 5. Attacher le domaine choisi, `www.vassi.click` ou un sous-domaine dedie ; le certificat TLS fourni
    par Sliplane rend les adresses `wss://` disponibles.
 6. Ecrire la meme valeur de token dans le device :
-   `npm run config:publisher -- --url wss://<domaine>/publisher`, token passe par la variable
+   `npm.cmd run config:publisher -- --url wss://<domaine>/publisher`, token passe par la variable
    d'environnement `VASSI_PUBLISHER_TOKEN`.
 
 Le token vit donc a deux endroits, tous deux hors du depot : les variables d'environnement chiffrees

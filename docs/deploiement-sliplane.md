@@ -44,6 +44,38 @@ Sliplane ne prend de toute facon que ce dont il a besoin : la recette ne copie q
 fichier audio de test ne montent jamais sur le serveur. Vous versionnez tout, Sliplane deploie une
 petite partie.
 
+Un test verifie que cette petite partie suffit. `tests/relay-image.test.ts` lit le `Dockerfile`,
+reconstruit sa liste de fichiers dans un dossier temporaire, y demarre le relais et interroge sa
+route de sante. Une ligne `COPY` oubliee echouerait donc ici, et non au premier deploiement.
+
+---
+
+## Une note sur les commandes : `npm.cmd`, pas `npm`
+
+Toutes les commandes de ce document ecrivent `npm.cmd run ...` et non `npm run ...`.
+
+Ce n'est pas une coquille. Sous Windows, `npm` est un script PowerShell, et PowerShell refuse par
+defaut d'executer des scripts. Taper `npm run token:new` donne alors :
+
+```text
+npm : Impossible de charger le fichier C:\Program Files\nodejs\npm.ps1,
+car l'execution de scripts est desactivee sur ce systeme.
+```
+
+`npm.cmd` est le meme programme, appele par son autre entree, celle que PowerShell accepte toujours.
+Il n'y a rien a installer ni a regler : ajoutez `.cmd` et la commande marche.
+
+Si vous preferez taper `npm` tout court, cette commande leve la restriction une fois pour toutes,
+pour votre compte seulement et sans droits administrateur :
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+Elle autorise les scripts ecrits sur votre machine et ceux qui sont signes. C'est le reglage que la
+documentation de npm elle-meme recommande sous Windows. Les deux solutions se valent ; la premiere
+ne change rien a votre systeme.
+
 ---
 
 ## Etape 0 - Mettre le projet sur GitHub
@@ -83,7 +115,7 @@ Le token est un mot de passe qui sert a une seule chose : prouver au relais que 
 votre Ableton, et pas de quelqu'un d'autre. Sans lui, n'importe qui pourrait diffuser sur votre page.
 
 ```powershell
-npm run token:new
+npm.cmd run token:new
 ```
 
 La commande affiche une suite de 64 caracteres. **Collez-la tout de suite dans votre gestionnaire de
@@ -201,7 +233,7 @@ Le token n'apparait dans aucune ligne du journal, meme quand c'est lui le proble
 genre `mon-service.sliplane.app`) :
 
 ```powershell
-npm run relay:check -- https://mon-service.sliplane.app
+npm.cmd run relay:check -- https://mon-service.sliplane.app
 ```
 
 Trois lignes doivent afficher `OK` :
@@ -254,7 +286,7 @@ Tant qu'elle repond une erreur, c'est que le DNS n'a pas encore suivi. Attendez,
 ## Etape 7 - Verifier le relais definitif
 
 ```powershell
-npm run relay:check -- https://live.vassi.click
+npm.cmd run relay:check -- https://live.vassi.click
 ```
 
 Les trois lignes doivent afficher `OK`, et la commande affiche ensuite l'adresse exacte a donner au
@@ -277,7 +309,7 @@ remplacant les points par votre token :
 
 ```powershell
 $env:VASSI_PUBLISHER_TOKEN = "..."
-npm run config:publisher -- --url wss://live.vassi.click/publisher
+npm.cmd run config:publisher -- --url wss://live.vassi.click/publisher
 Remove-Item Env:\VASSI_PUBLISHER_TOKEN
 ```
 
@@ -355,8 +387,8 @@ Les quatre chiffres utiles quand quelque chose cloche :
 |---|---|---|
 | Le deploiement echoue avant de demarrer | `Docker context` n'est pas `/` | corriger dans les reglages du service, redeployer |
 | `relais_config_invalide` dans les logs | token absent ou tronque | refaire l'etape 4 |
-| `npm run relay:check` echoue sur la sante | le service n'a pas fini de demarrer | attendre une minute, reessayer |
-| `npm run relay:check` echoue sur le listener | le domaine n'est pas encore propage | attendre, verifier avec `Resolve-DnsName` |
+| `npm.cmd run relay:check` echoue sur la sante | le service n'a pas fini de demarrer | attendre une minute, reessayer |
+| `npm.cmd run relay:check` echoue sur le listener | le domaine n'est pas encore propage | attendre, verifier avec `Resolve-DnsName` |
 | Le device reste sur « Erreur » | le token du device ne correspond pas a celui de Sliplane | refaire l'etape 8 avec le token du gestionnaire |
 | `"live"` reste `false` pendant un live | le device n'atteint pas le relais | verifier l'adresse collee a l'etape 8 |
 
@@ -370,7 +402,7 @@ deploiement rate ne coupe pas un direct.
 
 Si le token doit changer, par exemple parce qu'il a ete vu par quelqu'un :
 
-1. `npm run token:new` pour en fabriquer un nouveau, et l'enregistrer dans le gestionnaire ;
+1. `npm.cmd run token:new` pour en fabriquer un nouveau, et l'enregistrer dans le gestionnaire ;
 2. remplacer la valeur de `VASSI_PUBLISHER_TOKEN` dans Sliplane, puis redeployer ;
 3. refaire l'etape 8 sur chaque ordinateur qui lance des lives.
 

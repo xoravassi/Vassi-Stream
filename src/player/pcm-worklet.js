@@ -31,6 +31,11 @@ export const CONTROL_OVERFLOWS = 3;
 const CONTROL_SLOTS = 8;
 const CONTROL_BYTES = CONTROL_SLOTS * 4;
 
+// Nombre d'essais accordes au vidage de la file. Le consommateur n'avance qu'une fois par bloc, soit
+// toutes les 2,7 ms environ, alors qu'un essai dure quelques nanosecondes : deux essais suffisent
+// toujours en pratique. La limite existe pour qu'un vidage ne puisse jamais retenir son thread.
+const CLEAR_ATTEMPTS = 4;
+
 // Cette fonction cree la memoire d'une file PCM. Elle utilise un `SharedArrayBuffer` quand la page
 // est isolee, ce qui permet au worker et au processeur audio de lire la meme memoire. Sinon elle
 // utilise un tampon ordinaire : la file fonctionne pareil, mais elle appartient a un seul thread.
@@ -58,6 +63,9 @@ export class PcmRing {
     this.capacity = capacityFrames;
     this.control = new Int32Array(buffer, 0, CONTROL_SLOTS);
     this.samples = new Float32Array(buffer, CONTROL_BYTES, capacityFrames * PCM_CHANNELS);
+    // Ce drapeau retient si la lecture precedente a manque de donnees. Il appartient au seul
+    // consommateur, donc il vit dans l'objet et non dans la memoire partagee.
+    this.starving = false;
   }
 
   // Cette methode donne le nombre d'echantillons par canal disponibles a la lecture.
@@ -90,8 +98,21 @@ export class PcmRing {
   // regle de cette file : le producteur n'ecrit que l'index d'ecriture, le consommateur n'ecrit que
   // l'index de lecture. Remettre les deux a zero depuis le producteur ecraserait la position d'un
   // consommateur en train de lire, sur le thread audio, au moment precis d'une discontinuite.
+  //
+  // Lire un index puis en ecrire un autre ne forme pas une operation indivisible : le consommateur
+  // peut avancer entre les deux, et l'index d'ecriture se retrouve alors *derriere* celui de
+  // lecture. La file se croit pleine a trois secondes, le seuil de lecture est atteint aussitot, et
+  // l'auditeur entend jusqu'a trois secondes de memoire perimee. La valeur ecrite est donc relue :
+  // si le consommateur a bouge, la remise est refaite sur sa nouvelle position.
   clear() {
-    Atomics.store(this.control, CONTROL_WRITE_INDEX, Atomics.load(this.control, CONTROL_READ_INDEX));
+    for (let attempt = 0; attempt < CLEAR_ATTEMPTS; attempt += 1) {
+      const read = Atomics.load(this.control, CONTROL_READ_INDEX);
+      Atomics.store(this.control, CONTROL_WRITE_INDEX, read);
+
+      if (Atomics.load(this.control, CONTROL_READ_INDEX) === read) {
+        return;
+      }
+    }
   }
 
   // Cette methode ecrit un bloc stereo. Elle renvoie `false` et compte un abandon quand la place
@@ -128,6 +149,12 @@ export class PcmRing {
   //
   // Le silence est prefere a une repetition du dernier bloc : une repetition s'entend beaucoup plus
   // qu'un court silence.
+  //
+  // Un manque de donnees compte une fois par episode, pas une fois par bloc. La carte son demande un
+  // bloc toutes les 2,7 ms, et le thread principal ne relit le compteur que toutes les 40 ms : un
+  // seul creux, entendu comme un seul trou, ajouterait une quinzaine d'unites. Le nombre affiche ne
+  // dirait alors plus rien de la gravite, et la regle « la file s'est videe depuis le dernier
+  // rapport » compterait quinze fois le meme evenement.
   read(left, right) {
     const wanted = Math.min(left.length, right.length);
     const write = Atomics.load(this.control, CONTROL_WRITE_INDEX);
@@ -152,7 +179,12 @@ export class PcmRing {
     Atomics.store(this.control, CONTROL_READ_INDEX, position);
 
     if (count < wanted) {
-      Atomics.add(this.control, CONTROL_UNDERRUNS, 1);
+      if (!this.starving) {
+        this.starving = true;
+        Atomics.add(this.control, CONTROL_UNDERRUNS, 1);
+      }
+    } else {
+      this.starving = false;
     }
 
     return count;
@@ -259,6 +291,9 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         type: "level",
         availableMs: this.ring.availableMs,
         underruns: this.ring.underruns,
+        // Les abandons faute de place sont la mesure directe du mode messages sous charge : un
+        // port qui n'arrive plus a suivre les fait monter.
+        overflows: this.ring.overflows,
       });
     }
   }

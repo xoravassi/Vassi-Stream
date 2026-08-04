@@ -218,6 +218,53 @@ test("rend le son attendu de bout en bout par la file partagee", async (t) => {
   assert.equal(reader.underruns, 1);
 });
 
+// Ce test couvre le seul instant ou le decodeur attend au milieu d'une frame : la remise a zero qui
+// suit une discontinuite.
+//
+// Une coupure produit les deux evenements a la fois, et dans cet ordre : la frame marquee arrive,
+// puis le relais annonce la session suivante. Si la frame reprenait son chemin sans regarder, elle
+// deposerait vingt millisecondes du direct precedent en tete de la file que la session neuve vient
+// de vider — le seul endroit du moteur ou du son perime peut passer devant du son neuf.
+test("abandonne une frame dont la session a change pendant la remise a zero", async (t) => {
+  const { decoder, sink } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+  const source = packets[0];
+  assert.ok(source !== undefined);
+
+  await decoder.push(source);
+  assert.equal(sink.left.length, 960);
+
+  // Cette frame porte le bit de discontinuite : son traitement passe donc par la remise a zero.
+  const marque = encodeAudioPacket({
+    sessionId: FIXTURE_SESSION_ID,
+    sequenceNumber: 1,
+    timestampMicros: 20000n,
+    payload: source.subarray(28),
+    flags: 1,
+  });
+
+  // La nouvelle session est annoncee pendant cette remise a zero, et une seule fois : celle que
+  // `setSession` enchaine a son tour ne doit pas relancer le meme changement.
+  const vraiReset = decoder.resetDecoder.bind(decoder);
+  let deja = false;
+
+  decoder.resetDecoder = async (): Promise<void> => {
+    await vraiReset();
+
+    if (!deja) {
+      deja = true;
+      decoder.setSession(2);
+    }
+  };
+
+  await decoder.push(marque);
+
+  assert.equal(deja, true, "le test doit avoir change la session pendant la remise a zero");
+  assert.equal(sink.left.length, 0, "la frame du direct precedent ne doit pas entrer dans la file neuve");
+});
+
 // Ce test verifie qu'une nouvelle session vide tout ce qui restait de la precedente.
 test("vide le PCM et le decodeur a chaque nouvelle session", async (t) => {
   const { decoder, sink } = await makeDecoder();

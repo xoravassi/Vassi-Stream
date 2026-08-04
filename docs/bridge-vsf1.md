@@ -120,3 +120,12 @@ s'arrete et qu'un autre programme reprend exactement le meme port ephemere avant
 l'objet lui enverrait ses frames. Le risque reste theorique en loopback avec des ports ephemeres, et le
 message `port 0` ferme la connexion des que Node s'arrete volontairement. Une poignee de main dans les
 deux sens reglerait definitivement ce cas ; elle n'est pas ajoutee tant que le probleme n'est pas observe.
+
+Le sens entrant a la meme limite, et elle est acceptee volontairement. Node ecoute sur `127.0.0.1` sans
+demander d'identite : n'importe quel programme du meme compte peut se connecter au port annonce, et
+comme une connexion neuve remplace la precedente, il prendrait la place de l'objet natif. Un programme
+quelconque ne peut pas nuire par accident, parce que le lecteur rejette tout ce qui n'est pas du `VSF1`
+bien forme ; il faudrait un programme ecrit pour cela. Or un tel programme tournerait deja sous le compte
+de Vassi, sur sa machine, avec acces au fichier qui contient le token de publication : le pont ne serait
+alors pas le maillon le plus faible, et l'authentifier ne protegerait rien de plus. Cette limite est donc
+documentee plutot que corrigee.
