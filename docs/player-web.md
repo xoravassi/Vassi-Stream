@@ -294,37 +294,74 @@ Le navigateur repond seul aux pings WebSocket du relais. Le player n'a rien a fa
 
 ## Telephone en veille et page en arriere-plan
 
-Il faut commencer par une distinction, parce qu'elle decide de tout le reste.
+### La regle que le telephone applique vraiment
 
-**Un iPhone verrouille continue de jouer un element `<audio>`, et n'accepte pas de faire tourner un
-AudioWorklet.** Ce sont deux mecanismes differents et un seul survit a la veille. Le lecteur de
-musique du site `vassi.click` le montre : il pose `audio.src = <adresse du fichier>` sur un element
-`<audio>`, donc iOS le traite comme un media, l'affiche sur l'ecran verrouille et le laisse jouer.
-C'est le comportement normal d'un media element, et il ne se transporte pas ici.
+Une seule phrase explique tout le reste :
 
-Ce moteur, lui, n'a pas de media element. Il recoit des paquets par WebSocket, les decode dans un
-worker, et ecrit du PCM dans une file que lit un AudioWorklet. Il n'existe aucune adresse, aucune
-ressource media que le navigateur pourrait posseder et decider de garder vivante. Ce qui s'arrete
-est le contexte audio, et quand la page passe en arriere-plan iOS Safari le met dans l'etat
-`interrupted`, dont la definition est que la page n'a pas la main : le navigateur decide seul quand
-interrompre et quand rendre la sortie audio. Android Chrome suspend de meme un contexte dont
-l'onglet est cache, et ce qu'il laisse tourner ensuite depend du reglage de batterie du navigateur
-dans les parametres du telephone.
+> **Quand l'ecran se verrouille, iOS suspend le JavaScript, Web Audio et WebRTC. Ce qui continue de
+> jouer, c'est un element `<audio>` dont la pile media native va chercher et decoder les donnees
+> toute seule.**
 
-**Faire jouer le direct par un vrai media element est possible, mais c'est une autre architecture.**
-Elle est decrite plus bas, avec ce qu'elle couterait.
+La ligne de partage n'est donc pas « element `<audio>` ou pas ». C'est **« le JavaScript est-il dans
+la boucle ou non ? »** Ce qui survit a la veille est ce que le systeme sait faire sans reveiller la
+page.
 
-Deux raccourcis circulent et aucun ne donne un vrai media element :
+Cette regle explique trois choses observees d'un coup :
 
-- **Sortir par un `MediaStreamAudioDestinationNode` branche sur un element `<audio>`.** L'element
-  existe, mais sa source reste le contexte audio, qui est justement ce qu'iOS interrompt : la source
-  se tarit avec lui. Le resultat differe en plus dans chaque navigateur — Chromium declenche les
-  evenements de lecture mais `currentTime` n'avance pas — et la specification ne dit pas ce qui
-  devrait se passer.
-- **Jouer un fichier muet en boucle.** Ce reveil ne fonctionne plus depuis plusieurs versions de
-  Safari mobile.
+- Le lecteur de musique du site `vassi.click` joue ecran eteint parce qu'il pose
+  `audio.src = <adresse du fichier>`. Le systeme telecharge et decode ce fichier lui-meme ; le
+  JavaScript n'a plus rien a faire une fois la lecture lancee.
+- Soundcloud et Bandcamp jouent la piste en cours ecran eteint, mais **ne passent pas a la suivante**,
+  parce que ce changement-la demande du JavaScript.
+- Ce moteur s'arrete tout de suite, parce qu'il est du JavaScript de bout en bout : WebSocket,
+  decodage dans un worker, ecriture dans une file, AudioWorklet.
 
-`background-audio.ts` fait donc les trois choses qui sont possibles sans changer d'architecture.
+### Ce que cela elimine
+
+| Chemin | Sur un iPhone verrouille |
+|---|---|
+| AudioWorklet, le chemin actuel | s'arrete tout de suite : le contexte passe en `interrupted` |
+| `MediaStreamAudioDestinationNode` vers `<audio srcObject>` | s'arrete aussi : l'element existe, mais sa source est le contexte audio, justement suspendu |
+| Fichier muet joue en boucle | ne reveille plus rien depuis plusieurs versions de Safari mobile |
+| WebRTC | suspendu au meme titre que Web Audio |
+| **MSE / `ManagedMediaSource`** | **s'arrete quand le tampon deja rempli est epuise** |
+
+La derniere ligne est la plus importante, parce que c'est le chemin qui semblait prometteur. Un
+`SourceBuffer` est bien un vrai media element, mais un direct demande un `appendBuffer` toutes les
+vingt millisecondes, **et cet appel est du JavaScript**. Ecran verrouille, il ne part plus : la
+lecture tient le temps de vider ce qui est deja en tampon, quelques secondes, puis s'arrete. Trois
+obstacles s'y ajoutent sur iPhone : MSE n'y existe que sous la forme `ManagedMediaSource`, depuis
+Safari 17.1 ; elle exige `disableRemotePlayback = true` ou une source HLS de repli ; et Safari ne lit
+pas l'Opus dans un conteneur MP4, ce qui obligerait a reencoder.
+
+### Le seul chemin qui tiendrait : une adresse que le systeme va chercher seul
+
+Pour qu'un telephone verrouille continue de jouer un direct, il faut lui donner **une adresse**, pas
+des echantillons : un flux HTTP continu, comme une radio Internet, ou un flux HLS. La pile media
+d'iOS s'y branche et se debrouille sans la page. C'est exactement pour cela qu'une webradio joue sur
+un iPhone dans une poche.
+
+Ce que cela couterait ici :
+
+- **Le relais devrait decoder et reencoder.** Le principe le plus structurant du projet est qu'il ne
+  decode jamais l'audio : il verifie un en-tete et renvoie les memes octets. Servir un flux lisible
+  par la pile native demanderait de passer l'Opus en MP3 ou en AAC, donc un decodage, un reencodage,
+  et un cout processeur par auditeur.
+- **La latence passerait a plusieurs secondes.** Un flux HTTP continu ou HLS est bufferise par le
+  systeme, et cette avance n'est pas reglable depuis la page. Les profils de 200, 400 et 800 ms n'ont
+  aucun sens sur ce chemin.
+- **La qualite baisserait.** Un reencodage MP3 ou AAC a partir d'Opus est une seconde passe avec
+  perte.
+
+**La conclusion tient en une ligne : sur le web d'aujourd'hui, l'ecoute en arriere-plan et la latence
+basse s'excluent.** L'une demande que le systeme possede le flux, l'autre que la page le pilote. Ce
+n'est pas un defaut a corriger, c'est un arbitrage a faire, et il est pose au bloc 9 de
+`docs/Roadmap-v2.md`.
+
+### Ce que `background-audio.ts` fait, dans le chemin actuel
+
+Puisque le chemin a latence basse est celui que le projet a choisi, ce module fait les trois choses
+possibles sans en changer.
 
 **Il declare l'intention audio de la page.** `navigator.audioSession.type = "playback"` dit au
 systeme que cette page joue un media. Sur iOS, c'est ce qui distingue un son que le bouton
@@ -353,29 +390,21 @@ d'ancien n'est joue au retour.
 Aucune de ces trois interfaces n'est indispensable. Chacune est verifiee avant usage, et un
 navigateur qui n'en offre aucune se comporte exactement comme avant.
 
-### Le chemin qui donnerait vraiment la veille : ManagedMediaSource
+### Sources
 
-Pour qu'un iPhone verrouille continue de jouer, il faut que le son soit une **ressource media que le
-navigateur possede**, pas des echantillons que la page lui pousse. Depuis Safari 17.1, l'iPhone
-offre `ManagedMediaSource` : un element `<audio>` alimente par la page, mais gere par le systeme.
-C'est lui qui previent la page, par les evenements `startstreaming` et `endstreaming`, quand il faut
-remplir ou lever le pied — y compris parce que l'ecran vient de se verrouiller. La lecture, elle,
-continue.
+Les affirmations ci-dessus viennent de ces relevés, faits le 2026-08-05 :
 
-Ce que cela demanderait :
+- l'etat `interrupted` d'`AudioContext` et sa definition — la page n'a pas la main — sur MDN ;
+- la suspension de Web Audio et de WebRTC des le verrouillage, sur le forum developpeur d'Apple ;
+- la lecture qui continue mais le JavaScript qui ne repart pas, observee sur Soundcloud et Bandcamp
+  et discutee dans les fils Apple sur les listes de lecture ecran verrouille ;
+- `ManagedMediaSource` sur iPhone depuis Safari 17.1, et son exigence de `disableRemotePlayback`,
+  sur le blog WebKit et sur MDN ;
+- l'absence d'Opus dans MP4 sur Safari, et son ajout en WebM pour l'enregistrement seulement a
+  partir de Safari 18.4.
 
-- **Empaqueter l'Opus dans un conteneur WebM dans le navigateur.** Un `SourceBuffer` n'accepte pas
-  des paquets Opus nus ; il lui faut un conteneur. C'est un muxeur a ecrire, pas enorme mais reel.
-- **Verifier Opus dans WebM sur un vrai iPhone.** Le parseur WebM de Safari pour MSE etait encore
-  marque experimental il y a peu ; rien ne remplace un essai.
-- **Accepter plus de latence.** Un `SourceBuffer` bufferise davantage qu'une file d'AudioWorklet, et
-  le systeme decide lui-meme de son avance. Les profils de 200, 400 et 800 ms ne tiendraient pas.
-- **Tenir deux chemins de lecture.** L'AudioWorklet resterait le chemin de l'ordinateur, ou la
-  latence basse est le but ; `ManagedMediaSource` serait celui du telephone.
-
-C'est donc un vrai choix et non un correctif : **la veille sur iPhone s'achete en latence.** Elle
-sort du perimetre de la v1, qui ecarte explicitement MSE et WebM. La decision est notee au bloc 9 de
-`docs/Roadmap-v2.md`.
+Ces comportements changent d'une version d'iOS a l'autre. Avant d'engager le moindre travail sur ce
+sujet, les revérifier sur un telephone reel : c'est la seule source qui ne se perime pas.
 
 ## Ce que ce moteur ne fait pas
 

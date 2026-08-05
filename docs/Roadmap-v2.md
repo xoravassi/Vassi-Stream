@@ -497,16 +497,18 @@ il ne marche pas.
 **La recherche faite le 2026-08-05 a corrigé l'hypothèse de départ de cette roadmap.** Il faut
 commencer par une distinction.
 
-**Un iPhone verrouillé continue de jouer un élément `<audio>`, et refuse de faire tourner un
-AudioWorklet.** Le lecteur de musique du site `vassi.click` le montre : il pose une adresse de
-fichier sur un élément `<audio>`, donc iOS le traite comme un média et le laisse jouer écran éteint.
-Ce moteur-ci n'a pas de média : il pousse des échantillons dans un AudioWorklet, et c'est le contexte
-audio qu'iOS met dans l'état `interrupted` — dont la définition est que la page n'a pas la main.
-Android Chrome suspend de même un contexte dont l'onglet est caché, et ce qu'il laisse tourner
-ensuite dépend du réglage de batterie du navigateur, pas de la page.
+**Quand l'écran se verrouille, iOS suspend le JavaScript, Web Audio et WebRTC. Ce qui continue de
+jouer, c'est un élément `<audio>` dont la pile média native va chercher et décoder les données toute
+seule.** La ligne de partage n'est pas « élément `<audio>` ou pas » : c'est « le JavaScript est-il
+dans la boucle ou non ».
 
-Faire jouer le direct par un vrai élément `<audio>` **est possible** — c'est `ManagedMediaSource`,
-disponible sur iPhone depuis Safari 17.1 — mais c'est une autre architecture, décrite plus bas.
+Cette règle explique trois observations d'un coup. Le lecteur de musique du site `vassi.click` joue
+écran éteint parce qu'il pose une adresse de fichier et que le système fait le reste. Soundcloud et
+Bandcamp jouent la piste en cours mais ne passent pas à la suivante, parce que ce changement demande
+du JavaScript. Et ce moteur s'arrête tout de suite, parce qu'il est du JavaScript de bout en bout.
+
+Android suspend de même un contexte audio dont l'onglet est caché, et ce qu'il laisse tourner ensuite
+dépend du réglage de batterie du navigateur.
 
 Les deux contournements que cette roadmap proposait ont été écartés après vérification. Sortir par un
 `MediaStreamAudioDestinationNode` branché sur un `<audio>` donne un résultat différent dans chaque
@@ -524,25 +526,39 @@ Douze tests couvrent ce module, dont un qui va du relais réel jusqu'au contexte
 Le son ne survit toujours pas à un écran verrouillé sur iPhone. L'auditeur qui rallume son téléphone
 retrouve en revanche le direct tout de suite, sans recharger la page.
 
-### La décision qui reste : acheter la veille en latence
+### La décision qui reste : un second mode d'écoute, lent et autonome
 
-Pour qu'un iPhone verrouillé continue de jouer, il faut que le son soit une **ressource média que le
-navigateur possède**, pas des échantillons que la page lui pousse. `ManagedMediaSource` le permet
-depuis Safari 17.1 : un élément `<audio>` alimenté par la page mais géré par le système, qui prévient
-par `startstreaming` et `endstreaming` quand remplir ou lever le pied — y compris parce que l'écran
-vient de se verrouiller.
+`ManagedMediaSource` a été étudié et **ne résout pas le problème.** Un `SourceBuffer` est bien un
+vrai élément média, mais un direct demande un `appendBuffer` toutes les vingt millisecondes, et cet
+appel est du JavaScript : écran verrouillé, la lecture tient le temps de vider le tampon déjà rempli,
+quelques secondes, puis s'arrête. S'y ajoutent trois obstacles sur iPhone — MSE n'y existe que sous
+la forme `ManagedMediaSource` depuis Safari 17.1, elle exige `disableRemotePlayback = true`, et
+Safari ne lit pas l'Opus dans un conteneur MP4.
+
+**Le seul chemin qui tiendrait est de donner au téléphone une adresse, pas des échantillons** : un
+flux HTTP continu comme une radio Internet, ou un flux HLS, que la pile média d'iOS va chercher et
+décode seule. C'est exactement pour cela qu'une webradio joue dans une poche.
 
 | Ce que ça demande | Ce que ça coûte |
 |---|---|
-| Empaqueter l'Opus dans un conteneur WebM dans le navigateur | un muxeur à écrire, réel mais pas énorme |
-| Vérifier Opus dans WebM sur un vrai iPhone | le parseur WebM MSE de Safari était encore marqué expérimental il y a peu |
-| Alimenter un `SourceBuffer` au lieu d'une file d'AudioWorklet | **les profils 200 / 400 / 800 ms ne tiennent plus** |
-| Garder l'AudioWorklet pour l'ordinateur | deux chemins de lecture à maintenir |
+| Décoder l'Opus et le réencoder en MP3 ou AAC, dans le relais | **casse le principe le plus structurant du projet** : le relais ne décode jamais l'audio |
+| Servir un flux HTTP continu ou HLS | un coût processeur par auditeur, là où le relais ne faisait que recopier des octets |
+| Laisser le système gérer son avance | **la latence passe à plusieurs secondes**, et n'est pas réglable depuis la page |
+| Réencoder depuis de l'Opus | une seconde passe avec perte |
+| Garder l'AudioWorklet pour l'écoute attentive | deux chemins de lecture à maintenir |
+
+**Sur le web d'aujourd'hui, l'écoute en arrière-plan et la latence basse s'excluent.** L'une demande
+que le système possède le flux, l'autre que la page le pilote. Ce n'est pas un défaut à corriger,
+c'est un arbitrage.
 
 **La question à trancher est donc : pour qui est faite la page ?** Pour un professeur qui écoute un
 mix pendant un appel vidéo, la latence basse est tout le projet et la veille de l'écran ne sert à
-rien. Pour quelqu'un qui écoute un direct dans sa poche, c'est l'inverse. Les deux ne se font pas
-avec le même chemin audio, et vouloir les deux, c'est accepter d'en maintenir deux.
+rien. Pour quelqu'un qui suit un direct dans sa poche, c'est l'inverse, et quelques secondes de
+retard ne le gênent pas.
+
+**Si les deux sont voulus, ce sont deux modes d'écoute affichés comme tels**, pas un réglage caché :
+« Écoute attentive, latence basse, écran allumé » et « Écoute d'ambiance, quelques secondes de
+retard, fonctionne écran éteint ». Le second est un ajout au relais, pas une modification du premier.
 
 Rien ne presse : ce choix se prend après les mesures ci-dessous, pas avant.
 
