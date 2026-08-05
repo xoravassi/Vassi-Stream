@@ -3,11 +3,16 @@
 //
 // Usage : npm.cmd run device:install
 //
-// Le device n'est pas gele : il lance `node/index.js` par un chemin relatif a lui-meme. Le dossier
-// `device/node/` doit donc etre copie a cote du `.amxd`, sans quoi le device s'ouvre mais ne parle
-// a rien. C'est la raison du sous-dossier « Vassi Stream » : un `.amxd` pose seul dans le dossier
-// des devices ne trouverait pas son script. Le gel du device, au bloc 11, supprimera ce besoin.
-import { copyFileSync, cpSync, existsSync, mkdirSync, statSync } from "node:fs";
+// Le device n'est pas gele : il demande son script Node par son seul nom de fichier, et c'est Max
+// qui doit le retrouver. Or Max n'indexe pas la bibliotheque d'Ableton — pas un fichier de
+// `Documents\Ableton\User Library` n'entre dans sa base de recherche. Poser le dossier `node/` a
+// cote du `.amxd` ne servait donc a rien : le script restait invisible et ne demarrait jamais.
+//
+// Les deux morceaux vont a deux endroits : le `.amxd` dans la bibliotheque d'Ableton, qui le montre
+// dans son navigateur, et le dossier `node/` dans la bibliotheque de Max, que Max indexe. C'est
+// deja par la que `vassi.encoder~` est trouve. Le gel du device, au bloc 11, emportera le script
+// dans le `.amxd` et supprimera ce second depot.
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,7 +27,11 @@ const MAXPAT = join(ROOT, "patchers", "vassi-stream.maxpat");
 const NODE_SOURCE = join(ROOT, "device", "node");
 const EXTERNAL = join(ROOT, "externals", EXTERNAL_NAME);
 
-const MAX_LIBRARY = join(HOME, "Documents", "Max 8", "Library", "Vassi Stream", "externals");
+// La bibliotheque de Max : le seul des deux dossiers que Max indexe, donc le seul ou il retrouve
+// un fichier demande par son nom.
+const MAX_PACKAGE = join(HOME, "Documents", "Max 8", "Library", "Vassi Stream");
+const MAX_LIBRARY = join(MAX_PACKAGE, "externals");
+const MAX_NODE = join(MAX_PACKAGE, "node");
 // Ce dossier est celui que Live montre sous Categories > Audio Effects > Max Audio Effect.
 const LIVE_DEVICES = join(HOME, "Documents", "Ableton", "User Library", "Presets", "Audio Effects", "Max Audio Effect", "Vassi Stream");
 
@@ -57,10 +66,23 @@ if (!existsSync(DEVICE)) {
 		copyInto(DEVICE, LIVE_DEVICES, DEVICE_NAME);
 		try {
 			// `node_modules` part avec le reste : le script Node a besoin de `ws` pour joindre le relais.
-			cpSync(NODE_SOURCE, join(LIVE_DEVICES, "node"), { recursive: true });
-			record(true, `node/ copie dans ${LIVE_DEVICES}`);
+			cpSync(NODE_SOURCE, MAX_NODE, { recursive: true });
+			record(true, `node/ copie dans ${MAX_NODE}`);
 		} catch (error) {
 			record(false, `node/ non copie : ${error.message}. Fermer Ableton Live et Max puis relancer.`);
+		}
+
+		// Les versions precedentes posaient le script a cote du `.amxd`, ou Max ne le trouvait pas.
+		// Cette copie morte est effacee : deux exemplaires du meme script, dont un que rien ne lit,
+		// est la meilleure facon de corriger un fichier sans effet.
+		const stale = join(LIVE_DEVICES, "node");
+		if (existsSync(stale)) {
+			try {
+				rmSync(stale, { recursive: true, force: true });
+				record(true, `ancienne copie de node/ effacee dans ${LIVE_DEVICES}`);
+			} catch (error) {
+				record(false, `ancienne copie de node/ non effacee : ${error.message}.`);
+			}
 		}
 	}
 }
@@ -86,6 +108,9 @@ if (blocked.length === 0) {
 	console.log("  1. Categories > Audio Effects > Max Audio Effect > Vassi Stream");
 	console.log(`  2. Deposer "${DEVICE_NAME}" sur la piste Master.`);
 	console.log("  3. Cliquer sur Reglages, coller l'adresse et le token, puis Enregistrer.");
+	console.log("");
+	console.log("Max ne relit sa bibliotheque qu'au demarrage : si Live tournait pendant cette");
+	console.log("installation, le fermer et le rouvrir avant de reposer le device.");
 	console.log("");
 	console.log("Le device installe est une copie. Une retouche faite dans Max sur cette copie ne");
 	console.log("revient pas dans le depot : la rapporter dans patchers/vassi-stream.maxpat.");

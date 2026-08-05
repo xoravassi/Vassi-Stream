@@ -97,7 +97,7 @@ export class ListenerHub {
     // Un signe de vie quelconque prouve que la connexion repond encore.
     socket.on("pong", () => this.markAlive(listener));
     socket.on("ping", () => this.markAlive(listener));
-    // La page `/live` n'envoie rien. Une connexion qui parle ne suit pas le protocole.
+    // La page `/session` n'envoie rien. Une connexion qui parle ne suit pas le protocole.
     socket.on("message", () => {
       this.closeListener(socket, CLOSE_UNSUPPORTED_DATA, "listener_message_refuse");
     });

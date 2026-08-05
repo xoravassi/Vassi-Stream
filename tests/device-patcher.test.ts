@@ -22,7 +22,10 @@ const AMXD_AUDIO_EFFECT = 1633771873;
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PATCHER = JSON.parse(readFileSync(`${ROOT}patchers/vassi-stream.maxpat`, "utf8")).patcher;
-const NODE_SOURCE = readFileSync(`${ROOT}device/node/index.js`, "utf8");
+// Ce nom est celui que le patcher demande a Max, et celui du fichier qui vit dans le depot : les
+// deux doivent rester le meme mot, sans quoi le device demarre un script qui n'existe pas.
+const NODE_ENTRY = "vassi-stream-device.js";
+const NODE_SOURCE = readFileSync(`${ROOT}device/node/${NODE_ENTRY}`, "utf8");
 
 // La hauteur d'un device Live ne se choisit pas : elle vaut 169 pixels pour tous les devices.
 const DEVICE_HEIGHT = 169;
@@ -163,6 +166,70 @@ test("les onglets, les menus et les boutons sont en mode LCD", () => {
   }
 });
 
+// Ces trois classes sont les commandes du device : ce qui repond a un clic. Les autres objets
+// `live.*` ne font qu'afficher — un libelle, un trait, un vumetre — et ne sont pas des parametres.
+const COMMANDS = ["live.tab", "live.menu", "live.text"];
+
+// Ce test verifie que chaque commande du device est un parametre Live.
+//
+// C'est le defaut qui a laisse les deux boutons de la page de reglages sans effet a la premiere
+// ouverture dans Ableton : ils etaient poses avec `parameter_enable` a 0. Le bang d'un `live.text`
+// en mode bouton nait de la transition 0 -> 1 de son parametre — la page de reference de Max le dit
+// a l'attribut `transition` — donc un bouton sans parametre ne sort rien du tout. Rien ne le
+// signale : ni erreur, ni cable manquant, ni objet mal place, et les tests de cablage passaient.
+//
+// Le releve des devices livres avec Live dit la meme chose autrement : sur leurs 411 objets
+// `live.*`, aucun n'a `parameter_enable` a 0.
+//
+// Le nom long identifie le parametre dans le fichier de morceau ; deux commandes qui le partagent
+// deviennent une seule aux yeux de Live.
+test("chaque commande du device est un parametre Live", () => {
+  const commands = boxes.filter((box) => COMMANDS.includes(box.maxclass));
+
+  assert.ok(commands.length >= 5, "le device doit porter des commandes");
+
+  const longNames: string[] = [];
+  for (const box of commands) {
+    assert.equal(box.parameter_enable, 1, `${box.varname} ne sortirait rien au clic`);
+
+    const longName = String(parameterOf(box).parameter_longname ?? "");
+    assert.notEqual(longName, "", `${box.varname} n'a pas de nom long`);
+    longNames.push(longName);
+  }
+
+  assert.equal(new Set(longNames).size, longNames.length, "deux commandes portent le meme nom long");
+});
+
+// Ce test verifie les deux boutons de la page de reglages.
+//
+// Un bouton n'a pas d'etat a retenir : son parametre est cache, comme le demandent les
+// recommandations de production d'Ableton, pour qu'un clic n'entre pas dans l'historique
+// d'annulation de Live et ne parte pas avec le morceau.
+//
+// `outputmode` ne doit pas etre pose : la page de reference le limite au mode interrupteur, et
+// aucun des 138 boutons `live.text` livres avec Live ne le pose. `texton` reprend le libelle, sinon
+// l'objet affiche le texte par defaut de Max le temps du clic.
+test("les deux boutons de la page de reglages sont des boutons sans etat", () => {
+  for (const id of ["save-button", "check-button"]) {
+    const button = byId.get(id);
+
+    assert.ok(button, `${id} manque`);
+    assert.equal(button.maxclass, "live.text");
+
+    const attributes = button as unknown as Record<string, unknown>;
+    assert.equal(attributes.mode, 0, `${id} doit etre en mode bouton`);
+    assert.equal(attributes.outputmode, undefined, `${id} ne doit pas poser outputmode`);
+    assert.equal(attributes.texton, attributes.text, `${id} changerait de libelle pendant le clic`);
+
+    const parameter = parameterOf(button);
+    assert.equal(parameter.parameter_invisible, 2, `${id} doit rester cache de Live`);
+    assert.deepEqual(parameter.parameter_initial, [0], `${id} doit demarrer au repos`);
+
+    // Un clic doit atteindre le script Node, sans quoi le bouton ne fait rien de visible.
+    assert.ok(reachedFrom(id, 0).includes("node"), `${id} n'atteint pas le script Node`);
+  }
+});
+
 // Ce test verifie la forme du device : presentation a l'ouverture, largeur fixee, et objets
 // entierement contenus dans la surface que Live accorde.
 test("le device tient dans la surface accordee par Live", () => {
@@ -290,14 +357,27 @@ test("le champ du token ne contient rien", () => {
   assert.equal(field.parameter_enable, undefined, "un champ texte n'est pas un parametre Live");
 });
 
-// Ce test verifie que le chemin du script Node est relatif au device. Un chemin absolu ne
-// fonctionnerait que sur la machine ou le device a ete construit.
-test("le script Node est designe par un chemin relatif", () => {
+// Ce test verifie comment le device nomme son script Node.
+//
+// C'est le defaut qui a laisse tout le device muet a la premiere ouverture dans Ableton : le
+// patcher demandait `node/index.js`, et Max n'a jamais trouve ce fichier. Sa base de recherche
+// n'indexe pas un seul fichier de `Documents\Ableton\User Library` — le dossier `node/` pose a cote
+// du `.amxd` y etait invisible. Aucun processus Node ne demarrait, et aucun bouton ne faisait rien.
+//
+// Max ne sait retrouver ici qu'un nom de fichier seul, cherche dans sa propre bibliotheque. Trois
+// choses doivent donc tenir ensemble : pas de chemin absolu, qui ne survivrait pas a un changement
+// de machine ; pas de dossier dans le nom, que Max ne resout pas ; et le meme nom que le fichier du
+// depot, que `device:install` copie dans la bibliotheque de Max.
+test("le device demande son script Node par un nom de fichier seul", () => {
   const node = boxes.find((box) => textOf(box).startsWith("node.script"));
 
   assert.ok(node, "le device doit contenir un objet node.script");
-  assert.doesNotMatch(textOf(node), /[A-Za-z]:[\\/]/, "chemin absolu dans le device");
-  assert.match(textOf(node), /node\/index\.js/);
+
+  const asked = String(textOf(node).split(/\s+/)[1]);
+
+  assert.doesNotMatch(asked, /[A-Za-z]:[\\/]/, "chemin absolu dans le device");
+  assert.doesNotMatch(asked, /[\\/]/, "Max ne resout pas un dossier dans le nom du script");
+  assert.equal(asked, NODE_ENTRY, "le nom demande n'est pas celui du fichier du depot");
   assert.match(textOf(node), /@autostart 1/, "le script demarre a l'ouverture du device");
 });
 

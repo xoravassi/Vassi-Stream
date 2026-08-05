@@ -566,7 +566,7 @@
 					"numoutlets": 2,
 					"outlettype": ["", ""],
 					"patching_rect": [560.0, 70.0, 560.0, 22.0],
-					"text": "node.script C:/Users/LENOVO/Documents/VASSI/vassi-stream/device/node/index.js @autostart 1"
+					"text": "node.script C:/Users/LENOVO/Documents/VASSI/vassi-stream/device/node/vassi-stream-device.js @autostart 1"
 				}
 			},
 			{

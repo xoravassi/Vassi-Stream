@@ -23,7 +23,7 @@ Le publisher ne cree jamais d'audio. Il recoit une frame deja encodee, ecrit l'e
 | `device/node/publisher-protocol.js` | messages JSON v1, en-tete binaire v1, identifiant de session |
 | `device/node/publisher-backoff.js` | delai avant chaque tentative de reconnexion |
 | `device/node/publisher.js` | machine a etats, connexion, session, envoi des frames |
-| `device/node/index.js` | cablage du pont, du publisher et des messages Max |
+| `device/node/vassi-stream-device.js` | cablage du pont, du publisher et des messages Max |
 
 ## Bibliotheques
 
@@ -51,7 +51,7 @@ Contenu :
 
 ```json
 {
-	"relayUrl": "wss://relai.vassi.click/publisher",
+	"relayUrl": "wss://live.vassi.click/publisher",
 	"publisherToken": "valeur_secrete"
 }
 ```
@@ -69,13 +69,13 @@ Ecriture depuis la ligne de commande :
 
 ```powershell
 $env:VASSI_PUBLISHER_TOKEN = "valeur_secrete"
-npm.cmd run config:publisher -- --url wss://relai.vassi.click/publisher
+npm.cmd run config:publisher -- --url wss://live.vassi.click/publisher
 ```
 
 Passer le token par la variable d'environnement evite de le laisser dans l'historique du terminal.
 L'option `--token` existe aussi, mais elle est moins sure. Le script ne reaffiche jamais le token ; il
-confirme seulement qu'il est enregistre. Au bloc 10, le device ecrira ce meme fichier depuis son
-interface.
+confirme seulement qu'il est enregistre. Le device ecrit aujourd'hui ce meme fichier depuis son
+panneau de reglages : cette commande ne sert plus qu'a un poste ou Max n'est pas installe.
 
 Une adresse `wss://` est acceptee partout. Une adresse `ws://` n'est acceptee que vers `127.0.0.1` ou
 `localhost`, ce qui sert aux tests : le token de publication ne doit jamais traverser un reseau en

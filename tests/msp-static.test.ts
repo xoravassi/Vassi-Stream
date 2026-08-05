@@ -317,7 +317,7 @@ test("envoie les frames depuis le worker et pas depuis Max", () => {
 // Ce test verifie que le cote Node reste local, en CommonJS et sans base64.
 test("expose un pont loopback CommonJS cote Node", () => {
   const bridge = readFileSync(join(ROOT, "device", "node", "frame-bridge.js"), "utf8");
-  const entry = readFileSync(join(ROOT, "device", "node", "index.js"), "utf8");
+  const entry = readFileSync(join(ROOT, "device", "node", "vassi-stream-device.js"), "utf8");
   const manifest = JSON.parse(readFileSync(join(ROOT, "device", "node", "package.json"), "utf8"));
 
   assert.equal(manifest.type, "commonjs");
@@ -338,7 +338,7 @@ test("transmet le port de node.script a vassi.encoder~", () => {
     lines.some((line: any) => line.source[0] === from && line.source[1] === outlet && line.destination[0] === to);
 
   // Le chemin du script est absolu : le device reste valide depuis la User Library d'Ableton.
-  assert.match(textOf("node"), /^node\.script [A-Za-z]:\/.*\/device\/node\/index\.js @autostart 1$/);
+  assert.match(textOf("node"), /^node\.script [A-Za-z]:\/.*\/device\/node\/vassi-stream-device\.js @autostart 1$/);
   assert.match(textOf("node-route"), /route port status stats/);
   assert.equal(textOf("port-to-encoder"), "prepend port");
   assert.ok(linked("node", 0, "node-route"));

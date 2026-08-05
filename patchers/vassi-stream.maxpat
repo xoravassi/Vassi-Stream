@@ -838,14 +838,18 @@
 						"",
 						""
 					],
-					"parameter_enable": 0,
 					"mode": 0,
-					"outputmode": 1,
 					"appearance": 2,
 					"lcdbgcolor": [
 						0.019608,
 						0.019608,
 						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
 						1
 					],
 					"textcolor": [
@@ -855,7 +859,39 @@
 						1
 					],
 					"fontsize": 10,
-					"text": "Enregistrer"
+					"text": "Enregistrer",
+					"texton": "Enregistrer",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "Enregistrer",
+							"parameter_longname": "Enregistrer",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
 				}
 			},
 			{
@@ -882,14 +918,18 @@
 						"",
 						""
 					],
-					"parameter_enable": 0,
 					"mode": 0,
-					"outputmode": 1,
 					"appearance": 2,
 					"lcdbgcolor": [
 						0.019608,
 						0.019608,
 						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
 						1
 					],
 					"textcolor": [
@@ -899,7 +939,39 @@
 						1
 					],
 					"fontsize": 10,
-					"text": "Tester le relais"
+					"text": "Tester le relais",
+					"texton": "Tester le relais",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "Tester",
+							"parameter_longname": "Tester",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
 				}
 			},
 			{
@@ -1334,7 +1406,7 @@
 				"box": {
 					"id": "node",
 					"maxclass": "newobj",
-					"text": "node.script node/index.js @autostart 1",
+					"text": "node.script vassi-stream-device.js @autostart 1",
 					"numinlets": 1,
 					"numoutlets": 2,
 					"outlettype": [

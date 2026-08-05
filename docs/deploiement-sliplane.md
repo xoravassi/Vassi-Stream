@@ -13,7 +13,7 @@ Le projet a trois morceaux. Deux tournent chez vous, un tourne sur Internet.
 
 ```text
 Ableton (votre ordinateur)          Sliplane (Internet)         Navigateur du professeur
-  device Max for Live      ----->      le relais       ----->      page /suivi-live
+  device Max for Live      ----->      le relais       ----->      page /session
 ```
 
 **Le relais** est le seul morceau a deployer. C'est un petit programme qui recoit le son d'Ableton et
@@ -158,7 +158,7 @@ Ce qui donne trois adresses, chacune avec un role precis :
 Les deux adresses en `wss://` sont les deux prises du relais : une ou Ableton branche le son, une ou
 les auditeurs le prennent. Ce ne sont pas des pages web, personne ne les ouvre a la main.
 
-**L'adresse que vous donnerez au professeur reste `https://www.vassi.click/suivi-live`.** C'est la
+**L'adresse que vous donnerez au professeur reste `https://www.vassi.click/session`.** C'est la
 seule que quelqu'un tape.
 
 ---
@@ -320,10 +320,10 @@ Les espaces avant ou apres le token sont enleves automatiquement : un copier-col
 gestionnaire de mots de passe en emporte souvent un, et ce n'est pas une raison pour que
 l'authentification echoue.
 
-> **Ce point sera plus simple.** Le bloc 10 ajoute deux champs texte et un bouton Enregistrer
-> directement dans le device : installer un nouvel ordinateur reviendra a poser le device, coller
-> l'adresse et le token, et cliquer. Aucune fenetre PowerShell. La commande ci-dessus est la solution
-> d'attente, pas la solution finale.
+> **Cette etape est plus simple depuis le device.** Le panneau de reglages porte deux champs texte et
+> un bouton Enregistrer : installer un nouvel ordinateur revient a poser le device, coller l'adresse
+> et le token, et cliquer. Aucune fenetre PowerShell. La commande ci-dessus reste utile sur un poste
+> ou Max n'est pas installe.
 
 ---
 
@@ -367,7 +367,7 @@ Voici tout ce qu'elle montre :
 
 Il n'y a la ni token, ni son, ni adresse IP, ni nom de personne. Le seul fait un peu personnel,
 « un direct est en cours », est de toute facon deja public : il suffit d'ouvrir la page
-`/suivi-live` pour le savoir. En echange, vous pouvez diagnostiquer une panne depuis n'importe quel
+`/session` pour le savoir. En echange, vous pouvez diagnostiquer une panne depuis n'importe quel
 telephone.
 
 Les quatre chiffres utiles quand quelque chose cloche :
@@ -411,15 +411,15 @@ que la nouvelle valeur sera en place sur la machine.
 
 ---
 
-## Ce qui reste a faire au bloc 9
+## La page publique n'est pas un service Sliplane de plus
 
-La page `/suivi-live` est un ajout au site Svelte existant, pas un troisieme service Sliplane. Deux
-points la concernent au moment de la deployer :
+La page `/session` est une route du site Svelte existant, pas un troisieme service Sliplane. Deux
+points la concernent, tous les deux deja tranches :
 
-- l'adresse `wss://live.vassi.click/listener` doit etre un reglage du site, pas une adresse ecrite en
-  dur dans un composant ;
-- si la page utilise `SharedArrayBuffer`, le site doit renvoyer les en-tetes
-  `Cross-Origin-Opener-Policy: same-origin` et `Cross-Origin-Embedder-Policy: require-corp`. Ces
-  en-tetes bloquent toute ressource externe de la page, ce qui peut casser autre chose sur le site.
-  Le moteur audio fonctionne aussi sans eux, avec un transport par messages : c'est un choix a faire
-  en regardant ce que la page charge par ailleurs.
+- l'adresse `wss://live.vassi.click/listener` est un reglage du site, pas une adresse ecrite en dur
+  dans un composant ;
+- les en-tetes `Cross-Origin-Opener-Policy` et `Cross-Origin-Embedder-Policy` ne sont pas poses. Ils
+  ne servent qu'a `SharedArrayBuffer`, que le moteur audio n'utilise pas, et ils bloqueraient les
+  ressources externes du reste du site. Le transport par messages est celui qui tourne.
+
+Le detail de ce que le site copie depuis ce depot est dans [pont-site-web.md](pont-site-web.md).

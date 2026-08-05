@@ -104,4 +104,4 @@ Points retenus :
 ## A confirmer par Vassi
 
 - La confirmation du sous-domaine `live.vassi.click` pour le relais.
-- Le test Safari quand la page `/live` existe. Le moteur audio du bloc 8 se teste des maintenant avec `npm.cmd run player:fixture`.
+- Le test Safari sur la page `/session`. Le moteur audio se teste aussi seul avec `npm.cmd run player:fixture`.

@@ -1,7 +1,7 @@
-# Relais Node du bloc 7
+# Relais Node
 
 Ce document decrit le relais deploye sur Sliplane : la partie qui recoit le flux du device et le
-rediffuse aux auditeurs de la page `/live`. Le contrat public reste `docs/protocol-v1.md`.
+rediffuse aux auditeurs de la page `/session`. Le contrat public reste `docs/protocol-v1.md`.
 
 ## Chaine complete
 

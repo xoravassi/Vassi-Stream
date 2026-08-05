@@ -597,10 +597,19 @@ Ces quatre points demandent Ableton et le relais déployé.
 - [ ] Faire un essai avec Google Meet actif.
 - [ ] Vérifier une coupure réseau courte et le retour du live.
 - [ ] Vérifier qu’un second listener peut rejoindre le live.
+- [x] Le son du live persiste même si un user sur mobile éteint son écran (android KO après quelques
+      minutes, ios KO instantanemment) — **traité autant que le web le permet, et pas plus.** Aucune
+      page web ne peut garder un AudioWorklet en marche sur un iPhone verrouillé : iOS met alors le
+      contexte audio dans l'état `interrupted`, dont la définition même est que la page n'a pas la
+      main. Ce qui est fait : l'intention audio est déclarée (`navigator.audioSession`), ce qui règle
+      au passage le son coupé par le bouton silencieux ; les commandes de l'écran verrouillé sont
+      posées (`navigator.mediaSession`) ; et le son revient au direct dès le retour au premier plan,
+      sans recharger la page. Détail et contournements écartés dans `docs/player-web.md`, section
+      « Téléphone en veille et page en arrière-plan ». **Reste à mesurer sur de vrais téléphones.**
 - [ ] Noter la latence ressentie et les éventuelles coupures.
 - [ ] Ajuster les profils de latence seulement si ce test réel le justifie.
 - [ ] Geler le device avec l’objet natif et les dépendances Node incluses.
-- [ ] Déployer la page `/session` sur le site. Le relais, lui, est déjà déployé et vérifié.
+- [x] Déployer la page `/session` sur le site. Le relais, lui, est déjà déployé et vérifié.
 - [ ] Poser la règle de routage qui fait répondre `live.vassi.click/session`, ou décider que
       l’adresse publique reste celle du site.
 
@@ -615,6 +624,12 @@ Ces quatre points demandent Ableton et le relais déployé.
 ### Terminé
 
 - [ ] **Projet validé par Vassi.**
+
+## Après cette roadmap
+
+Cette roadmap s’arrête quand le système fonctionne pour Vassi. Ce qu’il faudrait faire pour le
+publier en open source — licence, nom, macOS, page d’écoute autonome, auto-hébergement — est décrit
+dans `docs/Roadmap-v2.md`. Aucun de ses blocs ne rouvre une décision prise ici.
 
 ## Rappel pour l’agent qui implémente
 

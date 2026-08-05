@@ -190,8 +190,8 @@ export function buildInterface() {
 		field("url-field", [620, 60, 248, 18], [64, 40, 248, 18]),
 		label("token-label", "Token", [620, 85, 52, 18], [MARGIN, 62, 52, textBox(LABEL_SIZE)], LABEL_SIZE),
 		field("token-field", [620, 105, 248, 18], [64, 62, 248, 18]),
-		button("save-button", "Enregistrer", [620, 130, 120, 15], [64, 86, 120, 15]),
-		button("check-button", "Tester le relais", [750, 130, 120, 15], [192, 86, 120, 15]),
+		button("save-button", "Enregistrer", [620, 130, 120, 15], [64, 86, 120, 15], "Enregistrer"),
+		button("check-button", "Tester le relais", [750, 130, 120, 15], [192, 86, 120, 15], "Tester"),
 		label("relay-line", "relais non testé", [620, 155, 250, 18], [MARGIN, 103, CONTENT_WIDTH, textBox(LABEL_SIZE)], LABEL_SIZE),
 		label("bridge-line", "encodeur en attente", [620, 175, 250, 18], [MARGIN, 121, CONTENT_WIDTH, textBox(LABEL_SIZE)], LABEL_SIZE),
 
@@ -292,25 +292,51 @@ function rule(id, at, shows) {
 
 // Cette fonction cree un bouton qui envoie un bang au clic, sans etat a retenir.
 //
-// `outputmode: 1` (relachement de la souris) est la valeur que les recommandations de production
-// Max for Live d'Ableton demandent explicitement pour `live.text`, et qui n'est pas celle posee
-// par defaut : sans elle, le bouton repond au clic plutot qu'au relachement, contrairement aux
-// boutons natifs de Live.
-function button(id, text, at, shows) {
+// **Un bouton `live.text` doit etre un parametre Live, sinon il ne sort rien.** C'est le defaut qui
+// laissait les deux boutons de la page de reglages sans effet dans Ableton. La page de reference de
+// `live.text` le dit a l'attribut `transition` : « The parameter automation of live.text stores 0
+// and 1 values. The transition attribute specifies when a bang will be sent to the outlet. » Le
+// bang d'un clic nait donc de la transition 0 -> 1 du parametre ; sans parametre, il n'y a pas de
+// transition, donc pas de bang. Le releve le confirme : sur les 411 objets `live.*` des devices
+// livres avec Live, aucun n'a `parameter_enable` a 0.
+//
+// La visibilite est « cache » : les recommandations de production d'Ableton la demandent
+// explicitement pour un `live.text` en mode bouton, pour qu'un clic n'entre pas dans l'historique
+// d'annulation de Live. Rien n'est donc enregistre avec le morceau, ce qui etait deja l'intention.
+//
+// `outputmode` n'est pas pose. La page de reference le limite au mode interrupteur — « Sets the
+// output mode for the live.text object when it's mode attribute is set to 1 (toggle) » — et aucun
+// des 138 boutons `live.text` livres avec Live ne le pose. Le bouton du direct, lui, est un
+// interrupteur : il garde `outputmode 1`, la ou l'attribut agit vraiment.
+//
+// `texton` reprend le meme texte que `text` : en mode bouton, l'objet passe par l'etat « allume »
+// le temps du clic, et il y afficherait sinon le libelle par defaut de Max.
+//
+// `lcdcolor` donne au libelle sa couleur en mode LCD — c'est `lcdcolor` qui peint le texte a
+// l'arret, et le fond pendant le clic. Sans lui, les deux boutons prenaient l'orange par defaut de
+// Max au milieu d'un device gris.
+function button(id, text, at, shows, name) {
 	return control(id, "live.text", {
 		at,
 		shows,
 		outlets: 2,
 		outletTypes: ["", ""],
 		attributes: {
-			parameter_enable: 0,
 			mode: 0,
-			outputmode: 1,
 			appearance: 2,
 			lcdbgcolor: PALETTE.bg,
+			lcdcolor: PALETTE.text,
 			textcolor: PALETTE.text,
 			fontsize: LABEL_SIZE,
-			text
+			text,
+			texton: text,
+			...enumParameter({
+				shortName: name,
+				longName: name,
+				values: ["Repos", "Clic"],
+				initial: 0,
+				visibility: HIDDEN
+			})
 		}
 	});
 }

@@ -18,7 +18,7 @@ WORKDIR /app
 COPY relay/package.json relay/package-lock.json ./relay/
 RUN cd relay && npm ci --omit=dev
 
-# Le module de protocole est partage avec le device et la page `/live` : il reste a sa place.
+# Le module de protocole est partage avec le device et la page `/session` : il reste a sa place.
 COPY src/protocol ./src/protocol
 COPY relay ./relay
 

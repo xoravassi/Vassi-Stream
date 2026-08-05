@@ -1,8 +1,8 @@
-# Moteur audio navigateur du bloc 8
+# Moteur audio navigateur
 
 Ce document decrit la partie navigateur qui recoit le flux du relais, le decode et le joue. Le
-contrat public reste `docs/protocol-v1.md`. Le bloc 8 ne produit aucune interface visible : il
-produit un moteur que le bloc 9 branchera sur la page Svelte `/live`.
+contrat public reste `docs/protocol-v1.md`. Ce moteur ne produit aucune interface visible : la page
+Svelte `/session` du site le branche derriere son bouton Play/Pause.
 
 ## Chaine complete
 
@@ -44,12 +44,14 @@ lit les messages JSON, transfere les octets binaires au worker et pilote la mach
 | `src/player/player-diagnostics.ts` | rangement d'une panne entre reseau, decodage et audio |
 | `src/player/listener-socket.ts` | connexion WebSocket, separation JSON / binaire, reconnexion |
 | `src/player/browser-audio.ts` | contexte audio, processeur, worker : les pieces du navigateur |
+| `src/player/background-audio.ts` | page mise en arriere-plan : intention audio, ecran verrouille, reprise |
 | `src/player/audio-player.ts` | assemblage, compteurs, Play et Pause |
-| `src/player/index.ts` | seule surface publique utilisee par le bloc 9 |
+| `src/player/index.ts` | seule surface publique utilisee par la page du site |
 
 Un seul fichier a besoin d'un navigateur, `browser-audio.ts`, et il ne prend aucune decision. Tout
 ce qui decide — la machine d'etats, la lecture du protocole, le rangement des pannes — se teste sous
-Node.
+Node. `background-audio.ts` touche a des interfaces du navigateur, mais il les recoit toutes de son
+appelant : il se teste donc sous Node lui aussi.
 
 La validation de l'en-tete binaire n'est pas reecrite : elle vient de `src/protocol/audio-packet.ts`,
 le module deja partage par le device et le relais. Une seule definition d'un paquet valide existe
@@ -290,11 +292,63 @@ cliquer sur le bouton.
 
 Le navigateur repond seul aux pings WebSocket du relais. Le player n'a rien a faire pour cela.
 
-## Ce que le bloc 8 ne fait pas
+## Telephone en veille et page en arriere-plan
 
-- Il n'affiche rien : pas de bouton, pas de texte, pas de style. C'est le bloc 9.
-- Il ne pose pas les en-tetes COOP/COEP : c'est la configuration du site, donc le bloc 9.
+Il faut commencer par ce qui n'est pas possible, parce que cela decide de tout le reste.
+
+**Aucune page web ne peut garder un AudioWorklet en marche sur un iPhone dont l'ecran est
+verrouille.** Quand la page passe en arriere-plan, iOS Safari met le contexte audio dans l'etat
+`interrupted`, et la definition de cet etat est que la page n'a pas la main : le navigateur decide
+seul quand interrompre et quand rendre la sortie audio. Android Chrome suspend de meme un contexte
+dont l'onglet est cache, et ce qu'il laisse tourner ensuite depend du reglage de batterie du
+navigateur dans les parametres du telephone, pas de la page.
+
+Deux contournements circulent et aucun ne tient ici :
+
+- **Sortir par un `MediaStreamAudioDestinationNode` branche sur un element `<audio>`.** Le resultat
+  differe dans chaque navigateur — Chromium declenche les evenements de lecture mais `currentTime`
+  n'avance pas — et la specification ne dit pas ce qui devrait se passer. Batir le chemin audio
+  dessus couterait la lecture qui fonctionne aujourd'hui sur ordinateur pour un gain incertain sur
+  telephone.
+- **Jouer un fichier muet en boucle.** Ce reveil ne fonctionne plus depuis plusieurs versions de
+  Safari mobile.
+
+`background-audio.ts` fait donc les trois choses qui, elles, sont possibles et documentees.
+
+**Il declare l'intention audio de la page.** `navigator.audioSession.type = "playback"` dit au
+systeme que cette page joue un media. Sur iOS, c'est ce qui distingue un son que le bouton
+silencieux du telephone coupe d'un son qu'il laisse passer : un auditeur qui n'entend rien alors que
+la page affiche « Lecture » est le defaut le plus deroutant possible, et il n'a aucune cause
+visible. Cette interface n'existe aujourd'hui que dans Safari, ce qui est exactement le navigateur
+ou le probleme se pose.
+
+**Il pose les commandes de l'ecran verrouille.** `navigator.mediaSession` porte le titre, l'etat de
+lecture et les boutons Lecture et Pause. L'etat suit la machine d'etats et non le dernier clic : une
+rebufferisation ou une reconnexion s'y voit, sinon le telephone afficherait « en lecture » sur du
+silence. Sur Android, c'est aussi ce qui fait entrer la page dans la liste des lectures en cours du
+systeme.
+
+**Il reprend le son au retour au premier plan.** Une reprise demandee pendant que la page est cachee
+est refusee ; celle qui compte est celle du retour. Quatre tentatives espacees suivent le retour, et
+elles s'arretent des que le contexte tourne de nouveau — un systeme qui rend la sortie audio avec un
+instant de retard, ce qui arrive apres un appel telephonique, est ainsi rattrape.
+
+**Ce que cela change concretement.** Le son ne survit toujours pas a un ecran verrouille sur iPhone.
+Mais l'auditeur qui rallume son telephone retrouve le direct tout de suite, au direct et non a
+l'endroit ou il s'etait arrete, sans recharger la page. La file, elle, ne se remplit pas pendant
+l'interruption : le portail de `fill-gate.ts` se ferme des que le contexte s'arrete, donc rien
+d'ancien n'est joue au retour.
+
+Aucune de ces trois interfaces n'est indispensable. Chacune est verifiee avant usage, et un
+navigateur qui n'en offre aucune se comporte exactement comme avant.
+
+## Ce que ce moteur ne fait pas
+
+- Il n'affiche rien : pas de bouton, pas de texte, pas de style. C'est le role de la page du site.
+- Il ne pose pas les en-tetes COOP/COEP : c'est la configuration du site, et ils n'y sont pas poses.
 - Il ne mesure pas la latence totale. Le seuil de buffer est une valeur d'attente, pas une garantie.
+- Il ne garde pas le son en marche sur un telephone dont l'ecran est verrouille. Aucune page web ne
+  le peut aujourd'hui ; voir « Telephone en veille et page en arriere-plan » plus haut.
 
 ## Comment ce moteur arrive dans le site
 

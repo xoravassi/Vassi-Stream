@@ -151,7 +151,9 @@ Détail complet, y compris ce qui est enregistré avec le projet Ableton et ce q
   `npm run player:sync`.
 - **Le `.maxpat` fait foi après une première ouverture dans Max.** `device:build` sert à poser la
   première version du device, pas à écraser des retouches faites ensuite dans Max.
-- **État actuel du projet** (voir `Roadmap.md`) : le device et le relais sont codés et testés
-  (`npm.cmd run check` passe). Reste la première ouverture réelle dans Ableton, un direct de 15 à
-  30 minutes en conditions réelles, et le déploiement de la page `/session` sur le site — c'est
-  l'objet du bloc 11 de la roadmap.
+- **État actuel du projet** (voir [Roadmap.md](Roadmap.md)) : la chaîne complète fonctionne de bout
+  en bout — Ableton, relais déployé, page `/session` — et `npm.cmd run check` passe. Reste la série
+  de tests précis sur les cas limites (direct long, coupure réseau, écran de téléphone éteint,
+  second auditeur), puis le gel du device : c'est l'objet du bloc 11 de la roadmap. La suite,
+  c'est-à-dire ce qu'il faudrait pour publier ce projet en open source, est décrite dans
+  [docs/Roadmap-v2.md](docs/Roadmap-v2.md).

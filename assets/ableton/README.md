@@ -11,3 +11,7 @@ le set sur une machine neuve, sinon Live signale un fichier manquant.
 
 Le set est ouvert directement depuis ce dossier : Live ne demande pas que ses projets vivent dans
 un emplacement particulier.
+
+Seul le fichier `.als` est suivi par Git. Live recree tout seul, au premier enregistrement, le
+dossier `Ableton Project Info` et le dossier `Backup` de ses sauvegardes automatiques : ces deux
+dossiers ne decrivent rien du projet et pesaient a eux seuls un demi-megaoctet.

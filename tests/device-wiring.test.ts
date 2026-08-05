@@ -5,6 +5,10 @@ import test from "node:test";
 
 const DEVICE_DIRECTORY = join(process.cwd(), "device", "node");
 
+// Le point d'entree porte un nom unique dans la base de recherche de Max : c'est par ce nom, et
+// par lui seul, que le device retrouve son script (voir tests/device-patcher.test.ts).
+const ENTRY = "vassi-stream-device.js";
+
 // Cette fonction lit un fichier du device comme texte.
 function readDeviceFile(name: string): string {
   return readFileSync(join(DEVICE_DIRECTORY, name), "utf8");
@@ -12,7 +16,7 @@ function readDeviceFile(name: string): string {
 
 // Ce test verifie que le point d'entree relie le pont loopback au publisher.
 test("relie le pont loopback au publisher", () => {
-  const entry = readDeviceFile("index.js");
+  const entry = readDeviceFile(ENTRY);
 
   assert.match(entry, /require\("\.\/frame-bridge\.js"\)/);
   assert.match(entry, /require\("\.\/publisher\.js"\)/);
@@ -25,7 +29,7 @@ test("relie le pont loopback au publisher", () => {
 // Ce test verifie que le device du bloc 5 continue de fonctionner sans modification.
 // Le patch de test lit `status`, `port` et `stats` : ces trois sorties doivent survivre.
 test("garde les sorties lues par le device du bloc 5", () => {
-  const entry = readDeviceFile("index.js");
+  const entry = readDeviceFile(ENTRY);
 
   assert.match(entry, /send\("status", state, detail\)/);
   assert.match(entry, /send\("port", port\)/);

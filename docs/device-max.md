@@ -9,7 +9,7 @@ enregistre, et ce qu'il faut verifier a la premiere ouverture.
 |---|---|
 | `device/Vassi Stream.amxd` | le device depose sur le Master |
 | `patchers/vassi-stream.maxpat` | le meme patcher, lisible et modifiable dans Max |
-| `device/node/index.js` | le script Node lance par le device |
+| `device/node/vassi-stream-device.js` | le script Node lance par le device |
 | `externals/vassi.encoder~` | l'objet natif de capture et d'encodage |
 
 Le `.amxd` est un conteneur : trois blocs de tete, puis le patcher en JSON. `npm.cmd run
@@ -19,10 +19,11 @@ device:build` regenere les deux fichiers a partir du code de `scripts/device-pat
 objets et enregistrer. Relancer `device:build` ecraserait ces retouches : ce script sert a poser la
 premiere version, pas a entretenir le device.
 
-**`device:build` installe aussi le device.** Chaque construction recopie le `.amxd` et le dossier
-`node/` dans la bibliotheque d'Ableton : ce qui est dans le depot et ce qu'Ableton ouvre ne peuvent
-pas diverger sans qu'on l'ait voulu. Fermer Live avant de reconstruire, sinon la copie echoue et le
-script le dit.
+**`device:build` installe aussi le device.** Chaque construction recopie le `.amxd` dans la
+bibliotheque d'Ableton et le dossier `node/` dans celle de Max : ce qui est dans le depot et ce
+qu'Ableton ouvre ne peuvent pas diverger sans qu'on l'ait voulu. Les deux destinations sont
+expliquees plus bas, dans « Installer sur un nouvel ordinateur ». Fermer Live avant de reconstruire,
+sinon la copie echoue et le script le dit.
 
 ## Voir le device sans ouvrir Ableton
 
@@ -30,8 +31,9 @@ script le dit.
 npm.cmd run device:preview
 ```
 
-Cette commande ecrit `device-preview.html` : les deux pages dessinees a l'echelle 2, dans le theme
-clair et dans le theme sombre de Live. Elle lit les positions dans le `.maxpat`, donc elle ne peut
+Cette commande ecrit `device-preview.html` : les deux pages dessinees a l'echelle 2. Le device
+impose son propre fond, fixe, plutot que de suivre le theme de Live : il n'y a donc qu'un seul
+rendu a regarder. La maquette lit les positions et les couleurs dans le `.maxpat`, donc elle ne peut
 pas mentir sur la mise en page.
 
 C'est une maquette, pas un rendu : Max dessine les vrais objets, avec ses arrondis et ses degrades.
@@ -164,10 +166,18 @@ patch d'aide officiel de Max nomme lui-meme « LCD mode » : une barre plate, l'
 surbrillance. C'est ce mode qui est utilise partout dans le device : les deux onglets, les deux
 menus, le bouton du direct et les deux boutons de la page de reglages.
 
-Les recommandations de production Max for Live d'Ableton demandent aussi que l'**Output Mode** de
+En mode LCD, deux attributs seulement peignent un `live.text` : `lcdbgcolor` donne le fond a
+l'arret et la couleur du texte pendant le clic, `lcdcolor` fait l'inverse. `textcolor`, malgre son
+nom, ne sert qu'a un objet rendu inactif. Les trois boutons posent donc leur `lcdcolor` : l'accent
+pour le bouton du direct, le gris du texte pour les deux boutons de reglages, qui sont des actions
+secondaires.
+
+Les recommandations de production Max for Live d'Ableton demandent que l'**Output Mode** de
 `live.text` soit **Mouse Up** (`outputmode: 1`), *« since it will match Live's native button
-behavior »* — ce n'est pas la valeur posee par defaut par Max. Le bouton du direct l'avait deja ;
-les deux boutons de la page de reglages l'ont maintenant aussi.
+behavior »*. Cet attribut n'agit que sur un interrupteur — la page de reference de Max l'ecrit noir
+sur blanc : *« Sets the output mode for the live.text object when it's mode attribute is set to 1
+(toggle) »* — et aucun des 138 boutons `live.text` livres avec Live ne le pose. Le bouton du direct,
+qui est un interrupteur, le garde ; les deux boutons de la page de reglages ne le posent pas.
 
 **Les tailles sont mesurees, pas choisies.** Les 78 devices Max for Live livres avec Live 11 sont
 lisibles : leur bloc `ptch` n'est pas chiffre, contrairement aux devices d'Ableton. Les compter
@@ -205,8 +215,18 @@ et `tests/device-patcher.test.ts` echoue si l'une d'elles est enfreinte.
 | Qualité, Latence | oui | Vassi retrouve ses reglages en rouvrant le projet |
 | Bouton Lancer | non | rouvrir un projet ne doit jamais relancer un direct tout seul |
 | Onglet ouvert | non | le device s'ouvre sur le direct, c'est ce qu'on vient y voir |
+| Enregistrer, Tester le relais | non | un clic est une action, pas un reglage |
 | Adresse du relais | non | elle vit dans le fichier de configuration de la machine |
 | Token | **jamais** | un projet se partage et se sauvegarde en ligne |
+
+**Toutes les commandes du device sont des parametres Live, y compris celles qui ne retiennent
+rien.** Ce n'est pas un choix : un `live.text` en mode bouton tire son bang de la transition 0 vers
+1 de son parametre — la page de reference de Max le dit a l'attribut `transition` — donc un bouton
+sans parametre ne sort rien. Les deux boutons de la page de reglages etaient dans ce cas a la
+premiere ouverture dans Ableton : ils ne faisaient rien, sans message ni erreur. Leur parametre est
+cache (`parameter_invisible: 2`), comme les recommandations d'Ableton le demandent pour un bouton,
+si bien que rien n'entre dans l'historique d'annulation ni dans le morceau. Un test le verifie
+maintenant sur les trois commandes du fichier livre.
 
 Le bouton du direct retient sa position, sinon il ne pourrait pas s'allumer. Trois choses
 l'empechent de la rapporter d'un projet a l'autre : le parametre est cache, donc Live ne le range
@@ -245,14 +265,26 @@ Une seule commande met le device la ou Ableton le cherche :
 npm.cmd run device:install
 ```
 
-Elle copie le device dans `Documents\Ableton\User Library\Presets\Audio Effects\Max Audio
-Effect\Vassi Stream\`, et l'external dans la bibliotheque de Max. Elle refuse d'installer un device
-plus ancien que le patcher, et dit quoi relancer.
+Elle pose les trois morceaux du device a deux endroits :
 
-Le sous-dossier n'est pas un choix d'ordre. Le device lance `node/index.js` par un chemin relatif a
-lui-meme : le dossier `device/node/` doit se trouver a cote du `.amxd`, `node_modules` compris. Un
-`.amxd` pose seul s'ouvrirait sans parler a rien. Le gel du device, au bloc 11, emportera le script
-et supprimera ce besoin.
+| Morceau | Ou | Pourquoi la |
+|---|---|---|
+| `Vassi Stream.amxd` | `Documents\Ableton\User Library\Presets\Audio Effects\Max Audio Effect\Vassi Stream\` | c'est ce dossier qu'Ableton montre dans son navigateur |
+| `node/` et son `node_modules` | `Documents\Max 8\Library\Vassi Stream\node\` | c'est un dossier que **Max** indexe |
+| `vassi.encoder~.mxe64` | `Documents\Max 8\Library\Vassi Stream\externals\` | idem, et c'est deja par la qu'il etait trouve |
+
+Elle refuse d'installer un device plus ancien que le patcher, et dit quoi relancer.
+
+**Les deux dossiers ne sont pas interchangeables.** Le device demande son script par un nom de
+fichier seul, `vassi-stream-device.js`, et c'est Max qui doit le retrouver. Or Max n'indexe pas la
+bibliotheque d'Ableton : **pas un fichier** de `Documents\Ableton\User Library` n'entre dans sa base
+de recherche. Un dossier `node/` pose a cote du `.amxd` y est invisible — c'est ce qui laissait le
+device entierement muet a la premiere ouverture. La bibliotheque de Max, elle, est indexee, et le
+nom du fichier y est unique : un `index.js` y designerait un exemple livre avec Node for Max.
+
+**Max ne relit sa bibliotheque qu'a son demarrage.** Installer pendant que Live tourne ne suffit
+donc pas : il faut fermer Live et le rouvrir. Le gel du device, au bloc 11, emportera le script dans
+le `.amxd` et supprimera ce second depot.
 
 **Le device installe est une copie.** Une retouche faite dans Max depuis Live modifie cette copie,
 pas le depot : il faut la rapporter dans `patchers/vassi-stream.maxpat`.
@@ -286,21 +318,95 @@ Ces points ne se verifient pas sans Max. Ils sont classes du plus probable au mo
    dans son menu et « Tester le relais » dans son bouton sont les deux a regarder.
 4. **Le trait des separateurs.** `live.line` dessine dans le sens de sa plus grande dimension et
    centre son trait. Un trait qui n'apparait pas au bon endroit se corrige par `justification`.
-5. **Le chemin du script Node.** Il est relatif : `node/index.js`. Le device doit donc rester a
-   cote d'un dossier `node/`, ce dont `device:install` se charge. Le gel du device, au bloc 11,
-   emportera le script avec lui.
-6. **Les deux boutons de la page de reglages.** Ils sont en mode bouton. S'ils envoyaient deux
-   messages par clic au lieu d'un, l'enregistrement se ferait deux fois — sans consequence, la
-   seconde ecriture posant les memes valeurs.
+5. **Le script Node demarre.** Le device le demande par son nom seul, `vassi-stream-device.js`, et
+   Max le cherche dans sa bibliotheque. Si la ligne du bas reste a « configuration inconnue » et
+   que l'etat ne bouge pas, c'est ce maillon qui manque : `device:install` puis un redemarrage de
+   Live remettent le script la ou Max regarde.
+6. **Les deux boutons de la page de reglages.** Ils sont en mode bouton, et un clic doit envoyer un
+   seul message. Deux clics de suite sur **Enregistrer** sont sans consequence : la seconde ecriture
+   pose les memes valeurs.
+
+## Les deux defauts trouves a la premiere ouverture
+
+Ils se ressemblaient a l'ecran — un clic sans effet — et n'avaient rien a voir. Le premier empechait
+les boutons d'emettre quoi que ce soit ; le second empechait le script Node de demarrer, donc rendait
+le device entier muet. Le premier cachait le second : tant qu'aucun bang ne partait, rien ne
+montrait que personne n'ecoutait a l'autre bout.
+
+### 1. Un bouton sans parametre n'emet rien
+
+**Les deux boutons de la page de reglages ne faisaient rien.** Aucun message, aucune erreur dans la
+fenetre Max : un clic partait dans le vide.
+
+Ils etaient poses avec `parameter_enable: 0`, c'est-a-dire sans parametre Live. Or un `live.text` en
+mode bouton ne fabrique pas son bang tout seul : il le tire de la transition 0 vers 1 de son
+parametre. C'est la page de reference de Max qui le dit, a l'attribut `transition` — *« The
+parameter automation of live.text stores 0 and 1 values. The transition attribute specifies when a
+bang will be sent to the outlet. »* Sans parametre, pas de transition, donc pas de bang.
+
+Le releve des devices livres avec Live dit la meme chose autrement : sur leurs **411 objets
+`live.*`, aucun** n'a `parameter_enable` a 0, et les 138 boutons `live.text` portent tous un
+parametre, cache dans deux cas sur trois.
+
+Les deux boutons sont donc devenus des parametres caches. Deux autres reglages sont tombes avec :
+`outputmode` a disparu des boutons, ou il n'agit pas, et `lcdcolor` est desormais pose, sans quoi
+les deux libelles prenaient l'orange par defaut de Max au milieu d'un device gris — la maquette ne
+le montrait pas, parce qu'elle dessinait le texte avec `textcolor`. Les deux corrections sont
+decrites plus haut, dans « Le mode LCD ».
+
+Ce defaut ne pouvait pas etre attrape par les tests de cablage : les cables etaient justes, les
+messages existaient, le script Node avait ses handlers. Il manquait la question qu'aucun test ne
+posait — **est-ce que cette commande peut seulement emettre quelque chose ?** C'est maintenant un
+test, sur les trois commandes du fichier livre.
+
+### 2. Max ne voyait pas le script Node
+
+Les boutons corriges, plus rien ne se passait toujours : ni **Enregistrer**, ni **Tester le
+relais**, ni **LANCER**. Un seul soupcon explique les trois d'un coup — le script Node ne tournait
+pas — et il se verifie sans Max : Live lance un gestionnaire de processus Node for Max des qu'un
+objet `node.script` existe, et ce gestionnaire tournait bien, **sans aucun processus enfant**.
+L'objet existait donc, et son script n'avait jamais demarre.
+
+Le patcher demandait `node/index.js`. Max resout ce genre de nom dans sa base de recherche, un index
+de fichiers qu'il construit a son demarrage. Cette base se lit — c'est une base SQLite dans
+`%APPDATA%\Cycling '74\Max 8\Database\` — et elle repond sans ambiguite :
+
+| Question posee a la base | Reponse |
+|---|---|
+| fichiers indexes sous `Documents\Ableton\User Library` | **0** |
+| fichiers indexes sous `Documents\Max 8` | dont `vassi.encoder~.mxe64`, trouve par la depuis le bloc 5 |
+| fichiers nommes `index.js` dans toute la base | **un seul**, un exemple livre avec Node for Max |
+
+Le dossier `node/` etait pose a cote du `.amxd`, dans la bibliotheque d'Ableton : un endroit ou Max
+ne regarde pas. Le script etait invisible, l'objet ne demarrait rien, et le device restait muet.
+
+Deux corrections, pour les deux moities du probleme :
+
+- **Le script est installe dans la bibliotheque de Max**, `Documents\Max 8\Library\Vassi Stream\`,
+  a cote de l'external. C'est un dossier indexe, et c'est deja par la que `vassi.encoder~` est
+  trouve depuis le bloc 5 — le mecanisme etait donc deja prouve sur cette machine.
+- **Le point d'entree s'appelle `vassi-stream-device.js`**, plus `index.js`. Un nom unique dans la
+  base ne peut pas designer le fichier d'un autre : l'exemple de Node for Max porte deja ce nom, et
+  il a d'ailleurs ete ecrase par accident pendant le bloc 5.
+
+Un test garde les trois conditions du nom : pas de chemin absolu, qui ne survivrait pas a un
+changement de machine ; pas de dossier, que Max ne resout pas ici ; et le meme nom que le fichier du
+depot.
+
+**Max ne relit sa bibliotheque qu'a son demarrage.** Apres `device:install`, il faut donc fermer
+Live et le rouvrir, sinon le script reste introuvable pour la session en cours.
 
 ## Ce que les tests couvrent deja
 
-`tests/device-patcher.test.ts` lit le fichier livre et verifie dix-huit choses qu'un oeil ne voit
+`tests/device-patcher.test.ts` lit le fichier livre et verifie vingt choses qu'un oeil ne voit
 pas a l'ouverture : chaque cable relie des prises qui existent, chaque message envoye au script Node
 possede un handler, chaque mot attendu par le patcher est bien envoye par Node, aucun objet ne
 depasse la surface accordee par Live, aucun objet n'en recouvre un autre sur une meme page, les
 marges et les tailles sont celles d'Ableton, chaque libelle a la hauteur de boite de sa police,
-toute couleur figee vient de la palette unique du device, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint
+toute couleur figee vient de la palette unique du device, chaque commande est un parametre Live avec
+un nom long qui lui est propre, les deux boutons de reglages sont des boutons sans etat qui
+atteignent le script Node, le device demande son script par un nom de fichier seul qui existe dans
+le depot, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint
 les deux pages, le bouton du direct ne peut pas se rallumer a l'ouverture d'un projet, et le fichier
 depose contient bien le patcher livre.
 

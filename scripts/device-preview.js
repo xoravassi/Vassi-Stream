@@ -102,10 +102,15 @@ function draw(box) {
 		}
 
 		case "live.text": {
-			// Le bouton du direct est dessine eteint : c'est l'etat dans lequel le device s'ouvre.
+			// Les boutons sont dessines eteints : c'est l'etat dans lequel le device s'ouvre.
+			//
+			// En mode LCD, c'est `lcdcolor` qui peint le texte a l'arret, et `lcdbgcolor` le fond ;
+			// les deux echangent leur role pendant le clic. `textcolor` ne sert qu'a un objet rendu
+			// inactif : la maquette le dessinait a sa place, et montrait donc gris un libelle que
+			// Max peint en orange.
 			const lcd = box.appearance === 2;
 			const skin = lcd
-				? `background:${colorOf(box, "lcdbgcolor", PALETTE.bg)};color:${colorOf(box, "textcolor", PALETTE.textDim)}`
+				? `background:${colorOf(box, "lcdbgcolor", PALETTE.bg)};color:${colorOf(box, "lcdcolor", PALETTE.accent)}`
 				: `background:${PANEL_BG};color:${colorOf(box, "textcolor", PALETTE.text)};border:1px solid ${colorOf(box, "bordercolor", PALETTE.divider)}`;
 			return `<div class="box button" style="${place};${skin};font-size:${size}px">${escape(text)}</div>`;
 		}

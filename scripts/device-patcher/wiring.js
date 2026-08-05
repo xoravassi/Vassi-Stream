@@ -10,9 +10,19 @@
 // des messages vers des libelles. C'est ce qui garde ce fichier court.
 import { connect, message, object } from "./parts.js";
 
-// Le script Node est designe par un chemin relatif au device. Un chemin absolu ne survivrait ni a
-// un deplacement du dossier, ni a une installation sur une autre machine.
-const NODE_SCRIPT = "node.script node/index.js @autostart 1";
+// Le script Node est designe par son seul nom de fichier, sans dossier.
+//
+// C'est la seule forme que Max sait resoudre ici. Un `.amxd` pose dans la bibliotheque d'Ableton ne
+// donne aucun point de depart a `node.script` : la base de recherche de Max n'indexe pas un seul
+// fichier sous `Documents\Ableton\User Library`. Un chemin relatif comme `node/index.js` n'y menait
+// donc nulle part, et le script ne demarrait jamais — sans erreur visible ailleurs que dans la
+// fenetre Max. Un chemin absolu, lui, ne survivrait pas a un changement de machine.
+//
+// Le script est donc installe dans la bibliotheque de Max, `Documents\Max 8\Library\Vassi Stream\`,
+// a cote de l'external : c'est un dossier que Max indexe, et c'est deja par la que `vassi.encoder~`
+// est trouve. Le nom du fichier est unique dans cette base — un `index.js` y designerait un exemple
+// livre avec Node for Max.
+const NODE_SCRIPT = "node.script vassi-stream-device.js @autostart 1";
 
 // Ces mots sont ceux que le script Node place devant ses messages, dans cet ordre.
 const NODE_MESSAGES = ["port", "publisher", "encoder", "config", "saved", "relay", "status", "urlfield"];

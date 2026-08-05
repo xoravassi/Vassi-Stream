@@ -202,3 +202,118 @@ chemin relatif. Le device est donc installe dans un sous-dossier `Vassi Stream\`
 le dossier `node/` et son `node_modules`. Le script refuse d'installer un `.amxd` plus ancien que
 `patchers/vassi-stream.maxpat`, et ne recopie pas l'external quand la version installee est deja la
 bonne : Max le verrouille des qu'il est charge, et l'echec de copie n'aurait rien signale d'utile.
+
+## Ajout : la premiere ouverture dans Ableton
+
+Date : 2026-08-05.
+
+Le bloc restait ouvert jusqu'a cette ouverture. Elle a trouve un defaut, et un seul : **les deux
+boutons de la page de reglages, Enregistrer et Tester le relais, ne faisaient rien.** Pas de
+message, pas d'erreur dans la fenetre Max ; le clic partait dans le vide.
+
+### La cause
+
+Les deux boutons etaient poses avec `parameter_enable: 0` : ils n'etaient pas des parametres Live.
+Or un `live.text` en mode bouton ne fabrique pas son bang lui-meme, il le tire de la transition 0
+vers 1 de son parametre. La page de reference de Max le dit a l'attribut `transition` : *« The
+parameter automation of live.text stores 0 and 1 values. The transition attribute specifies when a
+bang will be sent to the outlet. »* Sans parametre, pas de transition, donc pas de bang.
+
+Le releve des devices livres avec Live 10 et Live 11 confirme la regle par l'usage : sur leurs
+**411 objets `live.*`, aucun** n'a `parameter_enable` a 0, et les 138 boutons `live.text` portent
+tous un parametre — cache dans 93 cas sur 138, ce que les recommandations de production d'Ableton
+demandent justement pour un bouton, afin qu'un clic n'entre pas dans l'historique d'annulation.
+
+### La correction
+
+Les deux boutons sont devenus des parametres caches, de type Enum a deux positions, valeur de
+depart au repos. Rien n'est enregistre avec le morceau, ce qui etait deja l'intention.
+
+Deux reglages sont tombes avec :
+
+- `outputmode` a disparu des deux boutons. La page de reference le limite au mode interrupteur, et
+  aucun des 138 boutons livres avec Live ne le pose. Le bouton du direct, qui est un interrupteur,
+  le garde.
+- `lcdcolor` est maintenant pose sur les trois boutons. En mode LCD, c'est lui qui peint le texte a
+  l'arret ; sans lui, les deux boutons de reglages prenaient l'orange par defaut de Max au milieu
+  d'un device gris. La maquette ne le montrait pas : elle dessinait le libelle avec `textcolor`,
+  qui ne sert qu'a un objet inactif. Elle a ete corrigee aussi, sinon elle aurait continue de
+  mentir sur ce point precis.
+
+### Ce que les tests ne voyaient pas
+
+Les vingt-et-un tests de `tests/device-patcher.test.ts` passaient tous : les cables reliaient des
+prises reelles, les messages avaient leurs handlers, les objets tenaient dans la surface. Aucun ne
+posait la question qui manquait — **cette commande peut-elle seulement emettre quelque chose ?**
+
+Deux tests la posent maintenant : chaque commande du device est un parametre Live avec un nom long
+qui lui est propre, et les deux boutons de reglages sont des boutons sans etat dont le clic atteint
+le script Node. Le premier aurait suffi a arreter ce defaut avant Ableton.
+
+### Ce qui reste a verifier
+
+Le clic lui-meme, dans Live. Un patcher se relit hors de Max ; une souris, non.
+
+## Ajout : le second defaut, et pourquoi le premier le cachait
+
+Les deux boutons corriges, plus rien ne se passait toujours — ni **Enregistrer**, ni **Tester le
+relais**, ni **LANCER**. Trois commandes muettes d'un coup ne se remontent pas a trois causes : le
+script Node ne tournait pas.
+
+### La preuve, sans ouvrir Max
+
+Live lance un gestionnaire de processus Node for Max des qu'un objet `node.script` existe, et ce
+gestionnaire lance ensuite un processus par script. La liste des processus donne l'etat exact :
+
+```text
+node.exe  ...Node for Max\source\index.js --maxenv "maxforlive"   (enfant de Live)
+  -> aucun processus enfant
+```
+
+Le gestionnaire tournait, donc l'objet existait ; aucun enfant, donc le script n'avait jamais
+demarre. Restait a savoir pourquoi.
+
+`node.script vassi-stream-device.js` — a l'epoque `node/index.js` — se resout dans la base de
+recherche de Max, un index de fichiers construit a son demarrage. C'est une base SQLite lisible,
+dans `%APPDATA%\Cycling '74\Max 8\Database\`, et trois questions ont suffi :
+
+| Question | Reponse |
+|---|---|
+| fichiers indexes sous `Documents\Ableton\User Library` | **0** |
+| fichiers indexes sous `Documents\Max 8` | dont `vassi.encoder~.mxe64` |
+| fichiers nommes `index.js` dans toute la base | **un seul**, un exemple de Node for Max |
+
+Le dossier `node/` etait installe a cote du `.amxd`, dans la bibliotheque d'Ableton. Max n'y regarde
+pas — pas un fichier de cet arbre n'entre dans sa base. Le script etait invisible.
+
+### La correction
+
+- Le dossier `node/` est installe dans `Documents\Max 8\Library\Vassi Stream\node\`, a cote de
+  l'external. Ce dossier est indexe par Max, et c'est deja par la que `vassi.encoder~` est trouve
+  depuis le bloc 5 : le mecanisme etait prouve sur cette machine avant d'etre reutilise.
+- Le point d'entree s'appelle `vassi-stream-device.js` et non plus `index.js`. Un nom unique dans la
+  base ne peut pas designer le fichier d'un autre. Le seul `index.js` indexe est un exemple livre
+  avec Node for Max, `packages/Node for Max/examples/squiggle/clientpage/js/index.js` — et son
+  contenu a ete ecrase par accident pendant le bloc 5 par la ligne d'objet du patch de test. Ce
+  fichier appartient a l'installation de Live ; il est signale ici pour memoire.
+- `install-device.js` efface l'ancienne copie de `node/` posee a cote du `.amxd`. Deux exemplaires
+  du meme script, dont un que rien ne lit, est la meilleure facon de corriger un fichier sans effet.
+
+Un test remplace « le chemin du script Node est relatif », qui validait precisement la forme qui ne
+marche pas. Il verifie maintenant les trois conditions du nom : pas de chemin absolu, qui ne
+survivrait pas a un changement de machine ; pas de dossier, que Max ne resout pas ici ; et le meme
+nom que le fichier du depot.
+
+### Ce que cette recherche a coute, et ce qu'elle rend
+
+Le script Node etait sain depuis le debut : lance a la main sous le Node 16 de Node for Max, avec un
+faux `max-api`, il ouvre son port, lit la configuration enregistree et annonce les quatre memes
+messages qu'il enverrait a Max. C'est ce qui a permis de chercher ailleurs sans douter du script.
+
+Cette methode reste disponible pour la suite : le device Max n'est pas necessaire pour verifier le
+cote Node.
+
+### Ce qui reste a verifier
+
+Le premier essai reel, apres un redemarrage de Live — Max ne relit sa bibliotheque qu'a son
+demarrage.

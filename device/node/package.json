@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Cote Node du device Max for Live : pont loopback, publisher WebSocket et etat pour Max.",
-  "main": "index.js",
+  "main": "vassi-stream-device.js",
   "type": "commonjs",
   "dependencies": {
     "ws": "8.21.1"

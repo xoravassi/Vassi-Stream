@@ -18,5 +18,13 @@ publisher.json
 # Ableton ecrit ses analyses de forme d'onde a cote des fichiers audio.
 *.asd
 
+# Ableton reecrit ces deux dossiers a chaque enregistrement d'un projet de test : les sauvegardes
+# automatiques et l'icone de dossier n'ont rien a dire sur le code, et l'icone pese 480 ko.
+Backup/
+Ableton Project Info/
+
+# Windows depose ce fichier dans un dossier qui porte une icone personnalisee.
+Desktop.ini
+
 # La maquette du device se regenere a la demande depuis le patcher : elle n'a rien a suivre.
 device-preview.html

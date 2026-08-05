@@ -97,13 +97,21 @@ function readAnswer(response, finish) {
 		body += chunk;
 	});
 
-	response.on("aborted", () => {
-		finish({ ok: false, detail: tooLarge ? "cette adresse n'est pas le relais" : "reponse interrompue" });
-	});
-
 	response.on("end", () => {
 		finish(describeHealth(body));
 	});
+
+	// Ces deux evenements couvrent une reponse qui s'arrete avant sa fin, dont celle que la limite
+	// de taille coupe elle-meme. `close` arrive toujours, y compris apres `end` : le premier
+	// resultat gagne, donc une reponse complete garde le sien. `aborted` est deprecie dans Node et
+	// destine a disparaitre ; sans `close` a cote, sa disparition laisserait la promesse sans
+	// reponse et le device afficherait « verification en cours » pour toujours.
+	const interrupted = () => {
+		finish({ ok: false, detail: tooLarge ? "cette adresse n'est pas le relais" : "reponse interrompue" });
+	};
+
+	response.on("aborted", interrupted);
+	response.on("close", interrupted);
 }
 
 // Cette fonction lit le corps de la route de sante et le resume pour l'affichage du device.

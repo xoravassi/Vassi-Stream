@@ -1,3 +1,4 @@
+import { BackgroundAudio, type BackgroundAudioDeps, type BackgroundAudioTitle } from "./background-audio.ts";
 import { BrowserAudio } from "./browser-audio.ts";
 import { ListenerSocket } from "./listener-socket.ts";
 import type { DiagnosticArea, PlayerDiagnostics } from "./player-diagnostics.ts";
@@ -19,24 +20,33 @@ import { LATE_MARGIN_MS, PlayerStateMachine, type PlayerStatus } from "./player-
 // worker. Le processeur audio, lui, ne contient aucun import et se donne par son adresse.
 //
 // Rien n'est telecharge depuis un CDN : les deux fichiers sont livres par le site.
+// `title` nomme le direct sur l'ecran verrouille d'un telephone et dans la liste des lectures en
+// cours du systeme. Il est facultatif : le moteur ne connait pas le nom du site qui l'emploie, et
+// il ne doit en inventer aucun.
 export type PlayerSetup = {
   relayUrl: string;
   createWorker: () => Worker;
   workletUrl: URL | string;
+  title?: BackgroundAudioTitle;
 };
 
-// Ce type decrit la seule piece remplacable du player, pour que les tests mesurent des durees sans
-// attendre reellement.
+// Ce titre sert tant que la page n'en fournit pas. Il decrit ce qui joue, sans nommer personne.
+export const DEFAULT_TITLE: BackgroundAudioTitle = { title: "Direct", artist: "Session en direct" };
+
+// Ce type decrit les pieces remplacables du player, pour que les tests mesurent des durees sans
+// attendre reellement et n'aient besoin d'aucune interface de navigateur.
 export type PlayerDeps = {
   now: () => number;
+  background: Partial<BackgroundAudioDeps>;
 };
 
-// Cette classe est la surface utilisee par la page `/live`.
+// Cette classe est la surface utilisee par la page `/session` du site.
 export class AudioPlayer {
   private now: () => number;
   private machine: PlayerStateMachine;
   private socket: ListenerSocket;
   private audio: BrowserAudio;
+  private background: BackgroundAudio;
   private closed = false;
 
   // Cette famille retient d'ou venait la panne, que le message d'erreur seul ne dit pas toujours.
@@ -107,6 +117,20 @@ export class AudioPlayer {
       onPacket: (packet) => this.sendPacket(packet),
       onConnectionLost: () => this.machine.connectionLost(),
     });
+
+    // Ce module tient ce qui arrive quand l'auditeur range son telephone : declaration de
+    // l'intention audio, commandes de l'ecran verrouille, et reprise au retour au premier plan.
+    // Il ne touche jamais au contexte audio lui-meme : il demande, `BrowserAudio` execute.
+    this.background = new BackgroundAudio(
+      {
+        onWake: () => void this.audio.resume(),
+        isAwake: () => this.audio.contextState === "running",
+        onPlay: () => void this.play(),
+        onPause: () => this.pause(),
+      },
+      setup.title ?? DEFAULT_TITLE,
+      deps.background ?? {},
+    );
   }
 
   // Cette methode rend l'etat complet du player.
@@ -167,9 +191,10 @@ export class AudioPlayer {
     this.socket.start();
   }
 
-  // Cette methode ferme tout : connexion, worker, contexte audio.
+  // Cette methode ferme tout : connexion, worker, contexte audio, commandes systeme.
   async close(): Promise<void> {
     this.closed = true;
+    this.background.stop();
     this.socket.stop();
     await this.audio.close();
   }
@@ -180,6 +205,11 @@ export class AudioPlayer {
     if (this.closed) {
       return;
     }
+
+    // L'intention audio de la page se declare avant la creation du contexte : c'est ce que le
+    // systeme lit au moment ou le son commence, et c'est ce qui decide, sur iOS, si le bouton
+    // silencieux du telephone coupe ce son ou le laisse passer.
+    this.background.start();
 
     // Une panne passagere ne doit pas bloquer la page jusqu'au rechargement. Les pieces en panne
     // sont jetees, puis la machine sort de l'erreur et le demarrage recommence a neuf.
@@ -268,6 +298,10 @@ export class AudioPlayer {
   // donnees qui n'en sont pas et peut faire rebufferiser pour rien. Une reprise de lecture part en
   // dernier, quand la file est deja dans l'etat voulu.
   private applyCommands(status: PlayerStatus): void {
+    // L'ecran verrouille suit l'etat reel de la lecture, pas le dernier clic : une rebufferisation
+    // ou une reconnexion doit s'y voir, sinon le telephone affiche « en lecture » sur du silence.
+    this.background.setPlaying(status.playing);
+
     if (!status.playing) {
       this.audio.setPlaying(false);
     }
