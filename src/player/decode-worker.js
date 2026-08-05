@@ -30,6 +30,15 @@ export class FrameDecoder {
     // Les paquets sont traites l'un apres l'autre : la remise a zero du decodeur est asynchrone, et
     // deux frames ne doivent jamais entrer dans le decodeur en meme temps.
     this.chain = Promise.resolve();
+    // Ce numero distingue les paquets d'avant un vidage de ceux d'apres.
+    //
+    // Le worker appelle `flush`, `setSession` et `setAccepting` des la reception du message, donc en
+    // dehors de la chaine. Une frame arretee sur le `await` de la remise a zero du decodeur reprend
+    // ensuite son cours et ecrit dans une file que le vidage venait de nettoyer. C'est etroit — la
+    // seule fenetre est celle d'une discontinuite — mais le son ecrit est alors du son que le moteur
+    // avait justement decide de jeter. Chaque paquet retient le numero qui avait cours quand il est
+    // entre dans la chaine ; il est abandonne si ce numero a change depuis.
+    this.epoch = 0;
     // Ces compteurs ne servent qu'au diagnostic. Ils repondent a la seule question que le thread
     // principal ne peut pas trancher seul : les paquets qui arrivent produisent-ils du son ?
     this.accepted = 0;
@@ -58,6 +67,7 @@ export class FrameDecoder {
   flush() {
     this.sink.clear();
     this.lastSequence = null;
+    this.epoch += 1;
   }
 
   // Cette methode cree le decodeur Opus. Elle decrit un flux stereo couple, le seul que la v1
@@ -81,6 +91,7 @@ export class FrameDecoder {
     this.sessionId = sessionId;
     this.lastSequence = null;
     this.sink.clear();
+    this.epoch += 1;
 
     if (sessionId !== 0) {
       this.chain = this.chain.then(() => this.resetDecoder());
@@ -100,17 +111,29 @@ export class FrameDecoder {
     if (!accepting) {
       this.lastSequence = null;
       this.sink.clear();
+      this.epoch += 1;
     }
   }
 
   // Cette methode prend un paquet du relais et fait avancer la file de traitement.
   push(bytes) {
-    this.chain = this.chain.then(() => this.handle(bytes)).catch(() => {});
+    const epoch = this.epoch;
+
+    this.chain = this.chain.then(() => this.handle(bytes, epoch)).catch(() => {});
     return this.chain;
   }
 
   // Cette methode traite un paquet complet : validation, detection de trou, decodage, ecriture.
-  async handle(bytes) {
+  //
+  // `epoch` est le numero qui avait cours quand ce paquet est entre dans la chaine. Un paquet plus
+  // vieux qu'un vidage est abandonne sans etre compte : il n'est ni accepte ni refuse, exactement
+  // comme un paquet recu pendant une pause. Le compteur de paquets refuses garde ainsi son sens —
+  // il ne compte que ce que le decodeur n'a pas su lire.
+  async handle(bytes, epoch) {
+    if (epoch !== this.epoch) {
+      return;
+    }
+
     let header;
 
     try {
@@ -150,10 +173,10 @@ export class FrameDecoder {
       this.notify({ type: "discontinuity", reason: marked ? "flag" : "sequence_gap" });
     }
 
-    // La remise a zero du decodeur est asynchrone : une nouvelle session ou une pause a pu arriver
-    // pendant ce temps. Cette frame appartient alors au direct precedent, et l'ecrire deposerait
-    // vingt millisecondes de son perime en tete d'une file que la session neuve vient de vider.
-    if (header.sessionId !== this.sessionId || !this.accepting) {
+    // La remise a zero du decodeur est asynchrone : une nouvelle session, une pause ou un vidage a
+    // pu arriver pendant ce temps. Cette frame appartient alors au direct precedent, et l'ecrire
+    // deposerait vingt millisecondes de son perime en tete d'une file qu'on vient de vider.
+    if (header.sessionId !== this.sessionId || !this.accepting || epoch !== this.epoch) {
       return;
     }
 

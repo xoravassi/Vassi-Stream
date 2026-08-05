@@ -9,6 +9,8 @@
     "lib": ["ES2020", "DOM"],
     // Les declarations Node couvrent le test runner et Buffer dans les tests.
     "types": ["node"],
+    // Les tests importent PALETTE depuis scripts/device-patcher/parts.js (JavaScript, pas TypeScript).
+    "allowJs": true,
     // Le mode strict refuse les incoherences de types avant l'execution des tests.
     "strict": true,
     "noUncheckedIndexedAccess": true,

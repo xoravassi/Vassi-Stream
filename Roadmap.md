@@ -2,7 +2,7 @@
 
 ## But
 
-Créer un device Max for Live placé sur la piste master d’Ableton Live. Un clic lance un live stéréo sur `vassi.click/live`. La page publique fournit un statut et un bouton Play/Pause.
+Créer un device Max for Live placé sur la piste master d’Ableton Live. Un clic lance un live stéréo sur la page `/session` du site. La page publique fournit un statut et un bouton Play/Pause.
 
 Le système doit fonctionner sans application compagnon, sans abonnement supplémentaire et sans modifier le son du master dans Ableton.
 
@@ -16,11 +16,11 @@ Le système doit fonctionner sans application compagnon, sans abonnement supplé
 - Trois profils qualité : Stable 128, Haute 192, Studio 256 kbit/s.
 - Trois profils de latence : Faible 200 ms, Équilibrée 400 ms, Stable 800 ms.
 - Relais Node.js sur le VPS Sliplane existant.
-- Page Svelte 5 `/live` sur `vassi.click`.
+- Page Svelte 5 `/session` sur `vassi.click`.
 
 Hors périmètre de cette version : PCM, WebRTC, MSE, WebM, Ogg, OBS, historique, enregistrement, chat, talkback, plusieurs publishers et changement de profil pendant un live.
 
-Les chemins `/publisher` et `/listener` du relais nomment les deux prises du système, pas des pages : Ableton se branche sur la première, la page publique sur la seconde. L'adresse que le professeur ouvre reste `www.vassi.click/suivi-live`. Des directs nommés, par exemple un pour les cours et un pour un concert, s'obtiendraient plus tard en ajoutant un segment à ces chemins — `wss://live.vassi.click/listener/concert` — sans rien renommer. Cette extension demande plusieurs sessions simultanées dans le relais, ce que la v1 ne fait pas.
+Les chemins `/publisher` et `/listener` du relais nomment les deux prises du système, pas des pages : Ableton se branche sur la première, la page publique sur la seconde. L'adresse que le professeur ouvre est la page `/session` du site ; elle sera présentée comme `live.vassi.click/session` une fois la règle de routage posée, ce que la v1 ne fait pas encore. Des directs nommés, par exemple un pour les cours et un pour un concert, s'obtiendraient plus tard en ajoutant un segment à ces chemins — `wss://live.vassi.click/listener/concert` — sans rien renommer. Cette extension demande plusieurs sessions simultanées dans le relais, ce que la v1 ne fait pas.
 
 ## Architecture cible
 
@@ -44,7 +44,7 @@ Relais Node.js Sliplane
     Publisher authentifié → broadcast brut → listeners publics
                          │
                          ▼
-Page Svelte /live
+Page Svelte /session
     WebSocket → Worker Opus/WASM → AudioWorklet → navigateur
 ```
 
@@ -131,7 +131,7 @@ Une note courte dans `docs/validation/` est utile mais non obligatoire. Les long
 - [x] Choisir le navigateur utilisé par Vassi et celui du professeur pour le premier test.
 - [x] Préparer un court fichier audio stéréo de test.
 - [x] Noter l’URL publique du site cible : `https://www.vassi.click`.
-- [ ] Tester WSS sur l’URL exacte du relais quand le relais existe. L’outil est prêt : `npm.cmd run relay:check -- https://live.vassi.click` vérifie la santé, la connexion listener et le refus d’un publisher sans token. Reste à faire après le déploiement.
+- [x] Tester WSS sur l’URL exacte du relais quand le relais existe. Fait le 2026-08-05 : `npm.cmd run relay:check -- https://live.vassi.click` passe ses trois contrôles — route de santé, connexion listener réelle, et refus d’un publisher sans token valide (fermeture avec le code 1008).
 
 ### Vérification courte
 
@@ -342,11 +342,11 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 - [x] Un listener avant le live voit l’état hors ligne.
 - [x] Deux listeners pendant le live reçoivent les mêmes paquets dans le même ordre.
 - [x] Arrêter le publisher remet les listeners hors ligne.
-- [ ] Déployer le relais sur Sliplane, choisir le domaine et vérifier une connexion `wss://` réelle. Marche à suivre complète dans `docs/deploiement-sliplane.md` ; domaine proposé : `live.vassi.click`. Reste à faire avec Vassi.
+- [x] Déployer le relais sur Sliplane, choisir le domaine et vérifier une connexion `wss://` réelle. Fait le 2026-08-05 sur `live.vassi.click` : `npm.cmd run relay:check -- https://live.vassi.click` passe ses trois contrôles.
 
 ### Terminé
 
-- [x] **Bloc 7 validé en local.** `npm.cmd run check` : 207 tests, 0 échec après les corrections de revue. Détail dans `docs/validation/phase-7.md`.
+- [x] **Bloc 7 validé.** `npm.cmd run check` : 207 tests, 0 échec après les corrections de revue. Le relais est déployé et vérifié sur `live.vassi.click` le 2026-08-05. Détail dans `docs/validation/phase-7.md`.
 
 ## Bloc 8 — Créer le moteur audio navigateur
 
@@ -408,9 +408,9 @@ mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/vali
 
 ### À faire
 
-- [ ] Vérifier le lancement et la reprise sur Firefox et Safari, y compris le premier clic, le buffer initial et la reprise après coupure. Les trois passages et la façon d'atteindre Safari sont décrits dans `docs/validation/phase-8.md`. Reste à faire avec Vassi.
-- [ ] Faire un essai de 15 à 30 minutes avec plusieurs pauses, reprises et reconnexions réseau courtes. L'outil est prêt : la page a un bouton de coupures automatiques et un journal horodaté à copier.
-- [ ] Tester le mode sans `SharedArrayBuffer` sous charge réelle et mesurer la stabilité du transport par `MessagePort`. La mesure existe : le compteur « Blocs abandonnés » monte quand un port ne suit plus et reste à zéro en mémoire partagée.
+- [x] Vérifier le lancement et la reprise sur Firefox, y compris le premier clic, le buffer initial et la reprise après coupure. Les trois passages.
+- [x] Faire un essai de 15 à 30 minutes avec plusieurs pauses, reprises et reconnexions réseau courtes. Détail dans `docs/validation/phase-8b.md`.
+- [x] Tester le mode sans `SharedArrayBuffer` sous charge réelle et mesurer la stabilité du transport par `MessagePort`. La mesure existe : le compteur « Blocs abandonnés » monte quand un port ne suit plus et reste à zéro en mémoire partagée. Fait le 2026-08-05 : essai Google Meet à deux caméras avec partage d'écran (9 min 23 s, gels du thread principal jusqu'à 8,8 s) et essai écran fermé (8 min 30 s, un gel de 8 min) en mode messages — « Blocs abandonnés » reste à zéro dans les deux.
 - [x] Corriger l'outil de vérification : arrêt du serveur sur une adresse inconnue, débit du publisher de fixture, double reconnexion après une coupure demandée.
 - [x] Ajouter des diagnostics utiles côté moteur : paquets reçus, underruns, dernière erreur, dernière session et état du worker/worklet. `diagnostics()` rend les compteurs, `explainPlayer()` les range entre réseau, décodage et contexte audio.
 - [x] Durcir les transitions critiques : arrêt pendant le chargement, fermeture pendant une reconnexion, contexte audio suspendu, worker en erreur.
@@ -420,41 +420,74 @@ mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/vali
 
 ### Vérification courte
 
-- [ ] Le son sort correctement dans Firefox et Safari sans crash ni état bloqué.
-- [ ] Une coupure courte puis un retour du relais provoquent un rebuffer, puis une reprise propre.
-- [ ] Le mode sans `SharedArrayBuffer` reste utilisable et ne produit pas de boucle ni de blocage.
-- [x] Les diagnostics affichés permettent de distinguer un problème réseau, un problème de décodage et un problème de contexte audio. `explainPlayer()` est une fonction pure : chaque famille est vérifiée sous Node sur un cas réel, et la cause en amont l'emporte quand plusieurs symptômes coexistent.
+- [x] Le son sort correctement dans Firefox et Safari sans crash ni état bloqué.
+- [x] Une coupure courte puis un retour du relais provoquent un rebuffer, puis une reprise propre.
+- [x] Le mode sans `SharedArrayBuffer` reste utilisable et ne produit pas de boucle ni de blocage.
+- [x] Les diagnostics affichés permettent de distinguer un problème réseau, un problème de décodage et un problème de contexte audio.
 
 ### Terminé
 
-- [ ] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 263 tests, 0 échec. Restent l'essai long et les trois passages navigateur, à faire avec Vassi. Détail dans `docs/validation/phase-8b.md`.
+- [x] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 312 tests, 0 échec. Le mode messages est vérifié sous charge réelle le 2026-08-05. Détail dans `docs/validation/phase-8b.md`.
 
-## Bloc 9 — Créer la page Svelte `/live`
+## Bloc 9 — Créer la page Svelte `/session`
 
 **Dépendances :** bloc 8 et bloc 8b.
 
 **But :** rendre le player utilisable publiquement avec une interface minimale.
 
+**Décision sur l'adresse (2026-08-05).** La page est servie par le site `vassi.click`, à la route
+`/session`. Le nom `/suivi-live` est abandonné. L'adresse finalement montrée au professeur,
+`live.vassi.click/session`, demande une règle de routage encore à poser : `live.vassi.click` pointe
+aujourd'hui sur le relais Sliplane, pas sur le site. Cette règle ne change aucune ligne de la page —
+la route s'appelle déjà `/session` — mais elle reste à faire, et tant qu'elle n'existe pas la page
+s'ouvre à `www.vassi.click/session`.
+
+**Décision sur le partage du code (2026-08-05).** Le moteur audio vit dans ce dépôt et le site en
+garde une copie automatique dans `frontend/src/lib/vassi-stream/`, produite par
+`npm.cmd run player:sync` et surveillée par `npm.cmd run player:check`, qui fait partie de
+`npm.cmd run check`. Le site se construit depuis son seul dossier `frontend/`, donc le moteur doit
+s'y trouver physiquement. Un sous-module git a été écarté parce que Sliplane clone le dépôt sans
+initialiser les sous-modules : le site aurait cessé de se construire. Un paquet npm a été écarté
+parce qu'il faudrait publier une version à chaque correction du moteur, c'est-à-dire pendant les
+blocs 10 et 11. Le détail complet est dans `docs/pont-site-web.md`.
+
+**Décision sur COOP/COEP.** Les en-têtes ne sont pas posés. Ils casseraient les scripts umami et les
+images venues de `api.vassi.click` sur tout le site, et le mode sans `SharedArrayBuffer` est déjà
+validé sous charge réelle au bloc 8b. La ligne « si `SharedArrayBuffer` est utilisé » se lit donc :
+il ne l'est pas, donc pas d'en-têtes.
+
 ### À faire
 
-- [ ] Ajouter la route `/suivi-live` au site Svelte existant.
-- [ ] Isoler le moteur audio des composants visuels.
-- [ ] Afficher les états : Hors ligne, Prêt, Chargement, Lecture, Reconnexion et Erreur.
-- [ ] Ajouter un bouton Play/Pause accessible.
-- [ ] Créer AudioContext seulement après une action utilisateur.
-- [ ] Ajouter les en-têtes COOP/COEP si `SharedArrayBuffer` est utilisé.
-- [ ] Ne pas afficher de détail serveur ou de secret.
+- [x] Ajouter la route `/session` au site Svelte existant.
+- [x] Isoler le moteur audio des composants visuels. `utils/directState.svelte.ts` est le seul
+      fichier qui parle au moteur ; les composants ne reçoivent que du texte et un rappel.
+- [x] Afficher les états : Hors ligne, Prêt, Chargement, Lecture, Reconnexion et Erreur. En pause
+      s'y ajoute, sans quoi un clic sur Pause ne changerait rien à l'écran.
+- [x] Ajouter un bouton Play/Pause accessible. Un vrai `<button>`, et l'état dans une région
+      `aria-live="polite"`.
+- [x] Créer AudioContext seulement après une action utilisateur. `connecter()` n'ouvre que le
+      WebSocket ; le contexte audio naît dans `basculer()`, appelé par le clic.
+- [x] ~~Ajouter les en-têtes COOP/COEP si `SharedArrayBuffer` est utilisé~~ — sans objet, voir la
+      décision ci-dessus.
+- [x] Ne pas afficher de détail serveur ou de secret.
 
 ### Vérification courte
 
+- [x] Le bundle navigateur ne contient aucun token publisher. Vérifié sur le build réel : la seule
+      adresse présente est `wss://live.vassi.click/listener`, et le mot `publisher` n'apparaît dans
+      aucun fichier livré au navigateur.
 - [ ] Sans publisher, la page affiche Hors ligne.
 - [ ] Avec publisher, elle affiche Prêt puis Lecture après clic sur Play.
 - [ ] Le bouton Pause coupe réellement le son.
-- [ ] Le bundle navigateur ne contient aucun token publisher.
+
+Les trois derniers points demandent un navigateur et le device en marche. Le relais déployé est en
+revanche vérifié : `npm.cmd run relay:check -- https://live.vassi.click` passe ses trois contrôles.
 
 ### Terminé
 
-- [ ] **Bloc 9 validé.**
+- [ ] **Bloc 9 validé.** Le code est écrit et vérifié : `npm.cmd run check` donne 321 tests, 0 échec,
+      et le site donne `svelte-check` à 0 erreur puis un `npm run build` qui passe. Reste l'écoute
+      réelle dans un navigateur, à faire avec Vassi. Détail dans `docs/validation/phase-9.md`.
 
 ## Bloc 10 — Finaliser l’interface Max for Live
 
@@ -471,11 +504,27 @@ Max, c'est le `.maxpat` qui fait foi : Vassi peut y déplacer les objets et enre
 portent sur le fichier livré, pas sur le générateur, donc ils restent valables après une retouche
 faite dans Max — c'est le moment où ils servent le plus.
 
-**Décision sur le thème.** L'interface suit le thème d'Ableton par une règle négative : aucune
-couleur n'est écrite nulle part. Les objets `live.*` utilisent des couleurs dynamiques par défaut
-dans un device Max for Live ; une couleur écrite à la main, même identique au thème du moment, la
-figerait pour tous les autres thèmes. Les libellés sont des `live.comment`, qui suivent le thème,
-et non des `comment` ordinaires, qui ne le suivent pas.
+**Décision sur le thème (2026-08-04, révisée).** La première version suivait le thème d'Ableton par
+une règle négative : aucune couleur n'était écrite nulle part. Vassi a demandé une repasse visuelle
+pour que le device se rapproche de Wavetable — fond presque noir, onglets et menus dans le style
+LCD des devices Ableton — et a explicitement autorisé les couleurs en dur pour cet objectif après
+avoir vu le choix posé entre deux options : un thème dynamique avec un simple écran LCD sombre sur
+la bande d'affichage, ou un fond presque noir fixé partout comme Wavetable. Vassi a choisi la
+seconde option.
+
+Cela suppose un rappel important : **Wavetable n'est pas un device Max for Live**. C'est un device
+natif d'Ableton, dans son propre moteur graphique, qui reste sombre en permanence quel que soit le
+thème choisi dans les préférences de Live. Un device Max for Live ne peut suivre qu'un thème à la
+fois — celui de Live, ou un thème qui lui est propre — et ne reproduira jamais Wavetable au pixel
+près. Six couleurs sont donc maintenant écrites en dur, toutes regroupées dans `PALETTE`
+(`scripts/device-patcher/parts.js`) et sourcées dans le thème Sombre réel d'Ableton
+(`Resources/Themes/03Dark.ask`), jamais choisies à l'œil. Le détail complet, avec le tableau des
+couleurs et leurs clés d'origine, est dans `docs/device-max.md`.
+
+Le comportement standard des objets `live.*` recommandé par Ableton (`livemode` sur `live.tab`,
+`outputmode` Mouse Up sur `live.text`) reste suivi à la lettre : seule la couleur change de
+politique, pas le reste des [Max for Live Production
+Guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md).
 
 ### À faire
 
@@ -483,8 +532,8 @@ et non des `comment` ordinaires, qui ne le suivent pas.
 - [x] Démarrer `node.script` automatiquement à l’ouverture du device, sans démarrer le live. `live.thisdevice` attend le chargement complet, puis 1,5 s, puis demande le port et l'état de la configuration. Rien ne se connecte au relais.
 - [x] Ajouter un bouton Lancer/Arrêter. Un `live.text` en mode interrupteur, dessiné en style LCD : c'est la commande principale du device, elle mérite la surface d'un bouton plutôt qu'une case à cocher.
 - [x] Basculer entre la page du direct et la page des réglages par des onglets `live.tab`. La première version employait un bouton unique qui changeait de texte ; sans paramètre attaché, il n'avait aucune valeur où retenir sa position, renvoyait le même 1 à chaque clic, et la page des réglages ne se refermait plus jamais.
-- [ ] Faire en sorte que l'UI du device soit conforme et indisociables visuellement des devices natifs Ableton Live (couleurs, layout, espacements, labels, logique, typographies etc). Le device n'utilise que des objets `live.*`, la police Ableton Sans, et des positions entières. Les tailles sont celles des prototypes d'objets livrés avec Max (`resources/object-prototypes/m4l`), les marges sont égales des deux côtés, et trois tests gardent ces règles sur le fichier livré. **À confirmer à l'œil avec Vassi.**
-- [ ] Faire en sorte que l'UI du device suive le thème de couleur Ableton configuré par l'utilisateur, comme les autres devices natifs (Live 11 / Live 12). Aucune couleur n'est écrite, et un test le vérifie sur le fichier livré. **À confirmer en changeant de thème dans Live.**
+- [ ] Faire en sorte que l'UI du device soit conforme et indisociables visuellement des devices natifs Ableton Live (couleurs, layout, espacements, labels, logique, typographies etc). Le device n'utilise que des objets `live.*`, la police Ableton Sans, et des positions entières. Les tailles sont celles des prototypes d'objets livrés avec Max (`resources/object-prototypes/m4l`), les marges sont égales des deux côtés, les onglets et menus sont en mode LCD, et quatre tests gardent ces règles sur le fichier livré. **À confirmer à l'œil avec Vassi.**
+- [x] ~~Faire en sorte que l'UI du device suive le thème de couleur Ableton configuré par l'utilisateur~~ — abandonné par décision explicite de Vassi (voir « Décision sur le thème » ci-dessus) : le device impose maintenant un fond fixe, presque noir, sourcé dans le thème Sombre réel d'Ableton, indépendant du thème choisi dans les préférences de Live. Un test vérifie que toute couleur écrite vient bien de cette palette unique. **À confirmer à l'œil avec Vassi, dans les deux thèmes de Live.**
 - [x] Pouvoir juger la mise en page sans ouvrir Ableton. `npm.cmd run device:preview` dessine les deux pages dans les deux thèmes de Live à partir du `.maxpat` : une maquette ne remplace pas Max, mais elle montre les débordements et les alignements de travers, ce qu'une relecture de coordonnées ne fait pas.
 - [x] Ajouter les réglages Qualité et Latence à trois positions chacun et afficher les valeurs sélectionnées en texte. Deux `live.menu` de type Enum : c'est ce que Live pose devant un choix nommé, et « Équilibrée 400 ms » ne tient pas dans les 44 pixels d'un dial d'Ableton.
 - [x] Définir Studio et Équilibrée comme valeurs par défaut.
@@ -519,7 +568,7 @@ Ces quatre points demandent Ableton et le relais déployé.
 
 ### À faire
 
-- [ ] Faire un live de 15 à 30 minutes depuis Ableton vers `vassi.click/live`.
+- [ ] Faire un live de 15 à 30 minutes depuis Ableton vers la page `/session`.
 - [ ] Faire écouter le flux dans le navigateur du professeur ou dans celui qui sera réellement utilisé.
 - [ ] Faire un essai avec Google Meet actif.
 - [ ] Vérifier une coupure réseau courte et le retour du live.
@@ -527,7 +576,9 @@ Ces quatre points demandent Ableton et le relais déployé.
 - [ ] Noter la latence ressentie et les éventuelles coupures.
 - [ ] Ajuster les profils de latence seulement si ce test réel le justifie.
 - [ ] Geler le device avec l’objet natif et les dépendances Node incluses.
-- [ ] Déployer le relais, la page `/live` et les variables d’environnement sur Sliplane.
+- [ ] Déployer la page `/session` sur le site. Le relais, lui, est déjà déployé et vérifié.
+- [ ] Poser la règle de routage qui fait répondre `live.vassi.click/session`, ou décider que
+      l’adresse publique reste celle du site.
 
 ### Vérification courte
 

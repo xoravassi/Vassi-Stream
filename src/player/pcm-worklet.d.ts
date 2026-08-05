@@ -12,6 +12,7 @@ export declare const CONTROL_WRITE_INDEX: number;
 export declare const CONTROL_READ_INDEX: number;
 export declare const CONTROL_UNDERRUNS: number;
 export declare const CONTROL_OVERFLOWS: number;
+export declare const CONTROL_SKIPS: number;
 
 // Cette fonction cree la memoire d'une file PCM, partagee entre threads ou non.
 export declare function createPcmBuffer(shared: boolean, capacityFrames?: number): ArrayBufferLike;
@@ -28,8 +29,10 @@ export declare class PcmRing {
   readonly availableMs: number;
   readonly underruns: number;
   readonly overflows: number;
+  readonly skips: number;
 
   clear(): void;
+  dropOldest(keepFrames: number): boolean;
   write(left: Float32Array, right: Float32Array): boolean;
   read(left: Float32Array, right: Float32Array): number;
 }

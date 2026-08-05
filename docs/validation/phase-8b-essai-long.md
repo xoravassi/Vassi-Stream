@@ -68,6 +68,11 @@ chaque phase : le journal est horodate, donc chaque incident se rattache ensuite
 
 Ce que cela provoque : des pointes de processeur, et une carte son que deux programmes se disputent.
 
+**Mesure du 5 aout 2026 : cette phase ne gele pas le thread principal.** Ableton a ete pousse au-dela
+de 300 % de processeur sans produire une seule ligne `thread principal gele`, et sans un seul saut au
+direct. La charge processeur seule n'atteint pas le moteur : la phase qui l'eprouve reellement est la
+phase 2.
+
 ### Phase 2 - Google Meet (10 min)
 
 1. Demarrer une reunion, seul, micro et camera actives.
@@ -78,6 +83,12 @@ Ce que cela provoque : des pointes de processeur, et une carte son que deux prog
 Ce que cela provoque : Windows bascule sur son peripherique de communication et baisse le volume des
 autres programmes. C'est la manipulation la plus susceptible de suspendre le contexte audio sans le
 dire.
+
+**C'est la phase la plus dure de la fiche, et de loin.** Mesure du 5 aout 2026 : douze gels du thread
+principal, de 2,3 s a 12,4 s, environ quatre-vingts secondes de gel cumule sur huit minutes et demie.
+Ni la charge processeur (phase 1) ni l'onglet masque (phase 5) ne produisent cela seuls — c'est la
+combinaison des pipelines media du navigateur. Attendre ici des manques de donnees et des sauts au
+direct ; exiger que `Blocs abandonnes` reste a zero et que le verdict revienne.
 
 ### Phase 3 - Peripheriques de sortie (5 min)
 
@@ -138,6 +149,7 @@ A la fin, cliquer **Copier le journal** sur chacune des deux pages.
 | Paquets refuses | **0**, toujours |
 | Derniere erreur | **aucune**, toujours |
 | Blocs abandonnes | 0 en memoire partagee ; en messages, une valeur qui se stabilise |
+| Sauts au direct | quelques-uns au plus, chacun apres un gel du thread principal |
 | Manques de donnees | quelques-uns, chacun rattachable a une phase |
 | Discontinuites | environ une par coupure et par trou reseau |
 | Son en attente | proche du seuil affiche, sans montee continue |
@@ -155,9 +167,31 @@ fait son travail. Ce qui compte est qu'il **revienne**.
 - **L'etat reste sur BUFFERING** alors que `Paquets recus` continue de monter.
 - **`Frames decodees` se fige** pendant que `Paquets acceptes` continue de monter.
 - **`Son en attente` monte sans redescendre** : le retard s'installe, et rien ne le rattrape.
-- **Plus d'un aller-retour `REBUFFERING` / `PLAYING`** pour un seul incident.
+- **Plus d'un aller-retour `REBUFFERING` / `PLAYING`** pour un incident bref — une coupure, un casque
+  debranche, une discontinuite. Pendant un **gel du thread principal**, en revanche, plusieurs
+  allers-retours sont normaux : le gel affame la file, puis le degel la sature, et ce sont deux causes
+  distinctes que le moteur signale separement. Ce qui compte alors est que le verdict revienne et que
+  `Blocs abandonnes` reste a zero.
 - **La ligne `retard detecte`** apparait alors qu'il ne s'est rien passe : le seuil est trop etroit.
 - **`Blocs abandonnes` monte encore** en memoire partagee.
+
+### Deux lignes du journal a savoir lire
+
+**`thread principal gele pendant ...`** — la page elle-meme a cesse de tourner : veille de la
+machine, onglet masque, ou processeur sature. C'est presque toujours la **cause** de ce qui suit, et
+non un defaut en soi. Tout incident note dans les secondes qui suivent cette ligne doit lui etre
+rattache avant d'etre compte comme un defaut du moteur.
+
+**`saut au direct : le processeur audio a borne la file lui-meme`** — le processeur audio a jete du
+son sans passer par la machine d'etats. C'est le filet, et il ne sert que lorsqu'une rafale a
+distance le vidage ordinaire : le son saute, mais aucune rebufferisation ne l'annonce. Quelques sauts
+apres un gel sont normaux. Une montee continue de `Sauts au direct` alors que rien ne gele est un
+defaut : elle veut dire que le vidage ne fait plus son travail et que seul le filet retient la file.
+
+**`(x45 en 2.1 s)`** en fin de ligne — cette ligne s'est repetee quarante-cinq fois en deux secondes.
+Le journal replie les rafales pour qu'un incident bref ne chasse pas des heures d'historique. Le
+compte et la duree sont eux-memes une mesure : quarante-cinq vidages en deux secondes decrivent une
+rafale continue, trois vidages en dix secondes un tout autre phenomene.
 
 ### Le piege a connaitre
 

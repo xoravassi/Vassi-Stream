@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { PALETTE } from "../scripts/device-patcher/parts.js";
+
 // Ce nombre est le code ASCII « audi » : il dit a Live que le device est un effet audio.
 // Un autre code ferait apparaitre le device dans la mauvaise categorie du navigateur d'Ableton.
 const AMXD_AUDIO_EFFECT = 1633771873;
@@ -12,8 +14,8 @@ const AMXD_AUDIO_EFFECT = 1633771873;
 // Un patcher est un objet JSON : ses objets, ses cables et ses positions se lisent et se
 // verifient comme n'importe quelle donnee. Ce qui suit couvre exactement ce qu'un oeil ne voit
 // pas a l'ouverture : un cable qui pointe vers une sortie inexistante, un message que le script
-// Node ne comprend pas, une couleur figee qui ne suivrait pas le theme d'Ableton, ou un token
-// qui partirait dans le fichier de morceau.
+// Node ne comprend pas, une couleur figee qui ne viendrait pas de la palette unique du device, ou
+// un token qui partirait dans le fichier de morceau.
 //
 // Ces tests portent sur le fichier reellement livre. Ils restent donc valables apres une retouche
 // faite dans Max, ce qui est le moment ou ils servent le plus.
@@ -123,24 +125,42 @@ test("les identifiants et les noms sont uniques", () => {
   assert.equal(new Set(names).size, names.length, "deux objets portent le meme nom");
 });
 
-// Ce test verifie qu'aucune couleur n'est figee dans le device.
+// Ce test verifie que toute couleur figee dans le device vient de `PALETTE`.
 //
-// C'est la seule chose a faire pour que l'interface suive le theme d'Ableton : les objets `live.*`
-// utilisent des couleurs dynamiques par defaut. Ecrire une couleur, meme celle du theme du moment,
-// la fige pour tous les autres themes.
-test("aucune couleur n'est ecrite dans le device", () => {
-  const written: string[] = [];
+// Le device ne suit plus le theme d'Ableton pour ses couleurs : Vassi a choisi un fond presque
+// noir, fixe, proche de celui de Wavetable (voir `docs/device-max.md`). La regle n'est donc plus
+// « aucune couleur », mais « une seule palette, documentee, jamais une valeur recopiee a la main ».
+const PALETTE_VALUES = new Set(Object.values(PALETTE).map((rgba) => JSON.stringify(rgba)));
+
+test("toute couleur figee dans le device vient de la palette", () => {
+  const foreign: string[] = [];
 
   for (const box of boxes) {
-    for (const key of Object.keys(box)) {
-      if (key.toLowerCase().includes("color")) {
-        written.push(`${box.id}.${key}`);
+    for (const [key, value] of Object.entries(box)) {
+      if (key.toLowerCase().includes("color") && !PALETTE_VALUES.has(JSON.stringify(value))) {
+        foreign.push(`${box.id}.${key}`);
       }
     }
   }
 
-  assert.deepEqual(written, [], "des couleurs figees empecheraient le suivi du theme");
-  assert.equal(PATCHER.bgcolor, undefined, "le fond du device doit venir du theme de Live");
+  assert.deepEqual(foreign, [], "une couleur hors palette echapperait a la seule source de verite");
+  assert.deepEqual(PATCHER.bgcolor, PALETTE.bg, "le fond du device doit venir de PALETTE.bg");
+});
+
+// Ce test verifie que les onglets, les menus et les boutons sont en mode LCD.
+//
+// Sans lui, `live.tab` et `live.menu` dessinent chaque position comme un bouton separe, ce qui
+// donnait au device un air de « deux boutons » plutot que d'onglets (voir `docs/device-max.md`).
+test("les onglets, les menus et les boutons sont en mode LCD", () => {
+  const withAppearance = (maxclass: string) => boxes.filter((box) => box.maxclass === maxclass);
+
+  for (const box of [...withAppearance("live.tab"), ...withAppearance("live.menu")]) {
+    assert.equal((box as unknown as Record<string, unknown>).appearance, 1, `${box.varname} n'est pas en mode LCD`);
+  }
+
+  for (const box of withAppearance("live.text")) {
+    assert.equal((box as unknown as Record<string, unknown>).appearance, 2, `${box.varname} n'est pas en mode LCD`);
+  }
 });
 
 // Ce test verifie la forme du device : presentation a l'ouverture, largeur fixee, et objets

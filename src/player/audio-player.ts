@@ -1,7 +1,7 @@
 import { BrowserAudio } from "./browser-audio.ts";
 import { ListenerSocket } from "./listener-socket.ts";
 import type { DiagnosticArea, PlayerDiagnostics } from "./player-diagnostics.ts";
-import { PlayerStateMachine, type PlayerStatus } from "./player-state.ts";
+import { LATE_MARGIN_MS, PlayerStateMachine, type PlayerStatus } from "./player-state.ts";
 
 // Ce module assemble le moteur audio : la connexion au relais, la machine d'etats, les pieces du
 // navigateur et les compteurs de diagnostic.
@@ -10,12 +10,17 @@ import { PlayerStateMachine, type PlayerStatus } from "./player-state.ts";
 // `browser-audio.ts` execute, ce module fait passer les ordres de l'une a l'autre et compte ce qui
 // traverse.
 
-// Ce type decrit les adresses dont le moteur a besoin. Le bloc 9 fournit les deux dernieres avec
-// `new URL(..., import.meta.url)` pour que le bundler du site les emette lui-meme : rien n'est
-// telecharge depuis un CDN.
-export type PlayerUrls = {
+// Ce type decrit tout ce dont le moteur a besoin pour atteindre ses pieces.
+//
+// `createWorker` est une fabrique et non une adresse. Le worker de decodage importe la bibliotheque
+// `opus-decoder`, un nom de paquet qu'un navigateur ne sait pas resoudre : c'est l'outil de
+// construction du site qui s'en charge, et il ne le fait que s'il voit lui-meme la creation du
+// worker. Le processeur audio, lui, ne contient aucun import et se donne par son adresse.
+//
+// Rien n'est telecharge depuis un CDN : les deux fichiers sont livres par le site.
+export type PlayerSetup = {
   relayUrl: string;
-  workerUrl: URL | string;
+  createWorker: () => Worker;
   workletUrl: URL | string;
 };
 
@@ -46,6 +51,7 @@ export class AudioPlayer {
     discontinuities: 0,
     underruns: 0,
     overflows: 0,
+    skips: 0,
   };
   private lastRefusal: string | null = null;
   private lastPacketAt: number | null = null;
@@ -58,7 +64,7 @@ export class AudioPlayer {
   private announcedSessionId = 0;
   private liveSince: number | null = null;
 
-  constructor(urls: PlayerUrls, onChange: (status: PlayerStatus) => void = () => {}, deps: Partial<PlayerDeps> = {}) {
+  constructor(setup: PlayerSetup, onChange: (status: PlayerStatus) => void = () => {}, deps: Partial<PlayerDeps> = {}) {
     this.now = deps.now ?? (() => Date.now());
 
     this.machine = new PlayerStateMachine((status) => {
@@ -66,8 +72,9 @@ export class AudioPlayer {
       onChange(status);
     });
 
-    this.audio = new BrowserAudio(urls, {
-      onLevel: (availableMs, underruns, overflows) => this.handleLevel(availableMs, underruns, overflows),
+    this.audio = new BrowserAudio(setup, {
+      onLevel: (availableMs, underruns, overflows, skips) =>
+        this.handleLevel(availableMs, underruns, overflows, skips),
       onDiscontinuity: () => this.machine.discontinuity(),
       onRefusal: (reason) => {
         this.lastRefusal = reason;
@@ -84,7 +91,7 @@ export class AudioPlayer {
       onFailure: (area, reason) => this.fail(area, reason),
     }, this.now);
 
-    this.socket = new ListenerSocket(urls.relayUrl, {
+    this.socket = new ListenerSocket(setup.relayUrl, {
       onState: (state) => {
         this.machine.setStream(state);
         this.trackSession();
@@ -139,6 +146,7 @@ export class AudioPlayer {
       bufferedMs: this.bufferMs,
       underruns: this.counters.underruns,
       overflows: this.counters.overflows,
+      skips: this.counters.skips,
       sinceLevelMs: this.lastLevelAt === null ? null : at - this.lastLevelAt,
 
       errorReason: status.errorReason,
@@ -194,10 +202,11 @@ export class AudioPlayer {
   }
 
   // Cette methode enregistre le niveau annonce par le processeur audio et le remet a la machine.
-  private handleLevel(availableMs: number, underruns: number, overflows: number): void {
+  private handleLevel(availableMs: number, underruns: number, overflows: number, skips: number): void {
     this.bufferMs = availableMs;
     this.counters.underruns = underruns;
     this.counters.overflows = overflows;
+    this.counters.skips = skips;
     // Cette date est la preuve que le thread audio tourne encore. Un contexte suspendu cesse
     // d'appeler le processeur, donc plus aucun niveau n'arrive.
     this.lastLevelAt = this.now();
@@ -255,6 +264,13 @@ export class AudioPlayer {
     if (!status.playing) {
       this.audio.setPlaying(false);
     }
+
+    // Le filet du processeur audio est place une marge au-dessus du seuil de vidage : le vidage
+    // garde la main sur la derive ordinaire, avec son diagnostic et sa rebufferisation, et le filet
+    // n'intervient que lorsqu'une rafale l'a distance. En sautant, il laisse de quoi jouer tout de
+    // suite, sinon le saut se paierait d'un manque de donnees.
+    const target = this.machine.targetBufferMs();
+    this.audio.setLimit(target + 2 * LATE_MARGIN_MS, target);
 
     this.audio.setAccepting(status.accepting);
     this.audio.applyFlush(status.flushId);

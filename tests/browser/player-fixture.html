@@ -149,6 +149,8 @@
       <dd id="underruns">0</dd>
       <dt>Blocs abandonnes</dt>
       <dd id="overflows">0</dd>
+      <dt>Sauts au direct</dt>
+      <dd id="skips">0</dd>
       <dt>Dernier niveau annonce</dt>
       <dd id="since-level">-</dd>
       <dt>Derniere erreur</dt>
@@ -194,19 +196,53 @@
       const debut = Date.now();
       const lignes = [];
 
+      // Ces trois valeurs replient une rafale de lignes identiques sur une seule ligne comptee.
+      let derniereLigne = null;
+      let repetitions = 0;
+      let rafaleDepuis = 0;
+
+      // Cette fonction met un horodatage en forme depuis le debut de l'essai.
+      function horodater(at) {
+        const seconds = Math.floor((at - debut) / 1000);
+
+        return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+
       // Cette fonction ecrit une ligne horodatee. Le journal sert a l'essai long : ce qui s'est
       // passe pendant une demi-heure ne tient dans aucune memoire, et un compteur seul ne dit pas
       // dans quel ordre les choses sont arrivees.
+      //
+      // Une suite de lignes identiques est repliee sur une seule, avec son compte et sa duree. Sans
+      // ce repli, un incident de deux secondes chasse du tampon tout l'historique de l'essai :
+      // c'est ce qui est arrive pendant l'essai de la nuit du 4 aout 2026, ou dix heures de journal
+      // ont disparu derriere quarante-cinq lignes identiques. Le repli garde en plus l'information
+      // qui manquait le plus — combien de fois, et sur quelle duree.
       function noter(texte) {
-        const seconds = Math.floor((Date.now() - debut) / 1000);
-        const horodatage = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+        const at = Date.now();
 
-        lignes.push(`${horodatage}  ${texte}`);
+        if (texte === derniereLigne && lignes.length > 0) {
+          repetitions += 1;
+          const secondes = ((at - rafaleDepuis) / 1000).toFixed(1);
+          lignes[lignes.length - 1] = `${horodater(rafaleDepuis)}  ${texte}  (x${repetitions} en ${secondes} s)`;
+          rendre();
+          return;
+        }
 
-        if (lignes.length > 300) {
+        derniereLigne = texte;
+        repetitions = 1;
+        rafaleDepuis = at;
+        lignes.push(`${horodater(at)}  ${texte}`);
+
+        // Un essai d'une nuit tient largement dans ce tampon une fois les rafales repliees.
+        if (lignes.length > 600) {
           lignes.shift();
         }
 
+        rendre();
+      }
+
+      // Cette fonction reaffiche le journal.
+      function rendre() {
         journal.textContent = lignes.join("\n");
         journal.scrollTop = journal.scrollHeight;
       }
@@ -227,16 +263,30 @@
       let dernierEtat = null;
       let dernierVidage = 0;
 
+      // Ce renvoi laisse le rappel ci-dessous lire les compteurs du moteur, qui n'existe pas encore
+      // au moment ou ce rappel est ecrit.
+      let moteur = null;
+
       const player = new AudioPlayer(
         {
           relayUrl: listenerUrl,
-          workerUrl: new URL("/src/player/decode-worker.js", location.href),
+          createWorker: () =>
+            new Worker(new URL("/src/player/decode-worker.js", location.href), { type: "module" }),
           workletUrl: new URL("/src/player/pcm-worklet.js", location.href),
         },
         (status) => {
           if (status.flushId !== dernierVidage) {
             dernierVidage = status.flushId;
-            noter("retard detecte : le son en attente est jete, la lecture repart du direct");
+
+            // Le niveau qui a declenche le vidage est la mesure de sa gravite : un depassement de
+            // cent millisecondes et une file pleine a ras bord donnent la meme ligne sans lui. Il
+            // est arrondi a cinq cents millisecondes pour qu'une rafale reste une seule ligne
+            // repliee au lieu de quarante-cinq lignes toutes differentes.
+            const attente = moteur === null ? null : Math.round(moteur.bufferedMs / 500) * 500;
+            const seuil = status.session === null ? 400 : status.session.targetBufferMs;
+            const mesure = attente === null ? "le son en attente" : `~${attente} ms en attente pour un seuil de ${seuil} ms`;
+
+            noter(`retard detecte : ${mesure}, tout est jete et la lecture repart du direct`);
           }
 
           if (status.state !== dernierEtat) {
@@ -247,16 +297,39 @@
         },
       );
 
+      moteur = player;
       player.connect();
 
       let derniereFamille = null;
+      let dernierSaut = 0;
+
+      // Ces deux valeurs detectent un gel du thread principal.
+      //
+      // C'est la panne qui manquait le plus au journal de la nuit du 4 aout 2026 : rien n'y disait
+      // que la page elle-meme avait cesse de tourner pendant dix heures. Tout ce qui suivait — la
+      // rafale de vidages, les blocs abandonnes, les bascules d'etat — en decoulait, mais il fallait
+      // le deduire d'un compteur reseau a 36131 s. Une minuterie qui doit se reveiller quatre fois
+      // par seconde et qui revient bien plus tard mesure ce gel directement.
+      const GEL_MS = 2000;
+      let dernierReveil = Date.now();
 
       // Ces valeurs changent trop souvent pour passer par les changements d'etat : elles sont
       // relues quatre fois par seconde.
       setInterval(() => {
         const info = player.diagnostics();
         const verdict = explainPlayer(info);
-        const seconds = Math.floor((Date.now() - debut) / 1000);
+        const maintenant = Date.now();
+        const seconds = Math.floor((maintenant - debut) / 1000);
+
+        // Ce gel est note avant tout le reste : c'est la cause, et ce qui suit dans le journal en
+        // est la consequence. Veille de la machine, onglet gele, ou processeur sature.
+        const retard = maintenant - dernierReveil;
+        dernierReveil = maintenant;
+
+        if (retard > GEL_MS) {
+          const duree = retard > 90000 ? `${Math.round(retard / 60000)} min` : `${(retard / 1000).toFixed(1)} s`;
+          noter(`thread principal gele pendant ${duree} : veille, onglet masque ou processeur sature`);
+        }
 
         champs.state.textContent = info.state;
         champs.session.textContent = info.sessionId === null ? "aucune" : String(info.sessionId);
@@ -278,8 +351,18 @@
         champs.buffer.textContent = `${Math.round(info.bufferedMs)} ms`;
         champs.underruns.textContent = String(info.underruns);
         champs.overflows.textContent = String(info.overflows);
+        champs.skips.textContent = String(info.skips);
         champs["since-level"].textContent = duree(info.sinceLevelMs);
         champs.error.textContent = info.errorReason ?? "aucune";
+
+        // Un saut decide par le processeur audio veut dire que le vidage a ete distance. Il ne
+        // produit ni rebufferisation ni verdict rouge : sans cette ligne, le son sauterait sans que
+        // rien dans le journal ne l'explique.
+        if (info.skips !== dernierSaut) {
+          const sauts = info.skips - dernierSaut;
+          dernierSaut = info.skips;
+          noter(`saut au direct : le processeur audio a borne la file lui-meme (${sauts})`);
+        }
 
         champs.verdict.textContent = verdict.message;
         champs.verdict.dataset.area = verdict.area;

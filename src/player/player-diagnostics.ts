@@ -43,6 +43,10 @@ export type PlayerDiagnostics = {
   bufferedMs: number;
   underruns: number;
   overflows: number;
+  // Nombre de sauts au direct decides par le processeur audio lui-meme, quand une rafale a distance
+  // le vidage. Ce compteur ne change aucun verdict : il dit ou regarder quand le son a saute sans
+  // qu'aucune rebufferisation ne l'explique.
+  skips: number;
   sinceLevelMs: number | null;
 
   errorReason: string | null;

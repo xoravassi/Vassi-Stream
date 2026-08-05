@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import { buildTestDevice } from "./build-test-device.js";
 import { buildInterface, DEVICE_WIDTH } from "./device-patcher/interface.js";
+import { PALETTE } from "./device-patcher/parts.js";
 import { buildWiring } from "./device-patcher/wiring.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -23,8 +24,9 @@ const DEVICE_PATH = `${ROOT}device/Vassi Stream.amxd`;
 
 // Cette fonction assemble le patcher complet.
 //
-// Aucune couleur de fond n'est posee : le device prend celle du theme de Live. Une couleur ecrite
-// ici resterait claire dans un theme sombre, et le device se verrait au premier coup d'oeil.
+// Le fond du device est fige a `PALETTE.bg`, presque noir : Vassi a choisi ce rendu, proche de
+// celui de Wavetable, plutot que de suivre le theme de Live. Le detail de cette decision et la
+// source de la couleur sont dans `docs/device-max.md`.
 export function buildDevicePatcher() {
 	const pages = buildInterface();
 	const wiring = buildWiring(pages);
@@ -37,6 +39,7 @@ export function buildDevicePatcher() {
 			// Cette fenetre est celle de l'edition dans Max, pas celle du device dans Live.
 			rect: [100, 100, 1400, 800],
 			bglocked: 0,
+			bgcolor: PALETTE.bg,
 			// Le device s'ouvre sur sa presentation, jamais sur le cablage.
 			openinpresentation: 1,
 			default_fontsize: 10,

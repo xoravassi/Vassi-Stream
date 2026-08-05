@@ -22,7 +22,9 @@
     "relay:check": "node scripts/check-relay.js",
     "fixture:opus": "cmd.exe /c scripts\\make-opus-fixture.cmd",
     "player:fixture": "node scripts/player-fixture.js",
-    "check": "npm run typecheck && npm test && npm run test:native && npm run test:encoder && npm run test:bridge"
+    "player:sync": "node scripts/sync-player.js",
+    "player:check": "node scripts/sync-player.js --check",
+    "check": "npm run typecheck && npm test && npm run test:native && npm run test:encoder && npm run test:bridge && npm run player:check"
   },
   "devEngines": {
     "runtime": {

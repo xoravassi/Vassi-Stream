@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { readStreamState, type StreamState } from "../src/player/player-protocol.ts";
-import { LATE_MARGIN_MS, PlayerStateMachine, type PlayerState } from "../src/player/player-state.ts";
+import {
+  LATE_MARGIN_MS,
+  PlayerStateMachine,
+  RECOVERY_CONFIRM_MAX_REPORTS,
+  type PlayerState,
+} from "../src/player/player-state.ts";
 
 // Ce fichier verifie la machine d'etats du player. C'est elle qui decide ce que l'auditeur voit, si
 // le decodeur remplit la file et si le processeur audio la consomme.
@@ -329,7 +334,10 @@ test("jette le son en attente quand la file a grossi bien au-dela du seuil", () 
   assert.equal(machine.status().state, "REBUFFERING");
   assert.equal(machine.status().flushId, vidages + 1);
 
-  // La reprise se fait sur le son neuf, au seuil habituel.
+  // La reprise se confirme sur deux rapports propres d'affilee, pas un seul.
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
+
   machine.reportLevel(400, 0);
   assert.equal(machine.status().state, "PLAYING");
 });
@@ -379,10 +387,165 @@ test("ne sort pas de rebufferisation sur du son deja en retard", () => {
   assert.equal(machine.status().flushId, vidages + 1, "le son en attente est jete");
   assert.equal(etats.length, transitions + 1, "l'ordre de vidage doit atteindre le decodeur");
 
-  // La reprise se fait une seule fois, au seuil habituel.
+  // La reprise se confirme sur deux rapports propres d'affilee, pas un seul : voir le test suivant
+  // pour le cas ou la rafale continue au lieu de se calmer.
+  machine.reportLevel(400, 1);
+  assert.equal(machine.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
+
   machine.reportLevel(400, 1);
   assert.equal(machine.status().state, "PLAYING");
   assert.equal(machine.status().flushId, vidages + 1, "un seul vidage pour un seul retard");
+});
+
+// Ce test verifie le motif exact vu dans le journal de l'essai long : le rattrapage arrive par rafale
+// au lieu d'un seul bloc, un rapport correct s'y glisse, puis la rafale continue et refranchit la
+// marge. La lecture ne doit jamais reprendre entre les deux, sinon le journal montre a nouveau
+// REBUFFERING, PLAYING, REBUFFERING, PLAYING pour un seul incident.
+test("ne reprend pas la lecture sur un seul rapport correct au milieu d'une rafale de rattrapage", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+  machine.reportLevel(0, 1);
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  const vidages = machine.status().flushId;
+
+  // Premier paquet de rattrapage, trop vieux : vidage, la bufferisation continue.
+  machine.reportLevel(3000, 1);
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  // Un rapport correct s'y glisse : ce n'est que le premier des deux requis.
+  machine.reportLevel(400, 1);
+  assert.equal(
+    machine.status().state,
+    "REBUFFERING",
+    "un seul rapport correct ne suffit pas a reprendre pendant une rafale",
+  );
+
+  // La rafale continue : un second paquet trop vieux arrive avant que la reprise ne se confirme.
+  machine.reportLevel(3000, 1);
+  assert.equal(machine.status().state, "REBUFFERING");
+  assert.equal(
+    machine.status().flushId,
+    vidages + 2,
+    "chaque paquet trop vieux est jete, mais aucune reprise n'a eu lieu entre les deux",
+  );
+
+  // La rafale se calme. Deux vidages ont eu lieu, donc la confirmation demande quatre rapports
+  // propres et non deux : chaque vidage supplementaire l'allonge d'autant. Les trois premiers ne
+  // suffisent pas.
+  machine.reportLevel(400, 1);
+  machine.reportLevel(400, 1);
+  machine.reportLevel(400, 1);
+  assert.equal(machine.status().state, "REBUFFERING", "deux vidages demandent quatre rapports propres");
+
+  machine.reportLevel(400, 1);
+  assert.equal(machine.status().state, "PLAYING");
+});
+
+// Ce test couvre la rafale longue, celle qui a fait echouer la confirmation a deux rapports.
+//
+// Il vient de l'essai long de la nuit du 4 aout 2026 : portable en veille dix heures, capot ferme.
+// Au reveil, le thread principal degele et recoit d'un coup les paquets accumules pendant le gel. Le
+// decodeur les ecrit dans la file bien plus vite que le temps reel, et la file repasse au-dessus de
+// la marge pendant deux secondes entieres.
+//
+// Ce que le journal montrait n'etait pas une rafale unique mais une dent de scie : deux rapports
+// trop pleins, deux rapports propres, et ainsi de suite pendant deux secondes. Deux rapports propres
+// suffisaient a reprendre la lecture, la dent suivante refaisait rebufferiser aussitot. Resultat :
+// quinze allers-retours REBUFFERING/PLAYING pour un seul incident, la ou la fiche de validation
+// n'en tolere qu'un.
+//
+// Les vidages, eux, restent nombreux et c'est correct : chaque dent porte du son perime qu'il faut
+// jeter. Ce qui est verifie ici est l'etat annonce a l'auditeur, qui doit rester stable.
+test("ne bascule qu'une fois pendant une rafale longue en dents de scie", () => {
+  const { machine, etats } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING");
+
+  const transitionsAvant = etats.length;
+
+  // Quinze dents : deux rapports trop pleins, deux rapports propres.
+  for (let dent = 0; dent < 15; dent += 1) {
+    machine.reportLevel(3000, 1);
+    machine.reportLevel(3000, 1);
+    machine.reportLevel(400, 1);
+    machine.reportLevel(400, 1);
+  }
+
+  const bascules = etats.slice(transitionsAvant).filter((etat) => etat === "PLAYING").length;
+  assert.equal(bascules, 0, "la lecture ne doit jamais reprendre au milieu de la rafale");
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  // La rafale finie, la reprise arrive quand meme : le plafond de confirmation l'empeche d'etre
+  // repoussee indefiniment par le nombre de vidages deja subis.
+  for (let rapport = 0; rapport < RECOVERY_CONFIRM_MAX_REPORTS; rapport += 1) {
+    machine.reportLevel(400, 1);
+  }
+
+  assert.equal(machine.status().state, "PLAYING", "la reprise arrive dans la seconde qui suit");
+});
+
+// Ce test verifie que la confirmation allongee ne penalise pas le cas ordinaire : un vidage isole,
+// celui d'un changement de casque ou d'un onglet brievement masque, repart en deux rapports comme
+// avant. C'est la garantie que la correction de la rafale longue n'a pas ralenti tout le reste.
+test("repart en deux rapports apres un vidage isole", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  machine.reportLevel(3000, 0);
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING");
+});
+
+// Ce test verifie qu'une coupure du direct oublie la rafale en cours, y compris son compte de
+// vidages.
+//
+// Ce compte est le seul des trois champs de reprise qui ne se voit pas dans l'etat : il ne fait
+// qu'allonger la confirmation suivante. Un compte survivant a la coupure ferait donc payer au direct
+// d'apres les vidages du direct d'avant — une reprise de deux rapports en demanderait dix, et rien
+// dans le journal ne dirait pourquoi.
+test("une coupure du direct oublie les vidages de la rafale precedente", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  // Quatre vidages d'affilee : la confirmation demanderait desormais huit rapports propres.
+  for (let vidage = 0; vidage < 4; vidage += 1) {
+    machine.reportLevel(3000, 0);
+  }
+
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  // Le direct s'arrete, puis un autre commence. La rafale precedente n'a plus aucun sens.
+  machine.setStream(OFFLINE);
+  machine.setStream(live(2));
+  machine.play();
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING", "le nouveau direct repart sans confirmation");
+
+  // Un vidage isole dans ce nouveau direct doit redemander deux rapports, pas dix.
+  machine.reportLevel(3000, 0);
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  machine.reportLevel(400, 0);
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING", "un vidage isole repart en deux rapports");
 });
 
 // Ce test verifie la meme regle pendant la toute premiere bufferisation, celle qui suit le clic sur
@@ -399,6 +562,9 @@ test("ne demarre pas la lecture sur une file remplie pendant un arret du thread 
 
   assert.equal(machine.status().state, "BUFFERING");
   assert.equal(machine.status().flushId, vidages + 1);
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "BUFFERING", "un seul rapport propre ne suffit pas encore");
 
   machine.reportLevel(400, 0);
   assert.equal(machine.status().state, "PLAYING");

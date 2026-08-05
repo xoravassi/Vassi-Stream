@@ -10,16 +10,22 @@ import { createPcmBuffer, PCM_CAPACITY_FRAMES, PCM_PROCESSOR_NAME, PCM_SAMPLE_RA
 // est separe pour une raison precise : c'est la seule partie du player qui ne peut pas tourner sous
 // Node, et la tenir a part garde le reste testable.
 
-// Ce type decrit les deux fichiers charges dans leur propre contexte. Le bloc 9 les fournit avec
-// `new URL(..., import.meta.url)` pour que le bundler du site les emette lui-meme.
-export type AudioModuleUrls = {
-  workerUrl: URL | string;
+// Ce type decrit les deux pieces qui tournent dans leur propre contexte JavaScript : le worker de
+// decodage et le processeur audio.
+//
+// Le worker arrive sous forme de fabrique et le processeur audio sous forme d'adresse, parce que les
+// deux fichiers n'ont pas le meme besoin. Le worker importe `opus-decoder` : sa creation doit passer
+// par l'outil de construction du site, seul capable de resoudre ce nom de paquet. Le processeur
+// audio, lui, ne contient aucun import, et `audioWorklet.addModule` ne sait de toute facon prendre
+// qu'une adresse.
+export type AudioSetup = {
+  createWorker: () => Worker;
   workletUrl: URL | string;
 };
 
 // Ce type decrit ce que les pieces signalent a leur appelant.
 export type BrowserAudioEvents = {
-  onLevel: (availableMs: number, underruns: number, overflows: number) => void;
+  onLevel: (availableMs: number, underruns: number, overflows: number, skips: number) => void;
   onDiscontinuity: () => void;
   onRefusal: (reason: string) => void;
   onStats: (stats: { accepted: number; decoded: number; refused: number; discontinuities: number; lastRefusal: string | null }) => void;
@@ -27,7 +33,7 @@ export type BrowserAudioEvents = {
 };
 
 export class BrowserAudio {
-  private urls: AudioModuleUrls;
+  private setup: AudioSetup;
   private events: BrowserAudioEvents;
   private now: () => number;
   private decoder: DecodeWorkerHost;
@@ -36,6 +42,12 @@ export class BrowserAudio {
   private starting: Promise<void> | null = null;
   private closed = false;
   private lastPlaying = false;
+  // Ces deux bornes sont les dernieres transmises au processeur audio. Un ordre inchange n'est pas
+  // renvoye. Les deux sont retenues, et pas seulement le plafond : celui-ci bute toujours sur la
+  // limite des deux tiers de la file, donc un profil de latence change en cours de direct ne le
+  // ferait pas bouger et la nouvelle hauteur de saut ne partirait jamais.
+  private lastCeilingFrames = 0;
+  private lastKeepFrames = 0;
 
   // Ce portail decide si le decodeur remplit la file. Il rassemble les trois signaux qui y
   // repondent, et que ce module lui remet a mesure qu'ils arrivent.
@@ -48,8 +60,8 @@ export class BrowserAudio {
   stage: AudioStage = "IDLE";
   shared = false;
 
-  constructor(urls: AudioModuleUrls, events: BrowserAudioEvents, now: () => number = () => Date.now()) {
-    this.urls = urls;
+  constructor(setup: AudioSetup, events: BrowserAudioEvents, now: () => number = () => Date.now()) {
+    this.setup = setup;
     this.events = events;
     this.now = now;
     this.decoder = new DecodeWorkerHost({
@@ -153,6 +165,31 @@ export class BrowserAudio {
     this.decoder.applyFlush(flushId);
   }
 
+  // Cette methode donne au processeur audio la hauteur au-dela de laquelle il saute au direct, et
+  // ce qu'il doit garder en sautant. Le processeur ne connait pas le profil de la session : c'est la
+  // machine d'etats qui le tient, et cette borne en decoule.
+  setLimit(ceilingMs: number, keepMs: number): void {
+    if (this.node === null) {
+      return;
+    }
+
+    // Le plafond demande est ramene aux deux tiers de la file. Il doit rester assez bas pour que la
+    // place restante absorbe ce qu'une rafale ecrit entre deux blocs — le processeur ne verifie
+    // qu'une fois toutes les 2,7 ms, et un plafond colle a la capacite laisserait la file deborder
+    // dans cet intervalle, ce que le filet est precisement charge d'empecher.
+    const maxFrames = Math.round((PCM_CAPACITY_FRAMES * 2) / 3);
+    const ceilingFrames = Math.min(Math.round((ceilingMs * PCM_SAMPLE_RATE) / 1000), maxFrames);
+    const keepFrames = Math.round((keepMs * PCM_SAMPLE_RATE) / 1000);
+
+    if (ceilingFrames === this.lastCeilingFrames && keepFrames === this.lastKeepFrames) {
+      return;
+    }
+
+    this.lastCeilingFrames = ceilingFrames;
+    this.lastKeepFrames = keepFrames;
+    this.node.port.postMessage({ type: "limit", ceilingFrames, keepFrames });
+  }
+
   // Cette methode dit au processeur audio de consommer la file, ou de produire du silence.
   setPlaying(playing: boolean): void {
     if (this.node === null || playing === this.lastPlaying) {
@@ -188,7 +225,7 @@ export class BrowserAudio {
       throw new Error("audioworklet_unavailable");
     }
 
-    await context.audioWorklet.addModule(this.urls.workletUrl.toString());
+    await context.audioWorklet.addModule(this.setup.workletUrl.toString());
 
     // Une fermeture pendant le chargement s'arrete ici : le demontage ferme le contexte deja cree,
     // et rien de plus n'est construit.
@@ -221,7 +258,7 @@ export class BrowserAudio {
 
     this.buildingArea = "decode";
     await this.decoder.start(
-      this.urls.workerUrl,
+      this.setup.createWorker,
       channel === null ? { buffer: pcmBuffer, capacityFrames: PCM_CAPACITY_FRAMES } : { port: channel.port1 },
     );
 
@@ -261,7 +298,13 @@ export class BrowserAudio {
   // Chaque niveau prouve que le thread audio tourne : c'est ici que le remplissage de la file
   // reprend apres un arret constate.
   private handleLevel(event: MessageEvent): void {
-    const message = event.data as { type: string; availableMs: number; underruns: number; overflows?: number };
+    const message = event.data as {
+      type: string;
+      availableMs: number;
+      underruns: number;
+      overflows?: number;
+      skips?: number;
+    };
 
     if (message.type !== "level") {
       return;
@@ -270,7 +313,7 @@ export class BrowserAudio {
     this.gate.noteLevel(this.now());
     this.updateAccepting();
 
-    this.events.onLevel(message.availableMs, message.underruns, message.overflows ?? 0);
+    this.events.onLevel(message.availableMs, message.underruns, message.overflows ?? 0, message.skips ?? 0);
   }
 
   // Cette methode detruit les pieces et oublie les ordres deja transmis.
@@ -282,6 +325,8 @@ export class BrowserAudio {
     this.node?.disconnect();
     this.node = null;
     this.lastPlaying = false;
+    this.lastCeilingFrames = 0;
+    this.lastKeepFrames = 0;
     this.gate.reset();
 
     const context = this.context;

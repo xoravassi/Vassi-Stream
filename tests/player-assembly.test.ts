@@ -31,7 +31,7 @@ async function startPlayer(options: { isolated: boolean }): Promise<{
 
   const player = new AudioPlayer({
     relayUrl: relay.listenerUrl,
-    workerUrl: "/decode-worker.js",
+    createWorker: () => new Worker("/decode-worker.js", { type: "module" }),
     workletUrl: "/pcm-worklet.js",
   });
 

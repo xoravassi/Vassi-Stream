@@ -39,12 +39,41 @@ export function message(id, text, options = {}) {
 	};
 }
 
-// Cette fonction cree un objet d'interface visible dans le device.
+// La palette fixe du device.
 //
-// Aucune couleur n'est posee ici, et c'est volontaire : les objets `live.*` utilisent par defaut
-// les couleurs dynamiques de Live, qui suivent le theme choisi dans les preferences. Ecrire une
-// couleur, meme identique au theme du moment, figerait l'objet et le ferait jurer des que Vassi
-// change de theme.
+// Vassi a demande un rendu proche de Wavetable : fond presque noir, quel que soit le theme choisi
+// dans les preferences de Live. Wavetable n'est pas un device Max for Live — c'est un device natif
+// d'Ableton, ecrit dans son propre moteur graphique, qui reste sombre en permanence. Un device Max
+// for Live ne peut suivre qu'un theme a la fois : soit celui de Live, soit un theme qui lui est
+// propre. Vassi a choisi le second, en connaissance des deux options.
+//
+// Ces six couleurs ne sont pas choisies a l'oeil : ce sont celles qu'Ableton applique lui-meme
+// dans son theme Sombre, relevees dans le fichier reel de l'application —
+// `C:\ProgramData\Ableton\Live 11 Suite\Resources\Themes\03Dark.ask`. `RetroDisplayBackground` est
+// la cle qu'Ableton utilise pour ses propres ecrans a l'ancienne (LCD, VU) ; c'est la valeur la
+// plus proche, sourcee, du presque-noir de l'ecran de Wavetable.
+//
+// | Cle Ableton (03Dark.ask)        | Role dans le device                    | Valeur    |
+// |----------------------------------|-----------------------------------------|-----------|
+// | RetroDisplayBackground           | fond du device                          | #050505   |
+// | RetroDisplayBackgroundLine       | traits de separation                    | #424242   |
+// | SurfaceAreaForeground             | texte principal                         | #a0a0a0   |
+// | RetroDisplayForegroundDisabled   | texte secondaire / inactif              | #808080   |
+// | RetroDisplayForeground           | accent (onglet actif, LCD allume)       | #f39420   |
+// | ControlOnForeground               | texte pose sur un fond accent           | #000000   |
+//
+// C'est la seule source de couleurs en dur du device : toute couleur ecrite ailleurs dans le code
+// doit venir d'ici, jamais d'une valeur recopiee a la main.
+export const PALETTE = {
+	bg: [0.019608, 0.019608, 0.019608, 1],
+	divider: [0.258824, 0.258824, 0.258824, 1],
+	text: [0.627451, 0.627451, 0.627451, 1],
+	textDim: [0.501961, 0.501961, 0.501961, 1],
+	accent: [0.952941, 0.580392, 0.12549, 1],
+	onAccent: [0, 0, 0, 1]
+};
+
+// Cette fonction cree un objet d'interface visible dans le device.
 export function control(id, maxclass, options = {}) {
 	const box = {
 		id,

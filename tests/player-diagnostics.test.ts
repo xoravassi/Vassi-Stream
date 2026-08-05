@@ -38,6 +38,7 @@ const SAIN: PlayerDiagnostics = {
   bufferedMs: 410,
   underruns: 0,
   overflows: 0,
+  skips: 0,
   sinceLevelMs: 40,
 
   errorReason: null,

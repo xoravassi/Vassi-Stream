@@ -16,6 +16,12 @@
 			800
 		],
 		"bglocked": 0,
+		"bgcolor": [
+			0.019608,
+			0.019608,
+			0.019608,
+			1
+		],
 		"openinpresentation": 1,
 		"default_fontsize": 10,
 		"default_fontface": 0,
@@ -71,6 +77,37 @@
 						"float"
 					],
 					"livemode": 1,
+					"appearance": 1,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.952941,
+						0.580392,
+						0.12549,
+						1
+					],
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					],
+					"textoncolor": [
+						0,
+						0,
+						0,
+						1
+					],
+					"bordercolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					],
 					"parameter_enable": 1,
 					"saved_attribute_attributes": {
 						"valueof": {
@@ -124,7 +161,13 @@
 						304,
 						8
 					],
-					"justification": 1
+					"justification": 1,
+					"linecolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					]
 				}
 			},
 			{
@@ -148,7 +191,13 @@
 						24
 					],
 					"text": "Arrêté",
-					"fontsize": 16
+					"fontsize": 16,
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					]
 				}
 			},
 			{
@@ -172,7 +221,13 @@
 						18
 					],
 					"text": "device prêt",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -198,6 +253,12 @@
 					"outlettype": [
 						"float",
 						"int"
+					],
+					"bgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
 					]
 				}
 			},
@@ -224,6 +285,12 @@
 					"outlettype": [
 						"float",
 						"int"
+					],
+					"bgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
 					]
 				}
 			},
@@ -247,7 +314,13 @@
 						304,
 						8
 					],
-					"justification": 1
+					"justification": 1,
+					"linecolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					]
 				}
 			},
 			{
@@ -271,7 +344,13 @@
 						18
 					],
 					"text": "Diffusion",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -295,7 +374,13 @@
 						18
 					],
 					"text": "Qualité",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -319,7 +404,13 @@
 						18
 					],
 					"text": "Latence",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -349,6 +440,30 @@
 					"mode": 1,
 					"outputmode": 1,
 					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.952941,
+						0.580392,
+						0.12549,
+						1
+					],
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					],
+					"textoncolor": [
+						0,
+						0,
+						0,
+						1
+					],
 					"fontsize": 10,
 					"text": "LANCER",
 					"texton": "ARRÊTER",
@@ -413,6 +528,25 @@
 						"float"
 					],
 					"fontsize": 10,
+					"appearance": 1,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"bordercolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					],
 					"parameter_enable": 1,
 					"saved_attribute_attributes": {
 						"valueof": {
@@ -473,6 +607,25 @@
 						"float"
 					],
 					"fontsize": 10,
+					"appearance": 1,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"bordercolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					],
 					"parameter_enable": 1,
 					"saved_attribute_attributes": {
 						"valueof": {
@@ -528,7 +681,13 @@
 						18
 					],
 					"text": "Relais",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -557,7 +716,25 @@
 						248,
 						18
 					],
-					"fontsize": 10
+					"fontsize": 10,
+					"bgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"bordercolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					]
 				}
 			},
 			{
@@ -581,7 +758,13 @@
 						18
 					],
 					"text": "Token",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -610,7 +793,25 @@
 						248,
 						18
 					],
-					"fontsize": 10
+					"fontsize": 10,
+					"bgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"bordercolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					]
 				}
 			},
 			{
@@ -639,6 +840,20 @@
 					],
 					"parameter_enable": 0,
 					"mode": 0,
+					"outputmode": 1,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
 					"fontsize": 10,
 					"text": "Enregistrer"
 				}
@@ -669,6 +884,20 @@
 					],
 					"parameter_enable": 0,
 					"mode": 0,
+					"outputmode": 1,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
 					"fontsize": 10,
 					"text": "Tester le relais"
 				}
@@ -694,7 +923,13 @@
 						18
 					],
 					"text": "relais non testé",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -718,7 +953,13 @@
 						18
 					],
 					"text": "encodeur en attente",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{
@@ -741,7 +982,13 @@
 						304,
 						8
 					],
-					"justification": 1
+					"justification": 1,
+					"linecolor": [
+						0.258824,
+						0.258824,
+						0.258824,
+						1
+					]
 				}
 			},
 			{
@@ -765,7 +1012,13 @@
 						18
 					],
 					"text": "configuration inconnue",
-					"fontsize": 10
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
 				}
 			},
 			{

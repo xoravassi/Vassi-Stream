@@ -10,11 +10,17 @@
 // qu'un device se fonde dans Live ; un bouton de 20 pixels se voit tout de suite a cote d'un
 // bouton d'Ableton.
 //
-// Aucune couleur n'est ecrite ici, et ce n'est pas une economie : chaque objet `live.*` designe
-// deja une couleur du theme de Live. `live.line` dessine sa barre en `live_surface_frame`, le fond
-// LCD d'un `live.text` est `live_lcd_bg`, un onglet choisi est `live_control_selection`. Ecrire
-// une couleur remplacerait ce lien par une valeur fixe, juste dans le theme du jour.
-import { control, enumParameter, HIDDEN, STORED_ONLY } from "./parts.js";
+// Toutes les couleurs viennent de `PALETTE`, dans `parts.js` : c'est la palette fixe, presque
+// noire, que Vassi a choisie pour se rapprocher du rendu de Wavetable plutot que de suivre le
+// theme de Live. Le detail de cette decision et la source de chaque couleur sont dans
+// `docs/device-max.md` et dans le commentaire au-dessus de `PALETTE`.
+//
+// L'apparence par defaut de `live.tab` et `live.menu` dessine chaque position comme un bouton
+// separe : c'est ce qui donnait au device un air de « deux boutons » plutot que d'onglets. Le mode
+// LCD (`appearance: 1` pour `live.tab`/`live.menu`, `appearance: 2` pour `live.text`) est celui
+// que le patch d'aide officiel de Max nomme lui-meme « LCD mode » : une barre plate, l'item actif
+// en surbrillance. C'est ce mode qui est utilise partout dans ce fichier.
+import { control, enumParameter, HIDDEN, PALETTE, STORED_ONLY } from "./parts.js";
 
 export const DEVICE_WIDTH = 320;
 // Live n'accorde pas un pixel de plus, quel que soit le device.
@@ -70,6 +76,12 @@ export function buildInterface() {
 			outletTypes: ["", "", "float"],
 			attributes: {
 				livemode: 1,
+				appearance: 1,
+				lcdbgcolor: PALETTE.bg,
+				lcdcolor: PALETTE.accent,
+				textcolor: PALETTE.textDim,
+				textoncolor: PALETTE.onAccent,
+				bordercolor: PALETTE.divider,
 				...enumParameter({
 					shortName: "Page",
 					longName: "Page",
@@ -93,7 +105,7 @@ export function buildInterface() {
 		// Faute d'un objet d'ecran dans Max 8 — `live.scope~` n'y existe pas — la bande est
 		// delimitee par deux traits et contient ce qu'un direct donne a lire : l'etat en gros, son
 		// detail, et le niveau qui part vraiment.
-		label("state-label", "Arrêté", [340, 20, 200, 24], [MARGIN, 44, 200, textBox(STATE_SIZE)], STATE_SIZE),
+		label("state-label", "Arrêté", [340, 20, 200, 24], [MARGIN, 44, 200, textBox(STATE_SIZE)], STATE_SIZE, false),
 		label("state-detail", "device prêt", [340, 50, 250, 18], [MARGIN, 72, 250, textBox(LABEL_SIZE)], LABEL_SIZE),
 		// Les deux vumetres ne servent aucun reglage : ils repondent a la seule question qu'on se
 		// pose devant un device de diffusion muet — est-ce que du son arrive jusqu'ici. Ils sont
@@ -128,6 +140,10 @@ export function buildInterface() {
 				mode: 1,
 				outputmode: 1,
 				appearance: 2,
+				lcdbgcolor: PALETTE.bg,
+				lcdcolor: PALETTE.accent,
+				textcolor: PALETTE.textDim,
+				textoncolor: PALETTE.onAccent,
 				fontsize: LABEL_SIZE,
 				text: "LANCER",
 				texton: "ARRÊTER",
@@ -217,10 +233,18 @@ export function buildInterface() {
 	};
 }
 
-// Cette fonction cree un libelle. `live.comment` suit le theme de couleur de Live tout seul :
-// un `comment` ordinaire garderait sa couleur et trahirait le device des le premier theme sombre.
-function label(id, text, at, shows, fontsize) {
-	return control(id, "live.comment", { at, shows, outlets: 0, attributes: { text, fontsize } });
+// Cette fonction cree un libelle.
+//
+// `dim` distingue la seule lecture principale de l'ecran (l'etat du direct) de tout le reste :
+// c'est la hierarchie qu'un ecran de device Ableton pose d'habitude entre une grande valeur et ses
+// legendes. `dim` vaut vrai par defaut ; seul l'etat du direct le met a faux.
+function label(id, text, at, shows, fontsize, dim = true) {
+	return control(id, "live.comment", {
+		at,
+		shows,
+		outlets: 0,
+		attributes: { text, fontsize, textcolor: dim ? PALETTE.textDim : PALETTE.text }
+	});
 }
 
 // Cette fonction cree le libelle pose au-dessus d'une commande, comme Live en pose un au-dessus
@@ -232,7 +256,9 @@ function title(id, text, at, shows) {
 // Cette fonction cree un menu deroulant a positions nommees, enregistre avec le morceau.
 //
 // Le nom long identifie le reglage dans le fichier `.als` : il reste celui de la premiere version
-// pour que les projets deja enregistres retrouvent leur valeur.
+// pour que les projets deja enregistres retrouvent leur valeur. Le mode LCD (`appearance: 1`) est
+// celui du patch d'aide officiel de Max ; sans lui, le menu se dessine dans son style par defaut,
+// qui detonne a cote du reste de l'ecran.
 function choice(id, at, shows, parameter) {
 	return control(id, "live.menu", {
 		at,
@@ -241,6 +267,10 @@ function choice(id, at, shows, parameter) {
 		outletTypes: ["", "", "float"],
 		attributes: {
 			fontsize: LABEL_SIZE,
+			appearance: 1,
+			lcdbgcolor: PALETTE.bg,
+			textcolor: PALETTE.text,
+			bordercolor: PALETTE.divider,
 			...enumParameter({ ...parameter, visibility: STORED_ONLY })
 		}
 	});
@@ -251,17 +281,37 @@ function choice(id, at, shows, parameter) {
 // `live.line` dessine sa barre dans le sens de sa plus grande dimension et la centre quand
 // `justification` vaut 1 : un rectangle de 8 pixels de haut pose son trait 4 pixels plus bas.
 function rule(id, at, shows) {
-	return control(id, "live.line", { at, shows, inlets: 1, outlets: 0, attributes: { justification: 1 } });
+	return control(id, "live.line", {
+		at,
+		shows,
+		inlets: 1,
+		outlets: 0,
+		attributes: { justification: 1, linecolor: PALETTE.divider }
+	});
 }
 
 // Cette fonction cree un bouton qui envoie un bang au clic, sans etat a retenir.
+//
+// `outputmode: 1` (relachement de la souris) est la valeur que les recommandations de production
+// Max for Live d'Ableton demandent explicitement pour `live.text`, et qui n'est pas celle posee
+// par defaut : sans elle, le bouton repond au clic plutot qu'au relachement, contrairement aux
+// boutons natifs de Live.
 function button(id, text, at, shows) {
 	return control(id, "live.text", {
 		at,
 		shows,
 		outlets: 2,
 		outletTypes: ["", ""],
-		attributes: { parameter_enable: 0, mode: 0, fontsize: LABEL_SIZE, text }
+		attributes: {
+			parameter_enable: 0,
+			mode: 0,
+			outputmode: 1,
+			appearance: 2,
+			lcdbgcolor: PALETTE.bg,
+			textcolor: PALETTE.text,
+			fontsize: LABEL_SIZE,
+			text
+		}
 	});
 }
 
@@ -273,7 +323,8 @@ function meter(id, at, shows) {
 		shows,
 		inlets: 1,
 		outlets: 2,
-		outletTypes: ["float", "int"]
+		outletTypes: ["float", "int"],
+		attributes: { bgcolor: PALETTE.bg }
 	});
 }
 
@@ -285,6 +336,9 @@ function meter(id, at, shows) {
 //
 // Le contenu tape n'est jamais enregistre : `textedit` n'a pas d'attribut sauvegarde, et il n'est
 // pas un parametre Live. Le token ne peut donc pas partir dans le fichier `.als` du morceau.
+//
+// `textedit` n'est pas un objet `live.*` : ses couleurs viennent aussi de `PALETTE`, sinon le
+// champ resterait blanc au milieu d'un device presque noir.
 function field(id, at, shows) {
 	return {
 		box: {
@@ -297,7 +351,10 @@ function field(id, at, shows) {
 			patching_rect: at,
 			presentation: 1,
 			presentation_rect: shows,
-			fontsize: LABEL_SIZE
+			fontsize: LABEL_SIZE,
+			bgcolor: PALETTE.bg,
+			textcolor: PALETTE.text,
+			bordercolor: PALETTE.divider
 		}
 	};
 }

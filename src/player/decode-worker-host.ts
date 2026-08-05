@@ -38,8 +38,13 @@ export class DecodeWorkerHost {
 
   // Cette methode cree le worker et rend la main quand le decodeur Opus est pret. Un echec de
   // compilation ou un worker mort-ne rejettent la promesse.
-  async start(url: URL | string, setup: WorkerSetup): Promise<void> {
-    const worker = new Worker(url, { type: "module" });
+  //
+  // Le worker n'est pas cree a partir d'une adresse mais par une fabrique fournie par l'appelant.
+  // La raison est pratique : le decodeur importe `opus-decoder`, un nom de paquet que le navigateur
+  // ne sait pas resoudre seul. C'est l'outil de construction du site qui sait le faire, et il ne le
+  // fait que s'il voit lui-meme la creation du worker. Une adresse le priverait de cette occasion.
+  async start(createWorker: () => Worker, setup: WorkerSetup): Promise<void> {
+    const worker = createWorker();
     this.worker = worker;
 
     const ready = new Promise<void>((resolve, reject) => {

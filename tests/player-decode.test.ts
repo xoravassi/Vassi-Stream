@@ -281,3 +281,66 @@ test("vide le PCM et le decodeur a chaque nouvelle session", async (t) => {
   await decoder.push(packets[1] as Uint8Array);
   assert.equal(sink.left.length, 0);
 });
+
+// Ce test couvre la course entre un vidage et une frame arretee sur son `await`.
+//
+// Le worker traite `flush` des la reception du message, donc en dehors de la chaine des paquets. Une
+// frame marquee discontinue attend la remise a zero du decodeur ; si le vidage tombe pendant cette
+// attente, la frame reprend son cours ensuite et ecrit dans une file que le vidage venait de
+// nettoyer. Le son ecrit est alors precisement celui que le moteur avait decide de jeter.
+//
+// La fenetre est etroite — seule une discontinuite la produit — mais elle est reelle, et elle
+// s'ouvre au pire moment : pendant le rattrapage qui suit un reveil, ou les discontinuites et les
+// vidages arrivent ensemble.
+test("abandonne une frame en vol quand un vidage la depasse", async (t) => {
+  const { decoder, sink } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+
+  // Cette frame est marquee discontinue : son traitement passe par la remise a zero du decodeur,
+  // qui est asynchrone.
+  const marque = encodeAudioPacket({
+    sessionId: FIXTURE_SESSION_ID,
+    sequenceNumber: 900,
+    timestampMicros: 0n,
+    payload: (packets[1] as Uint8Array).subarray(28),
+    flags: 1,
+  });
+
+  const enVol = decoder.push(marque);
+  // Le vidage arrive pendant que la frame attend : c'est ce que fait le worker sur le message.
+  decoder.flush();
+  await enVol;
+
+  assert.equal(sink.left.length, 0, "la frame depassee par le vidage ne doit pas entrer dans la file");
+
+  // Le decodeur reste utilisable : les paquets arrives apres le vidage passent normalement.
+  await decoder.push(packets[2] as Uint8Array);
+  assert.equal(sink.left.length, 960, "un paquet posterieur au vidage est decode comme avant");
+});
+
+// Ce test verifie que la frame abandonnee n'est comptee ni acceptee ni refusee. Le compteur de
+// paquets refuses sert a reperer un decodeur qui ne sait pas lire ce qu'on lui donne ; une frame
+// jetee par decision du moteur n'a rien a y faire, et la fiche de validation exige qu'il reste a
+// zero pendant tout l'essai.
+test("ne compte pas comme refusee une frame depassee par un vidage", async (t) => {
+  const { decoder } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+
+  const marque = encodeAudioPacket({
+    sessionId: FIXTURE_SESSION_ID,
+    sequenceNumber: 900,
+    timestampMicros: 0n,
+    payload: (packets[1] as Uint8Array).subarray(28),
+    flags: 1,
+  });
+
+  const enVol = decoder.push(marque);
+  decoder.flush();
+  await enVol;
+
+  assert.equal(decoder.stats().refused, 0, "aucun refus : la frame etait lisible, elle etait perimee");
+});

@@ -348,6 +348,93 @@ arrives pendant les dix coupures, alors que le decodeur ne remplissait pas. Aucu
 erreur, et une seule discontinuite — celle du trou de sequence laisse par le relais devant un
 auditeur que la veille avait mis en retard.
 
+## La campagne du 5 aout 2026 : six essais, trois defauts, une hypothese fausse
+
+Vassi a joue la fiche complete. Les corrections de l'essai precedent sont confirmees, trois nouveaux
+defauts ont ete trouves et corriges, et une hypothese que j'avais formulee a ete refutee par la
+mesure avant d'etre implementee — ce qui a evite un chantier inutile.
+
+### Ce que les six essais donnent
+
+| Essai | Duree | Blocs abandonnes | Sauts | Manques | Gels |
+|---|---:|---:|---:|---:|---:|
+| Veille 10 h (avant correctifs) | 606 min | **178** | — | 5 | 1 |
+| Veille 5 min | 6 min | 0 | 0 | 3 | 1 |
+| Phase 1, Ableton > 300 % CPU | 5 min | 0 | 0 | 4 | **0** |
+| Phase 2, Meet + cameras + 4G | 8 min | **0** | **25** | 22 | **12** |
+| Phase 5, onglet masque seul | 11 min | 0 | 0 | **1** | **0** |
+| Phase 7, martelement Play/Pause | 2 min | 0 | 0 | **0** | 0 |
+
+Aucun essai n'a produit un seul paquet refuse, une seule discontinuite non expliquee, ni une seule
+erreur. Le verdict est revenu a `rien a signaler` a la fin de chacun.
+
+### 1. La confirmation de reprise etait battue par une dent de scie
+
+`RECOVERY_CONFIRM_REPORTS = 2` supposait une rafale de rattrapage courte. Mesure sur la machine
+d'etats seule, avec le motif exact du journal :
+
+```text
+45 rapports pleins d'affilee     45 vidages, 1 bascule
+dents de scie (2 pleins, 2 propres) x 15   30 vidages, 15 bascules
+```
+
+Deux rapports propres suffisaient a repartir, et la dent suivante refaisait rebufferiser : une
+bascule tous les quatre rapports. La confirmation s'allonge desormais de deux rapports par vidage de
+la meme rafale, plafonnee a une seconde. Meme mesure apres correction : **une seule bascule**, reprise
+environ une seconde apres la fin de la rafale. Un vidage isole repart toujours en deux rapports.
+
+### 2. Un vidage pouvait etre depasse par une frame en vol
+
+Le worker traite `flush` des la reception du message, donc hors de la chaine des paquets. Une frame
+arretee sur le `await` de la remise a zero du decodeur reprenait ensuite son cours et ecrivait dans
+une file que le vidage venait de nettoyer.
+
+La fenetre est etroite — seule une discontinuite l'ouvre — mais elle s'ouvre au pire moment, pendant
+un rattrapage ou vidages et discontinuites arrivent ensemble. Chaque paquet retient desormais le
+numero d'epoque qui avait cours quand il est entre dans la chaine, et il est abandonne si ce numero a
+change. Il n'est compte ni accepte ni refuse : `Paquets refuses` garde son sens.
+
+### 3. Le vidage pouvait etre distance, et l'anneau debordait
+
+C'est le defaut des 178 blocs abandonnes, et il ne tenait pas a une hypothese sur la rafale : trois
+faits suffisent. L'anneau a atteint ses trois secondes 178 fois. Pendant `REBUFFERING`, le processeur
+audio ne consomme rien, donc la file ne fait que grossir. Et le vidage est un aller-retour d'au moins
+quarante millisecondes, qui traverse encore le worker. Une rafale peut donc le distancer **par
+construction**.
+
+Le processeur audio, lui, tourne toutes les 2,7 ms et possede l'index de lecture : il ne peut pas
+etre distance. Il jette desormais le son le plus ancien au-dela d'un plafond, en gardant de quoi
+jouer tout de suite, et compte ses sauts. Le plafond est place une marge au-dessus du seuil de
+vidage — le vidage garde la main sur la derive ordinaire, avec sa rebufferisation et son diagnostic,
+le filet n'intervient que par-dessous — et borne aux deux tiers de la file, sinon le profil Stable ne
+laisserait que deux cents millisecondes pour absorber une rafale entre deux blocs.
+
+**L'essai Meet le verifie directement : le filet a servi 25 fois, l'anneau n'a jamais deborde.** Ces
+25 cas sont exactement ceux que le vidage n'a pas rattrapes.
+
+### L'hypothese refutee : l'onglet masque
+
+Apres l'essai Meet, j'avais conclu que l'onglet en arriere-plan affamait le son, et propose de
+deplacer le WebSocket dans le worker pour que le chemin audio ne depende plus du thread principal.
+L'essai de onze minutes, onglet masque et rien d'autre en marche, donne **zero gel et un seul manque
+de donnees**. L'onglet masque n'y est pour rien, et ce chantier n'a pas lieu d'etre.
+
+Les douze gels de l'essai Meet viennent de la charge Meet elle-meme — cameras, partage d'ecran,
+WebRTC sur 4G. Ni la charge processeur, que la phase 1 disculpe, ni l'onglet masque, que la phase 5
+disculpe.
+
+### Ce que le journal sait dire maintenant
+
+L'enquete a ete ralentie par le journal lui-meme : celui de l'essai de dix heures sautait de `03:31` a
+`605:49`, dix heures d'historique chassees du tampon par quarante-cinq lignes identiques.
+
+- Les rafales sont repliees : `(x31 en 1.4 s)`. Le compte et la duree sont eux-memes une mesure.
+- La ligne de vidage porte sa gravite : `~2000 ms en attente pour un seuil de 400 ms`.
+- Un gel du thread principal est nomme : `thread principal gele pendant 12.4 s`. C'est presque
+  toujours la cause de ce qui suit, et rien ne le disait avant.
+- Un saut decide par le processeur audio est trace : il ne produit ni rebufferisation ni verdict
+  rouge, donc sans cette ligne le son sauterait sans explication.
+
 ## Verification executee
 
 ```powershell
@@ -505,20 +592,50 @@ comportement sont ceux decrits ci-dessus, et aucun ne touche le chemin normal du
   avertissement de securite a accepter sur chaque appareil, pour verifier le moteur dans des
   conditions qui ne sont deja plus celles du produit. La contrepartie est acceptee : le mode messages
   n'aura pas ete vu sur un vrai reseau avant le bloc 9.
-- Le mode sans `SharedArrayBuffer` n'a pas encore ete tenu quinze minutes dans un navigateur. C'est
-  le seul mode ou la file d'attente du port n'a pas d'autre borne que le premier defaut ci-dessus, et
-  c'est le compteur « blocs abandonnes » qui le dira.
-- Les quatre corrections de l'essai long n'ont pas encore ete entendues dans un navigateur. Un
-  second essai long en mode partage doit maintenant donner zero bloc abandonne, quelques manques de
-  donnees seulement, et une seule bascule `REBUFFERING` par incident. La ligne
-  `retard detecte : le son en attente est jete` du journal dit desormais quand la limite de derive se
-  declenche.
+- ~~Le mode sans `SharedArrayBuffer` n'a pas encore ete tenu quinze minutes dans un navigateur.~~
+  **Fait le 5 aout 2026** : essai Google Meet a deux cameras avec partage d'ecran (9 min 23 s) et
+  essai ecran ferme (8 min 30 s), tous deux en mode messages. « Blocs abandonnes » reste a zero dans
+  les deux, malgre des gels du thread principal allant jusqu'a 8,8 s et un gel de 8 minutes. Voir
+  « Le mode messages sous charge reelle » ci-dessous.
+- ~~Les quatre corrections de l'essai long n'ont pas encore ete entendues dans un navigateur.~~
+  **Fait le 5 aout 2026** : six essais, `Blocs abandonnes` a zero partout, y compris sous la charge
+  Meet qui a fait servir le filet 25 fois.
+- La charge de la phase 2 — Meet avec cameras, partage d'ecran et 4G — gele le thread principal
+  jusqu'a douze secondes, et le son est alors interrompu. Aucun reglage du moteur ne repare douze
+  secondes sans donnees : le seuil Stable a 800 ms absorberait les gels de deux a trois secondes, pas
+  ceux-la. C'est un arbitrage latence contre robustesse a trancher au bloc 11, sur le vrai parcours,
+  pas un defaut du moteur — qui n'a rien perdu et est revenu a chaque fois.
 - Le seuil de derive, une seconde au-dessus du profil, est une valeur choisie. Le premier essai long
   ne l'a pas mise en defaut : elle ne s'est declenchee qu'apres des arrets reels du thread audio,
   jamais sur la respiration normale de la file.
 - La latence reelle ne se mesure toujours pas ici. C'est le bloc 11.
 
+## Le mode messages sous charge reelle
+
+Le second chemin de transport du moteur — celui qui sert quand `SharedArrayBuffer` n'est pas
+disponible — n'avait jamais tourne plus de quelques minutes. Le filet ajoute le 5 aout borne l'anneau
+PCM ; il ne borne pas la file d'attente du `MessagePort`, qui n'a d'autre limite que le portail de
+remplissage. C'etait le seul endroit du moteur ou `Blocs abandonnes` pouvait encore monter sans
+qu'aucun test ne l'ait mesure sous charge.
+
+Vassi a lance `$env:VASSI_NO_ISOLATION = "1"; npm.cmd run player:fixture` le 5 aout 2026 pour deux
+essais :
+
+| Essai | Duree | Gel le plus long | Blocs abandonnes | Sauts au direct | Paquets refuses |
+|---|---:|---:|---:|---:|---:|
+| Google Meet, deux cameras, partage d'ecran | 9 min 23 s | 8,8 s | **0** | 6 | 0 |
+| Ecran ferme | 8 min 30 s | 8 min (veille) | **0** | 0 | 0 |
+
+Aucun paquet refuse, aucune discontinuite imprevue, aucune erreur dans les deux essais. Le premier
+reprend la phase la plus dure de la fiche longue — Meet fait chainer les gels du thread principal, de
+2 a 8,8 s, avec les allers-retours `REBUFFERING`/`PLAYING` que cela provoque normalement pendant un
+gel. Le second est le cas le plus propre possible sur la phase veille : un seul gel de 8 minutes, puis
+un unique `OFFLINE` -> `BUFFERING` -> `PLAYING`, sans bascule repetee.
+
+`Blocs abandonnes` a zero dans les deux confirme que la file d'attente du `MessagePort` ne deborde pas
+sous une charge reelle plus dure que celle deja mesuree en memoire partagee.
+
 ## Decision
 
-Le code du bloc 8b est termine et teste. Le bloc reste ouvert jusqu'a l'essai long et jusqu'aux
-trois passages navigateur.
+Le code du bloc 8b est termine et teste, l'essai long est fait en memoire partagee, et le mode
+messages est maintenant verifie sous charge reelle. **Le bloc 8b est valide.**

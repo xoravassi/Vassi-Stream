@@ -55,6 +55,24 @@ La validation de l'en-tete binaire n'est pas reecrite : elle vient de `src/proto
 le module deja partage par le device et le relais. Une seule definition d'un paquet valide existe
 donc dans tout le projet.
 
+## Pourquoi le worker arrive par une fabrique et non par une adresse
+
+`PlayerSetup` demande `createWorker: () => Worker`, pas une adresse de fichier. La raison est
+concrete : `decode-worker.js` commence par `import { OpusDecoder } from "opus-decoder"`, et
+`opus-decoder` est un nom de paquet, pas un chemin. Aucun navigateur ne sait le resoudre seul.
+
+C'est l'outil de construction du site, Vite, qui le remplace par un vrai chemin — mais il ne le fait
+que s'il fabrique lui-meme le worker. Une adresse le priverait de cette occasion : le fichier serait
+alors livre tel quel, avec son `import` intact, et le worker mourrait a sa premiere ligne.
+
+Le probleme est difficile a voir parce qu'il ne se manifeste pas au meme moment selon le mode. Une
+adresse obtenue par `?worker&url` fonctionne dans le build de production, ou Vite compile quand meme
+le fichier, et echoue en developpement, ou il le sert brut. Une fabrique obtenue par `?worker`
+fonctionne dans les deux.
+
+Le processeur audio, lui, garde une adresse : il ne contient aucun `import` (voir la section
+suivante), et `audioWorklet.addModule` ne sait de toute facon prendre qu'une adresse.
+
 ## Pourquoi `pcm-worklet.js` contient la file PCM
 
 Un module charge par `audioWorklet.addModule()` ne peut pas dependre d'un `import` : Safari ne le
@@ -277,6 +295,16 @@ Le navigateur repond seul aux pings WebSocket du relais. Le player n'a rien a fa
 - Il n'affiche rien : pas de bouton, pas de texte, pas de style. C'est le bloc 9.
 - Il ne pose pas les en-tetes COOP/COEP : c'est la configuration du site, donc le bloc 9.
 - Il ne mesure pas la latence totale. Le seuil de buffer est une valeur d'attente, pas une garantie.
+
+## Comment ce moteur arrive dans le site
+
+Le moteur vit ici, dans `src/player/` et `src/protocol/`. Le site en garde une copie automatique
+dans `frontend/src/lib/vassi-stream/`, produite par `npm run player:sync` et surveillee par
+`npm run player:check`, qui fait partie de `npm run check`.
+
+**Modifier le moteur se fait toujours ici, jamais dans le site.** L'explication complete — les deux
+commandes, ce que la copie garantit, et pourquoi ce n'est ni un paquet npm ni un sous-module git —
+est dans [`pont-site-web.md`](pont-site-web.md).
 
 ## Verification
 

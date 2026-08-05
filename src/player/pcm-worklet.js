@@ -25,6 +25,7 @@ export const CONTROL_WRITE_INDEX = 0;
 export const CONTROL_READ_INDEX = 1;
 export const CONTROL_UNDERRUNS = 2;
 export const CONTROL_OVERFLOWS = 3;
+export const CONTROL_SKIPS = 4;
 
 // Le tableau de controle occupe huit cases de quatre octets. Les quatre cases libres laissent la
 // place a un compteur supplementaire sans changer la disposition memoire.
@@ -89,6 +90,47 @@ export class PcmRing {
   // Cette methode donne le nombre de blocs abandonnes faute de place.
   get overflows() {
     return Atomics.load(this.control, CONTROL_OVERFLOWS);
+  }
+
+  // Cette methode donne le nombre de fois ou le consommateur a saute au direct.
+  get skips() {
+    return Atomics.load(this.control, CONTROL_SKIPS);
+  }
+
+  // Cette methode jette le son le plus ancien pour ne garder que `keepFrames` echantillons.
+  //
+  // Elle existe parce que le vidage demande par la machine d'etats est un aller-retour : le niveau
+  // part du thread audio, la decision revient quarante millisecondes plus tard, et l'ordre traverse
+  // encore le worker. Une rafale de paquets livree d'un coup — ce que fait le navigateur au degel du
+  // thread principal, puisqu'il vide la socket dans sa memoire meme quand rien ne tourne — remplit
+  // les trois secondes de la file avant que cet aller-retour n'aboutisse. La file bute alors sur sa
+  // capacite et compte des blocs abandonnes, qui sont du son perdu.
+  //
+  // Le consommateur, lui, tourne toutes les 2,7 ms et possede l'index de lecture : il ne peut pas
+  // etre distance. Il ne remplace pas le vidage, qui garde son role et son diagnostic ; il est le
+  // filet en dessous, et son compteur dit exactement quand ce filet a servi.
+  //
+  // Seul l'index de lecture est ecrit, comme le veut la regle de cette file : c'est celui du
+  // consommateur, et c'est le consommateur qui appelle cette methode.
+  dropOldest(keepFrames) {
+    const write = Atomics.load(this.control, CONTROL_WRITE_INDEX);
+    const read = Atomics.load(this.control, CONTROL_READ_INDEX);
+    const used = write >= read ? write - read : write + this.capacity - read;
+
+    if (used <= keepFrames) {
+      return false;
+    }
+
+    const advance = used - keepFrames;
+    let position = read + advance;
+
+    if (position >= this.capacity) {
+      position -= this.capacity;
+    }
+
+    Atomics.store(this.control, CONTROL_READ_INDEX, position);
+    Atomics.add(this.control, CONTROL_SKIPS, 1);
+    return true;
   }
 
   // Cette methode abandonne tout l'audio en attente : nouvelle session, discontinuite, ou reprise
@@ -209,6 +251,11 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       // temps la reviderait aussitot et le seuil ne serait jamais atteint.
       this.playing = false;
       this.blocksSinceReport = 0;
+      // Ces deux bornes viennent du thread principal, qui seul connait le profil de la session. Tant
+      // qu'elles valent zero, le filet est inactif : une file non bornee vaut mieux qu'une file
+      // tronquee sur une valeur devinee.
+      this.ceilingFrames = 0;
+      this.keepFrames = 0;
 
       // Le thread principal pilote la lecture et l'arret par ce port.
       this.port.onmessage = (event) => {
@@ -219,6 +266,12 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         // copiees, et un port se transfere, il ne se copie pas.
         if (message.type === "port") {
           this.listenTo(message.port);
+          return;
+        }
+
+        if (message.type === "limit") {
+          this.ceilingFrames = message.ceilingFrames;
+          this.keepFrames = message.keepFrames;
           return;
         }
 
@@ -265,6 +318,12 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       const left = output[0];
       const right = output[1];
 
+      // Le filet agit avant la lecture, et aussi quand la lecture est arretee : c'est justement
+      // pendant la bufferisation que personne ne consomme et que la file grossit sans frein.
+      if (this.ceilingFrames > 0 && this.ring.available > this.ceilingFrames) {
+        this.ring.dropOldest(this.keepFrames);
+      }
+
       if (this.playing) {
         this.ring.read(left, right);
       } else {
@@ -294,6 +353,8 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         // Les abandons faute de place sont la mesure directe du mode messages sous charge : un
         // port qui n'arrive plus a suivre les fait monter.
         overflows: this.ring.overflows,
+        // Les sauts au direct disent que le filet a servi, donc que le vidage a ete distance.
+        skips: this.ring.skips,
       });
     }
   }

@@ -50,7 +50,7 @@ async function startPlayer(options: { isolated?: boolean; sessionId?: number } =
   const player = new AudioPlayer(
     {
       relayUrl: relay.listenerUrl,
-      workerUrl: "/decode-worker.js",
+      createWorker: () => new Worker("/decode-worker.js", { type: "module" }),
       workletUrl: "/pcm-worklet.js",
     },
     () => {},
@@ -489,7 +489,10 @@ test("jette le son devenu vieux quand le thread audio a pris du retard", async (
   assert.deepEqual(worker.messagesOfType("flush"), [{ type: "flush" }], "le son en attente doit etre jete");
   assert.equal(montage.player.diagnostics().overflows, 12);
 
-  // La reprise se fait au seuil habituel, sur du son neuf.
+  // La reprise se confirme sur deux rapports propres d'affilee, pas un seul.
+  node.port.deliver({ type: "level", availableMs: 400, underruns: 0, overflows: 12 });
+  assert.equal(montage.player.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
+
   node.port.deliver({ type: "level", availableMs: 400, underruns: 0, overflows: 12 });
   assert.equal(montage.player.status().state, "PLAYING");
   assert.deepEqual(worker.messagesOfType("flush").length, 1, "un seul vidage pour un seul retard");

@@ -210,3 +210,70 @@ test("convertit la quantite disponible en millisecondes", () => {
   assert.equal(ring.available, 960);
   assert.equal(ring.availableMs, 20);
 });
+
+// Ce test couvre le filet du consommateur : la file bornee par celui qui la lit.
+//
+// Le vidage demande par la machine d'etats est un aller-retour — le niveau part du thread audio, la
+// decision revient quarante millisecondes plus tard, l'ordre traverse encore le worker. Une rafale
+// de paquets livree d'un coup remplit les trois secondes de la file avant que cet aller-retour
+// n'aboutisse : la file bute alors sur sa capacite et compte des blocs abandonnes, qui sont du son
+// perdu. C'est ce qui s'est produit pendant l'essai long de la nuit du 4 aout 2026, 178 fois.
+//
+// Le consommateur, lui, ne peut pas etre distance : il tourne a chaque bloc.
+test("jette le son le plus ancien et garde ce qu'on lui demande", () => {
+  const ring = makeRing(32);
+  const source = block(1, 20);
+
+  ring.write(source.left, source.right);
+  assert.equal(ring.available, 20);
+  assert.equal(ring.skips, 0);
+
+  assert.equal(ring.dropOldest(5), true);
+  assert.equal(ring.available, 5, "il ne reste que ce qui a ete demande");
+  assert.equal(ring.skips, 1, "le saut est compte, donc visible dans le diagnostic");
+
+  // Ce qui reste est bien le son le plus recent : c'est la fin du bloc ecrit, pas son debut.
+  const left = new Float32Array(5);
+  const right = new Float32Array(5);
+  ring.read(left, right);
+
+  assert.deepEqual(Array.from(left), [16, 17, 18, 19, 20]);
+  assert.deepEqual(Array.from(right), [-16, -17, -18, -19, -20]);
+});
+
+// Ce test verifie que le filet ne se declenche pas quand la file tient dans sa borne. Un saut inutile
+// couperait le son sans raison.
+test("ne saute pas quand la file tient dans sa borne", () => {
+  const ring = makeRing(32);
+  const source = block(1, 6);
+
+  ring.write(source.left, source.right);
+
+  assert.equal(ring.dropOldest(10), false);
+  assert.equal(ring.available, 6);
+  assert.equal(ring.skips, 0);
+});
+
+// Ce test verifie que le saut fonctionne quand la file a fait le tour de sa memoire. L'index de
+// lecture doit revenir au debut, sinon il sort du tableau et le son lu est du silence.
+test("saute correctement quand la file a fait le tour de sa memoire", () => {
+  const ring = makeRing(16);
+
+  // Cette premiere passe amene les deux index pres de la fin de la memoire.
+  const premier = block(1, 12);
+  ring.write(premier.left, premier.right);
+  ring.read(new Float32Array(12), new Float32Array(12));
+
+  // Cette ecriture repasse par le debut de la memoire.
+  const second = block(100, 12);
+  ring.write(second.left, second.right);
+  assert.equal(ring.available, 12);
+
+  assert.equal(ring.dropOldest(4), true);
+  assert.equal(ring.available, 4);
+
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+  assert.equal(ring.read(left, right), 4);
+  assert.deepEqual(Array.from(left), [108, 109, 110, 111]);
+});

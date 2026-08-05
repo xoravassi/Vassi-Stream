@@ -116,14 +116,58 @@ reseau.
 
 ## Ressembler a un device d'Ableton
 
-Trois regles font tout le travail, et aucune n'est une question de gout.
+### Wavetable n'est pas un device Max for Live
 
-**Aucune couleur n'est ecrite nulle part.** Les objets dont le nom commence par `live.` designent
-deja une couleur du theme de Live : `live.line` dessine sa barre en `live_surface_frame`, le fond
-LCD d'un `live.text` est `live_lcd_bg`, un onglet choisi est `live_control_selection`. Ecrire une
-couleur, meme celle du theme du moment, remplacerait ce lien par une valeur fixe. Les libelles sont
-donc des `live.comment`, qui suivent le theme, et non des `comment` ordinaires, qui ne le suivent
-pas.
+Vassi a demande un rendu proche de Wavetable : fond presque noir, onglets et menus dans le style
+LCD des devices Ableton. Un point compte avant de decrire les regles : **Wavetable n'est pas un
+device Max for Live**. C'est un device natif d'Ableton, ecrit dans son propre moteur graphique, qui
+reste sombre en permanence, quel que soit le theme choisi dans les preferences de Live. Un device
+Max for Live, lui, est construit avec des objets `live.*` generiques et ne peut pas reproduire au
+pixel pres le rendu de Wavetable — la cible realiste, documentee par les [Max for Live Production
+Guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md)
+d'Ableton, est le niveau de finition des devices Max for Live qu'Ableton livre elle-meme avec Live
+(LFO, Shaper, Envelope Follower, Align Delay, Convolution Reverb Pro).
+
+Un device Max for Live ne peut suivre qu'un theme a la fois : soit celui de Live, soit un theme qui
+lui est propre. Vassi a choisi le second, en connaissance des deux options, pour se rapprocher du
+rendu de Wavetable.
+
+### La palette
+
+Six couleurs, et six seulement, sont ecrites en dur dans le device. Elles vivent a un seul endroit,
+`PALETTE` dans `scripts/device-patcher/parts.js`, et rien dans le code ne recopie une valeur a la
+main : `tests/device-patcher.test.ts` verifie que toute couleur trouvee dans le fichier livre vient
+bien de cette palette.
+
+Ces six couleurs ne sont pas choisies a l'oeil. Ce sont celles qu'Ableton applique lui-meme dans
+son theme Sombre, relevees dans le fichier reel de l'application —
+`C:\ProgramData\Ableton\Live 11 Suite\Resources\Themes\03Dark.ask`.
+
+| Role dans le device | Cle Ableton (`03Dark.ask`) | Valeur |
+|---|---|---|
+| Fond du device | `RetroDisplayBackground` | `#050505` |
+| Traits de separation | `RetroDisplayBackgroundLine` | `#424242` |
+| Texte principal (l'etat du direct) | `SurfaceAreaForeground` | `#a0a0a0` |
+| Texte secondaire / legendes | `RetroDisplayForegroundDisabled` | `#808080` |
+| Accent (onglet actif, LCD allume) | `RetroDisplayForeground` | `#f39420` |
+| Texte pose sur un fond accent | `ControlOnForeground` | `#000000` |
+
+`RetroDisplayBackground` est la cle qu'Ableton utilise pour ses propres ecrans a l'ancienne (LCD,
+VU) : c'est la valeur la plus proche, sourcee, du presque-noir de l'ecran de Wavetable.
+
+### Le mode LCD
+
+L'apparence par defaut de `live.tab` et `live.menu` dessine chaque position comme un bouton separe
+— c'est ce qui donnait au device un air de « deux boutons » plutot que d'onglets. Le mode LCD
+(`appearance: 1` pour `live.tab` et `live.menu`, `appearance: 2` pour `live.text`) est celui que le
+patch d'aide officiel de Max nomme lui-meme « LCD mode » : une barre plate, l'item actif en
+surbrillance. C'est ce mode qui est utilise partout dans le device : les deux onglets, les deux
+menus, le bouton du direct et les deux boutons de la page de reglages.
+
+Les recommandations de production Max for Live d'Ableton demandent aussi que l'**Output Mode** de
+`live.text` soit **Mouse Up** (`outputmode: 1`), *« since it will match Live's native button
+behavior »* — ce n'est pas la valeur posee par defaut par Max. Le bouton du direct l'avait deja ;
+les deux boutons de la page de reglages l'ont maintenant aussi.
 
 **Les tailles sont mesurees, pas choisies.** Les 78 devices Max for Live livres avec Live 11 sont
 lisibles : leur bloc `ptch` n'est pas chiffre, contrairement aux devices d'Ableton. Les compter
@@ -145,9 +189,10 @@ maquette ne le montrent. La deuxieme version du device avait ce defaut partout.
 **Les marges sont egales des deux cotes.** Huit pixels a gauche, huit a droite ; c'est une
 recommandation d'Ableton, et le test la verifie sur le fichier livre.
 
-Le seul objet du device qui ne soit pas un objet `live.*` est le champ de saisie : Max n'en offre
-aucun qui suive le theme. C'est la raison de la seconde page — les deux champs ne sont visibles que
-le temps d'un collage, jamais pendant un direct.
+Le seul objet du device qui ne soit pas un objet `live.*` est le champ de saisie (`textedit`) : Max
+n'en offre aucune version `live.*`. Ses couleurs viennent de la meme `PALETTE`, posees a la main
+puisque l'objet n'a pas de mode LCD a activer. C'est aussi la raison de la seconde page — les deux
+champs ne sont visibles que le temps d'un collage, jamais pendant un direct.
 
 Ces regles viennent des [recommandations de production Max for Live
 d'Ableton](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md),
@@ -230,9 +275,10 @@ le token en clair, et la configuration le refuse.
 
 Ces points ne se verifient pas sans Max. Ils sont classes du plus probable au moins probable.
 
-1. **Le fond du device.** Aucune couleur de fond n'est posee, pour que Live donne la sienne. Si le
-   device apparait sur un rectangle gris clair dans un theme sombre, il faut poser une couleur
-   dynamique de fond.
+1. **Le fond du device.** Il est fixe a `PALETTE.bg`, presque noir : il doit s'afficher identique
+   dans les deux themes de Live, clair et sombre — c'est voulu, voir « Ressembler a un device
+   d'Ableton » plus haut. Ce qui reste a verifier a l'oeil, c'est le contraste : que l'etat du
+   direct, les legendes et les traits de separation restent lisibles sur ce fond.
 2. **Les accents.** Les libelles et les positions des deux menus portent des accents. Ils doivent
    s'afficher tels quels ; des caracteres abimes signalent un probleme d'encodage.
 3. **La largeur des textes.** La maquette calcule ses largeurs avec la police du navigateur, pas
@@ -254,7 +300,7 @@ pas a l'ouverture : chaque cable relie des prises qui existent, chaque message e
 possede un handler, chaque mot attendu par le patcher est bien envoye par Node, aucun objet ne
 depasse la surface accordee par Live, aucun objet n'en recouvre un autre sur une meme page, les
 marges et les tailles sont celles d'Ableton, chaque libelle a la hauteur de boite de sa police,
-aucune couleur n'est figee, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint
+toute couleur figee vient de la palette unique du device, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint
 les deux pages, le bouton du direct ne peut pas se rallumer a l'ouverture d'un projet, et le fichier
 depose contient bien le patcher livre.
 
