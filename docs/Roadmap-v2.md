@@ -495,13 +495,18 @@ qu'il fait autre chose, un auditeur qui range son téléphone : c'est le cas d'u
 il ne marche pas.
 
 **La recherche faite le 2026-08-05 a corrigé l'hypothèse de départ de cette roadmap.** Il faut
-commencer par ce qui n'est pas possible.
+commencer par une distinction.
 
-**Aucune page web ne peut garder un AudioWorklet en marche sur un iPhone verrouillé.** Quand la page
-passe en arrière-plan, iOS Safari met le contexte audio dans l'état `interrupted`, dont la définition
-est que la page n'a pas la main : le navigateur décide seul quand interrompre et quand rendre la
-sortie audio. Android Chrome suspend de même un contexte dont l'onglet est caché, et ce qu'il laisse
-tourner ensuite dépend du réglage de batterie du navigateur, pas de la page.
+**Un iPhone verrouillé continue de jouer un élément `<audio>`, et refuse de faire tourner un
+AudioWorklet.** Le lecteur de musique du site `vassi.click` le montre : il pose une adresse de
+fichier sur un élément `<audio>`, donc iOS le traite comme un média et le laisse jouer écran éteint.
+Ce moteur-ci n'a pas de média : il pousse des échantillons dans un AudioWorklet, et c'est le contexte
+audio qu'iOS met dans l'état `interrupted` — dont la définition est que la page n'a pas la main.
+Android Chrome suspend de même un contexte dont l'onglet est caché, et ce qu'il laisse tourner
+ensuite dépend du réglage de batterie du navigateur, pas de la page.
+
+Faire jouer le direct par un vrai élément `<audio>` **est possible** — c'est `ManagedMediaSource`,
+disponible sur iPhone depuis Safari 17.1 — mais c'est une autre architecture, décrite plus bas.
 
 Les deux contournements que cette roadmap proposait ont été écartés après vérification. Sortir par un
 `MediaStreamAudioDestinationNode` branché sur un `<audio>` donne un résultat différent dans chaque
@@ -518,6 +523,28 @@ Douze tests couvrent ce module, dont un qui va du relais réel jusqu'au contexte
 
 Le son ne survit toujours pas à un écran verrouillé sur iPhone. L'auditeur qui rallume son téléphone
 retrouve en revanche le direct tout de suite, sans recharger la page.
+
+### La décision qui reste : acheter la veille en latence
+
+Pour qu'un iPhone verrouillé continue de jouer, il faut que le son soit une **ressource média que le
+navigateur possède**, pas des échantillons que la page lui pousse. `ManagedMediaSource` le permet
+depuis Safari 17.1 : un élément `<audio>` alimenté par la page mais géré par le système, qui prévient
+par `startstreaming` et `endstreaming` quand remplir ou lever le pied — y compris parce que l'écran
+vient de se verrouiller.
+
+| Ce que ça demande | Ce que ça coûte |
+|---|---|
+| Empaqueter l'Opus dans un conteneur WebM dans le navigateur | un muxeur à écrire, réel mais pas énorme |
+| Vérifier Opus dans WebM sur un vrai iPhone | le parseur WebM MSE de Safari était encore marqué expérimental il y a peu |
+| Alimenter un `SourceBuffer` au lieu d'une file d'AudioWorklet | **les profils 200 / 400 / 800 ms ne tiennent plus** |
+| Garder l'AudioWorklet pour l'ordinateur | deux chemins de lecture à maintenir |
+
+**La question à trancher est donc : pour qui est faite la page ?** Pour un professeur qui écoute un
+mix pendant un appel vidéo, la latence basse est tout le projet et la veille de l'écran ne sert à
+rien. Pour quelqu'un qui écoute un direct dans sa poche, c'est l'inverse. Les deux ne se font pas
+avec le même chemin audio, et vouloir les deux, c'est accepter d'en maintenir deux.
+
+Rien ne presse : ce choix se prend après les mesures ci-dessous, pas avant.
 
 ### À faire
 
