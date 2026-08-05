@@ -2,14 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AudioPlayer } from "../src/player/audio-player.ts";
-import { PCM_PROCESSOR_NAME } from "../src/player/pcm-worklet.js";
+import { NET_CEILING_MAX_MS, PCM_PROCESSOR_NAME, PCM_SAMPLE_RATE } from "../src/player/pcm-worklet.js";
+import { LATE_MARGIN_MS } from "../src/player/player-state.ts";
 import {
   FakeAudioContext,
   FakeAudioWorkletNode,
   FakeWorker,
   installBrowserFakes,
 } from "./browser-fakes.ts";
-import { audioPacket, startLive, startRelay, waitFor, type TestRelay } from "./relay-harness.ts";
+import {
+  audioPacket,
+  startLive,
+  startRelay,
+  streamStartMessage,
+  waitFor,
+  type TestRelay,
+} from "./relay-harness.ts";
 
 // Ce fichier verifie l'assemblage du player : ce qui part vers le worker, ce qui part vers le
 // processeur audio, et dans quel ordre. Ces fils ne sont visibles nulle part ailleurs, et une erreur
@@ -19,7 +27,7 @@ import { audioPacket, startLive, startRelay, waitFor, type TestRelay } from "./r
 // remplacees : contexte audio, noeud de traitement et worker.
 
 // Cette fonction demarre un relais, un direct et un player pret a jouer.
-async function startPlayer(options: { isolated: boolean }): Promise<{
+async function startPlayer(options: { isolated: boolean; latencyProfile?: string }): Promise<{
   relay: TestRelay;
   player: AudioPlayer;
   publisher: Awaited<ReturnType<typeof startLive>>;
@@ -27,7 +35,11 @@ async function startPlayer(options: { isolated: boolean }): Promise<{
 }> {
   const restore = installBrowserFakes(options);
   const relay = await startRelay();
-  const publisher = await startLive(relay, 4242);
+  const publisher = await startLive(
+    relay,
+    4242,
+    options.latencyProfile === undefined ? {} : { latencyProfile: options.latencyProfile },
+  );
 
   const player = new AudioPlayer({
     relayUrl: relay.listenerUrl,
@@ -132,6 +144,98 @@ test("lance la lecture au seuil annonce par le processeur audio", async (t) => {
   assert.ok(worker !== null);
   const ordres = worker.messagesOfType("accepting");
   assert.deepEqual(ordres[ordres.length - 1], { type: "accepting", accepting: false });
+});
+
+// Ces trois lignes sont les bornes reellement transmises au processeur audio pour chaque profil de
+// latence. Elles sont ecrites en clair, sans etre recalculees a partir du code teste : c'est le seul
+// moyen qu'une formule changee sans qu'on le veuille se voie.
+const BORNES = [
+  { profil: "low", cibleMs: 200, plafondMs: 2000 },
+  { profil: "balanced", cibleMs: 400, plafondMs: 2000 },
+  { profil: "stable", cibleMs: 800, plafondMs: 2000 },
+];
+
+// Ce test fixe la hauteur du filet du processeur audio, profil par profil.
+//
+// Il existe parce que la formule qui la calcule ne se lit pas : `audio-player.ts` demande
+// `cible + 2000 ms`, soit 2200, 2400 et 2800, et la borne des deux tiers de la file ramene les trois
+// a 2000 ms. Personne ne peut deviner en lisant l'addition que la marge reelle de Stable vaut 200 ms
+// et non 1000. Ces valeurs sont donc ecrites ici, et un changement de capacite de file ou de marge
+// les fera echouer au lieu de passer inapercu.
+test("borne le filet du processeur audio, pour les trois profils de latence", async (t) => {
+  for (const borne of BORNES) {
+    const { relay, player, restore } = await startPlayer({ isolated: true, latencyProfile: borne.profil });
+
+    try {
+      await player.play();
+
+      const node = FakeAudioWorkletNode.last;
+      assert.ok(node !== null);
+
+      assert.deepEqual(
+        node.port.messagesOfType("limit"),
+        [
+          {
+            type: "limit",
+            ceilingFrames: (borne.plafondMs * PCM_SAMPLE_RATE) / 1000,
+            keepFrames: (borne.cibleMs * PCM_SAMPLE_RATE) / 1000,
+          },
+        ],
+        `profil ${borne.profil}`,
+      );
+
+      // C'est l'ordre qui compte plus que les valeurs : le filet doit rester au-dessus du seuil de
+      // vidage. En dessous, il sauterait a la place du vidage, et la derive ordinaire n'aurait plus
+      // ni rebufferisation ni diagnostic — elle deviendrait un saut muet.
+      assert.ok(
+        borne.plafondMs > borne.cibleMs + LATE_MARGIN_MS,
+        `le filet doit rester au-dessus du vidage pour le profil ${borne.profil}`,
+      );
+
+      // Le plafond ne peut pas depasser ce que la file autorise, quelle que soit la cible demandee.
+      assert.ok(borne.plafondMs <= NET_CEILING_MAX_MS, `profil ${borne.profil}`);
+    } finally {
+      await player.close();
+      await relay.close();
+      restore();
+    }
+  }
+});
+
+// Ce test verifie que la hauteur de saut suit une nouvelle session, alors que le plafond ne bouge
+// pas.
+//
+// C'est le piege que `browser-audio.ts` decrit et que rien ne verifiait : le plafond bute toujours
+// sur la borne de la file, donc comparer le seul plafond pour decider s'il faut renvoyer un ordre
+// laisserait la hauteur de saut a sa valeur precedente. Un auditeur qui rejoint un direct relance en
+// Stable garderait alors le saut d'un direct en Faible, et repartirait 600 ms trop court a chaque
+// rafale.
+test("suit la hauteur de saut d'une nouvelle session quand le plafond ne bouge pas", async (t) => {
+  const { relay, player, publisher, restore } = await startPlayer({ isolated: true, latencyProfile: "low" });
+  t.after(async () => {
+    await player.close();
+    await relay.close();
+    restore();
+  });
+
+  await player.play();
+
+  const node = FakeAudioWorkletNode.last;
+  assert.ok(node !== null);
+  assert.deepEqual(node.port.messagesOfType("limit"), [
+    { type: "limit", ceilingFrames: 96000, keepFrames: 9600 },
+  ]);
+
+  // Le publisher relance un direct sur un autre profil : le protocole prevoit qu'un second
+  // `stream_start` remplace la session.
+  publisher.sendJson(streamStartMessage(4243, { latencyProfile: "stable" }));
+  await waitFor(() => player.status().session?.sessionId === 4243, "seconde session annoncee");
+
+  assert.deepEqual(node.port.messagesOfType("limit"), [
+    { type: "limit", ceilingFrames: 96000, keepFrames: 9600 },
+    // Le plafond est le meme, la hauteur de saut a suivi le profil.
+    { type: "limit", ceilingFrames: 96000, keepFrames: 38400 },
+  ]);
 });
 
 // Ce test verifie qu'une discontinuite signalee par le worker fait rebufferiser la page.

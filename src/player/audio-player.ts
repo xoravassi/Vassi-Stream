@@ -1,6 +1,7 @@
 import { BrowserAudio } from "./browser-audio.ts";
 import { ListenerSocket } from "./listener-socket.ts";
 import type { DiagnosticArea, PlayerDiagnostics } from "./player-diagnostics.ts";
+import { NET_CEILING_MAX_MS } from "./pcm-worklet.js";
 import { LATE_MARGIN_MS, PlayerStateMachine, type PlayerStatus } from "./player-state.ts";
 
 // Ce module assemble le moteur audio : la connexion au relais, la machine d'etats, les pieces du
@@ -96,6 +97,12 @@ export class AudioPlayer {
         this.machine.setStream(state);
         this.trackSession();
         this.announceSession();
+        // Les bornes du processeur audio dependent du profil de latence, donc de la session, et pas
+        // seulement de l'etat. La machine ne previent que lorsque son etat change de nom : un direct
+        // relance sur un autre profil pendant que la page bufferise deja la laisserait muette, et la
+        // hauteur de saut resterait celle du direct precedent. Ce rappel est sans effet quand rien
+        // n'a change — chaque ordre transmis est deja compare au precedent.
+        this.applyCommands(this.machine.status());
       },
       onPacket: (packet) => this.sendPacket(packet),
       onConnectionLost: () => this.machine.connectionLost(),
@@ -269,8 +276,22 @@ export class AudioPlayer {
     // garde la main sur la derive ordinaire, avec son diagnostic et sa rebufferisation, et le filet
     // n'intervient que lorsqu'une rafale l'a distance. En sautant, il laisse de quoi jouer tout de
     // suite, sinon le saut se paierait d'un manque de donnees.
+    //
+    // La marge voulue est de deux fois `LATE_MARGIN_MS`, mais la file la tronque : avec trois
+    // secondes de capacite, aucun profil n'atteint la borne des deux tiers. Les valeurs reellement
+    // appliquees sont donc celles-ci, et le `Math.min` est ce qui decide, pas l'addition :
+    //
+    //   Faible 200 ms     vidage a 1200 ms, filet a 2000 ms, marge 800 ms
+    //   Equilibree 400 ms vidage a 1400 ms, filet a 2000 ms, marge 600 ms
+    //   Stable 800 ms     vidage a 1800 ms, filet a 2000 ms, marge 200 ms
+    //
+    // L'ordre voulu tient partout — le filet reste au-dessus du vidage — mais la marge de Stable est
+    // mince : une rafale y sera parfois rattrapee par le filet sans que la machine d'etats l'ait vue
+    // passer. Ce n'est pas une perte de service, la file redescend exactement au seuil de lecture et
+    // le son continue ; c'est un saut que seul le compteur `skips` raconte. Agrandir la file
+    // rendrait la marge complete, au prix d'une mesure de charge reelle a refaire.
     const target = this.machine.targetBufferMs();
-    this.audio.setLimit(target + 2 * LATE_MARGIN_MS, target);
+    this.audio.setLimit(Math.min(target + 2 * LATE_MARGIN_MS, NET_CEILING_MAX_MS), target);
 
     this.audio.setAccepting(status.accepting);
     this.audio.applyFlush(status.flushId);

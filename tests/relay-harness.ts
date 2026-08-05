@@ -226,13 +226,20 @@ export function audioPacket(sessionId: number, sequenceNumber: number, marker: n
 }
 
 // Cette fonction ouvre une connexion publisher deja authentifiee et deja en session.
-export async function startLive(relay: TestRelay, sessionId: number): Promise<TestClient> {
+//
+// `overrides` sert aux tests qui ont besoin d'une session autrement configuree, le profil de latence
+// en particulier : c'est lui qui fixe le seuil de lecture et les bornes du filet.
+export async function startLive(
+  relay: TestRelay,
+  sessionId: number,
+  overrides: Record<string, unknown> = {},
+): Promise<TestClient> {
   const publisher = await TestClient.connect(relay.publisherUrl);
 
   publisher.sendJson({ type: "publisher_auth", protocolVersion: 1, token: TEST_TOKEN });
   await waitFor(() => publisher.messagesOfType("auth_ok").length === 1, "auth_ok");
 
-  publisher.sendJson(streamStartMessage(sessionId));
+  publisher.sendJson(streamStartMessage(sessionId, overrides));
   await waitFor(() => relay.relay.health().live, "direct ouvert");
 
   return publisher;

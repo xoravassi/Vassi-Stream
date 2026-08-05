@@ -125,6 +125,51 @@ test("la copie ecrit un avertissement et un manifeste couvrant tous les fichiers
   }
 });
 
+// Ce test couvre le piege que le champ `commit` a reellement pose : la copie tourne avant le commit
+// qui la contient, donc elle enregistre le commit parent. Resynchroniser apres coup doit corriger le
+// champ, ce que la condition d'origine — reecrire seulement quand les empreintes changent —
+// empechait, puisque commiter ne change aucune empreinte.
+test("une copie resynchronisee apres le commit corrige le commit enregistre", () => {
+  const { racine, source, destination } = faireUnFauxMoteur();
+
+  try {
+    sansBruit(() => synchroniser(source, destination, "aaa1111+modifie"));
+
+    const avant = JSON.parse(readFileSync(join(destination, "manifest.json"), "utf8"));
+    assert.equal(avant.commit, "aaa1111+modifie");
+
+    // Le moteur est commite : rien n'a change dans les fichiers, seul le commit existe maintenant.
+    sansBruit(() => synchroniser(source, destination, "bbb2222"));
+
+    const apres = JSON.parse(readFileSync(join(destination, "manifest.json"), "utf8"));
+    assert.equal(apres.commit, "bbb2222");
+
+    // La date dit quand le contenu a ete copie. Une reecriture qui ne corrige que le commit ne doit
+    // donc pas la deplacer, sinon la difference lue dans git montre autre chose que la correction.
+    assert.equal(apres.copieLe, avant.copieLe);
+    assert.deepEqual(apres.fichiers, avant.fichiers);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+// Ce test garde la raison d'etre de la condition d'origine : une copie qui ne change rien ne doit
+// produire aucune difference dans git, pas meme une date.
+test("une copie sans changement ne reecrit pas le manifeste", () => {
+  const { racine, source, destination } = faireUnFauxMoteur();
+
+  try {
+    sansBruit(() => synchroniser(source, destination, "ccc3333"));
+    const premier = readFileSync(join(destination, "manifest.json"), "utf8");
+
+    sansBruit(() => synchroniser(source, destination, "ccc3333"));
+
+    assert.equal(readFileSync(join(destination, "manifest.json"), "utf8"), premier);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
 test("la verification accepte deux copies identiques", () => {
   const { racine, source, destination } = faireUnFauxMoteur();
 

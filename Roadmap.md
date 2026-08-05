@@ -429,6 +429,22 @@ mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/vali
 
 - [x] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 312 tests, 0 échec. Le mode messages est vérifié sous charge réelle le 2026-08-05. Détail dans `docs/validation/phase-8b.md`.
 
+**Correction du 2026-08-05, après revue.** Trois points repris sans rouvrir le bloc, `npm.cmd test`
+donnant 331 tests et 0 échec :
+
+- La hauteur du filet du processeur audio ne se lisait pas dans le code. La formule demandait
+  `cible + 2000 ms`, le plafond des deux tiers de la file ramenait les trois profils à 2000 ms, et
+  personne ne pouvait deviner que la marge réelle de Stable valait 200 ms et non 1000. La borne est
+  maintenant nommée (`NET_CEILING_MAX_MS`) et appliquée là où le plafond se calcule ; le tableau des
+  valeurs réelles est dans le code, dans `docs/validation/phase-8b.md`, et fixé par un test.
+- Le message `limit` n'était vérifié nulle part — c'est là que vivait le défaut ci-dessus. Six tests
+  l'entourent désormais : les trois profils, le suivi d'une nouvelle session, et le filet lui-même
+  dans `process()`, qui n'était couvert que par sa file.
+- Un défaut trouvé par ces tests : un direct relancé sur un autre profil pendant que la page
+  bufferise déjà ne renvoyait aucune borne au processeur audio. La machine d'états ne prévient que
+  lorsque son état change de nom, et `BUFFERING` vers `BUFFERING` n'en est pas un. La hauteur de saut
+  restait celle du direct précédent. Corrigé dans `audio-player.ts`.
+
 ## Bloc 9 — Créer la page Svelte `/session`
 
 **Dépendances :** bloc 8 et bloc 8b.
@@ -488,6 +504,14 @@ revanche vérifié : `npm.cmd run relay:check -- https://live.vassi.click` passe
 - [ ] **Bloc 9 validé.** Le code est écrit et vérifié : `npm.cmd run check` donne 321 tests, 0 échec,
       et le site donne `svelte-check` à 0 erreur puis un `npm run build` qui passe. Reste l'écoute
       réelle dans un navigateur, à faire avec Vassi. Détail dans `docs/validation/phase-9.md`.
+
+**Correction du 2026-08-05, après revue.** Le champ `commit` du manifeste enregistrait le commit
+**parent** de la copie, et personne ne pouvait le voir : `player:sync` tourne avant le commit qui
+contient la copie, donc il lit le `HEAD` précédent, et le manifeste n'était réécrit que si les
+empreintes changeaient — resynchroniser après coup ne corrigeait donc rien. Deux changements ferment
+le piège : le manifeste porte `<commit>+modifie` quand le moteur n'est pas commité, et il est réécrit
+quand ce seul champ change, en gardant sa date de copie. `player:check` le signale sans échouer.
+L'ordre des trois gestes est écrit dans `docs/pont-site-web.md`.
 
 ## Bloc 10 — Finaliser l’interface Max for Live
 

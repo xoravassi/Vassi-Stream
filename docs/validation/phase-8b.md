@@ -406,8 +406,26 @@ Le processeur audio, lui, tourne toutes les 2,7 ms et possede l'index de lecture
 etre distance. Il jette desormais le son le plus ancien au-dela d'un plafond, en gardant de quoi
 jouer tout de suite, et compte ses sauts. Le plafond est place une marge au-dessus du seuil de
 vidage — le vidage garde la main sur la derive ordinaire, avec sa rebufferisation et son diagnostic,
-le filet n'intervient que par-dessous — et borne aux deux tiers de la file, sinon le profil Stable ne
-laisserait que deux cents millisecondes pour absorber une rafale entre deux blocs.
+le filet n'intervient que par-dessous — et borne aux deux tiers de la file, sinon un plafond colle a
+la capacite laisserait l'anneau deborder entre deux blocs, ce que le filet est charge d'empecher.
+
+**Correction du 2026-08-05, apres revue.** Cette borne ne protege pas seulement Stable : elle decide
+pour les trois profils. La marge demandee vaut deux fois `LATE_MARGIN_MS`, donc 2200, 2400 et
+2800 ms, et les deux tiers de trois secondes valent 2000 ms — les trois sont tronques.
+
+| Profil | Vidage | Filet | Marge reelle |
+|---|---:|---:|---:|
+| Faible 200 ms | 1200 ms | 2000 ms | 800 ms |
+| Equilibree 400 ms | 1400 ms | 2000 ms | 600 ms |
+| Stable 800 ms | 1800 ms | 2000 ms | **200 ms** |
+
+L'ordre voulu tient partout, le filet reste au-dessus du vidage, et la mesure ci-dessous reste
+valable. Mais la marge de Stable est mince : une rafale y sera parfois rattrapee par le filet sans
+que la machine d'etats l'ait vue passer. Ce n'est pas une perte de service — la file redescend
+exactement au seuil de lecture et le son continue — c'est un saut que seul le compteur `skips`
+raconte. La formule du code disait 1000 ms de marge ; elle dit maintenant la verite, et un test fixe
+les trois valeurs (`tests/player-assembly.test.ts`). Agrandir la file rendrait la marge complete, au
+prix d'une mesure de charge reelle a refaire : ce n'est pas fait.
 
 **L'essai Meet le verifie directement : le filet a servi 25 fois, l'anneau n'a jamais deborde.** Ces
 25 cas sont exactement ceux que le vidage n'a pas rattrapes.

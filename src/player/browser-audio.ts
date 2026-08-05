@@ -1,7 +1,13 @@
 import { DecodeWorkerHost } from "./decode-worker-host.ts";
 import { FillGate } from "./fill-gate.ts";
 import type { AudioStage, DiagnosticArea } from "./player-diagnostics.ts";
-import { createPcmBuffer, PCM_CAPACITY_FRAMES, PCM_PROCESSOR_NAME, PCM_SAMPLE_RATE } from "./pcm-worklet.js";
+import {
+  createPcmBuffer,
+  NET_CEILING_MAX_MS,
+  PCM_CAPACITY_FRAMES,
+  PCM_PROCESSOR_NAME,
+  PCM_SAMPLE_RATE,
+} from "./pcm-worklet.js";
 
 // Ce module cree et detruit les pieces que seul un navigateur fournit : le contexte audio, le
 // processeur qui lit la file PCM, et le worker de decodage tenu par `decode-worker-host.ts`.
@@ -173,11 +179,10 @@ export class BrowserAudio {
       return;
     }
 
-    // Le plafond demande est ramene aux deux tiers de la file. Il doit rester assez bas pour que la
-    // place restante absorbe ce qu'une rafale ecrit entre deux blocs — le processeur ne verifie
-    // qu'une fois toutes les 2,7 ms, et un plafond colle a la capacite laisserait la file deborder
-    // dans cet intervalle, ce que le filet est precisement charge d'empecher.
-    const maxFrames = Math.round((PCM_CAPACITY_FRAMES * 2) / 3);
+    // Le plafond demande est ramene a la borne de la file. L'appelant applique deja cette borne pour
+    // que la valeur qu'il calcule soit lisible ; elle est reappliquee ici parce qu'elle appartient a
+    // la file et non a l'appelant : la file doit tenir sa garantie quel que soit l'ordre recu.
+    const maxFrames = Math.round((NET_CEILING_MAX_MS * PCM_SAMPLE_RATE) / 1000);
     const ceilingFrames = Math.min(Math.round((ceilingMs * PCM_SAMPLE_RATE) / 1000), maxFrames);
     const keepFrames = Math.round((keepMs * PCM_SAMPLE_RATE) / 1000);
 

@@ -77,13 +77,33 @@ function empreinte(chemin) {
   return createHash("sha256").update(readFileSync(chemin)).digest("hex");
 }
 
-// Cette fonction rend le commit courant du depot, ou `null` quand git ne repond pas.
-function commitCourant() {
+// Cette fonction lance une commande git dans ce depot, ou rend `null` quand git ne repond pas.
+function lireGit(parametres) {
   try {
-    return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+    return execFileSync("git", parametres, { cwd: REPO, encoding: "utf8" }).trim();
   } catch {
     return null;
   }
+}
+
+// Cette fonction decrit le commit d'ou sort la copie, et ajoute `+modifie` quand le moteur a des
+// changements pas encore commites.
+//
+// Ce marqueur est la partie utile. `player:sync` tourne forcement avant le commit qui contient la
+// copie — c'est le commit suivant qui l'emportera — donc sans lui le manifeste annoncerait le commit
+// parent avec l'assurance d'un fait, et personne ne verrait l'erreur. Relancer `player:sync` une
+// fois le moteur commite enleve le marqueur et pose le bon hash : c'est pour cela que
+// `ecrireManifeste` reecrit aussi quand ce seul champ change.
+function decrireCommit() {
+  const hash = lireGit(["rev-parse", "--short", "HEAD"]);
+
+  if (hash === null) {
+    return null;
+  }
+
+  const modifies = lireGit(["status", "--porcelain", "--", ...DOSSIERS.map((dossier) => `src/${dossier}`)]);
+
+  return modifies === null || modifies === "" ? hash : `${hash}+modifie`;
 }
 
 // Cette fonction verifie que le depot du site est bien la, et arrete le script sinon.
@@ -101,7 +121,7 @@ function exigerLeSite() {
 //
 // Les deux chemins sont des parametres pour que les tests puissent la lancer sur des dossiers
 // temporaires. En usage normal, ce sont les deux depots voisins.
-function synchroniser(source = join(REPO, "src"), destination = DESTINATION) {
+function synchroniser(source = join(REPO, "src"), destination = DESTINATION, commit = decrireCommit()) {
   const fichiers = listerFichiers(source);
 
   if (fichiers.length === 0) {
@@ -126,33 +146,50 @@ function synchroniser(source = join(REPO, "src"), destination = DESTINATION) {
     empreintes[fichier] = empreinte(origine);
   }
 
-  ecrireManifeste(empreintes, destination);
+  ecrireManifeste(empreintes, destination, commit);
   ecrireLisezMoi(destination);
 
   console.log(`Moteur copie vers ${relative(process.cwd(), destination)}`);
   console.log(`${fichiers.length} fichiers, ${DOSSIERS.length} dossiers.`);
-  console.log("Pense a committer le depot du site : la copie en fait partie.");
+  console.log(`Commit enregistre : ${commit ?? "inconnu"}`);
+
+  if (typeof commit === "string" && commit.endsWith("+modifie")) {
+    console.log("Le moteur n'est pas commite. Commite-le ici, relance cette commande, puis commite le site.");
+  } else {
+    console.log("Pense a committer le depot du site : la copie en fait partie.");
+  }
 
   return fichiers;
 }
 
 // Cette fonction ecrit le manifeste des empreintes.
 //
-// Le manifeste n'est reecrit que si le contenu du moteur a change. Une copie qui ne change rien ne
-// doit pas produire de difference dans git a cause de la seule date.
-function ecrireManifeste(empreintes, destination) {
+// Le manifeste n'est reecrit que si le contenu du moteur ou le commit d'origine a change. Une copie
+// qui ne change rien ne doit pas produire de difference dans git a cause de la seule date.
+//
+// Le commit compte autant que les empreintes. Sans lui dans cette condition, une copie faite avant
+// son commit — le cas normal — resterait etiquetee du commit parent pour toujours : les empreintes,
+// elles, ne changent pas quand on commite, donc une seconde copie ne reecrirait rien.
+function ecrireManifeste(empreintes, destination, commit) {
   const chemin = join(destination, "manifest.json");
   const ancien = lireManifeste(chemin);
+  const memesFichiers = ancien !== null && JSON.stringify(ancien.fichiers) === JSON.stringify(empreintes);
 
-  if (ancien !== null && JSON.stringify(ancien.fichiers) === JSON.stringify(empreintes)) {
+  if (memesFichiers && ancien.commit === commit) {
     return;
   }
 
   const manifeste = {
     _lisezMoi: "Fichier genere par `npm run player:sync` dans le depot vassi-stream. Ne pas editer.",
     source: "https://github.com/xoravassi/Vassi-Stream",
-    commit: commitCourant(),
-    copieLe: new Date().toISOString().slice(0, 10),
+    commit,
+    // Cette date dit quand le contenu a ete copie, pas quand ce fichier a ete reecrit. Une
+    // reecriture qui ne corrige que le commit garde donc la date d'origine, et la difference lue
+    // dans git ne montre que la correction.
+    copieLe:
+      memesFichiers && typeof ancien.copieLe === "string"
+        ? ancien.copieLe
+        : new Date().toISOString().slice(0, 10),
     fichiers: empreintes,
   };
 
@@ -197,8 +234,14 @@ une etape fragile a une chaine de deploiement qui fonctionne.
 1. Ouvrir le depot **Vassi Stream** (voisin de celui-ci sur le disque).
 2. Modifier le code dans \`src/player/\` ou \`src/protocol/\`.
 3. Y lancer \`npm run check\` — les tests du moteur y vivent.
-4. Y lancer \`npm run player:sync\` — ce dossier est reecrit.
-5. Committer **les deux depots**.
+4. **Y committer le moteur.** Le champ \`commit\` du manifeste enregistre d'ou sort
+   cette copie : le commit doit donc exister avant qu'elle soit faite.
+5. Y lancer \`npm run player:sync\` — ce dossier est reecrit.
+6. Committer ce depot-ci.
+
+Une copie faite avant son commit n'est pas perdue : le manifeste porte alors
+\`<commit>+modifie\`, et relancer \`npm run player:sync\` apres coup pose le bon commit
+sans rien recopier d'autre.
 
 ## Comment savoir si la copie est a jour
 
@@ -206,6 +249,8 @@ Dans le depot Vassi Stream : \`npm run player:check\`.
 Il compare les empreintes de \`manifest.json\` et dit exactement quel fichier differe.
 Cette commande fait partie de \`npm run check\`, la verification lancee a chaque etape
 du projet : une copie oubliee se voit donc immediatement, la-bas et non ici.
+Elle signale aussi un manifeste marque \`+modifie\`, sans echouer pour autant : les
+fichiers sont bons, seule leur etiquette est en retard.
 
 ## Ce qu'il y a dedans
 
@@ -271,6 +316,14 @@ function verifier(source = join(REPO, "src"), destination = DESTINATION) {
         problemes.push(`manifeste perime : ${fichier}`);
       }
     }
+  }
+
+  // Ce rappel ne fait pas echouer la verification. Un manifeste marque decrit une copie exacte dont
+  // seule l'etiquette est en retard, et le moteur du site est bel et bien le bon : echouer la-dessus
+  // rendrait `npm run check` rouge a chaque commit, y compris ceux qui ne touchent pas au moteur.
+  if (manifeste !== null && typeof manifeste.commit === "string" && manifeste.commit.endsWith("+modifie")) {
+    console.log(`Le manifeste porte ${manifeste.commit} : la copie a ete faite avant son commit.`);
+    console.log("Relance npm run player:sync une fois le moteur commite pour poser le bon commit.");
   }
 
   if (problemes.length === 0) {

@@ -31,15 +31,54 @@ passer inapercue jusqu'a la production.
 Sur une machine ou le depot du site n'est pas installe, `player:check` le dit et reussit :
 `npm run check` reste utilisable partout.
 
-## Comment modifier le moteur
+## La manipulation, en entier
 
-1. Modifier le code **ici**, dans `src/player/` ou `src/protocol/`.
-2. `npm run check` — les tests du moteur vivent ici.
-3. `npm run player:sync`.
-4. Committer **les deux depots**. La copie fait partie du site.
+C'est la seule chose a retenir de ce document. Elle est ecrite pour etre suivie sans rien savoir
+d'autre, et l'ordre compte : **le commit du moteur vient avant la copie**, pour la raison expliquee
+plus bas.
 
-Ne jamais editer les fichiers dans `frontend/src/lib/vassi-stream/` : la copie suivante les ecrase.
-Un `README.md` le rappelle sur place.
+**1. Modifier et tester le moteur, dans `vassi-stream`.**
+
+```powershell
+# le code du moteur est dans src/player/ et src/protocol/
+npm.cmd run check
+```
+
+**2. Committer le moteur, toujours dans `vassi-stream`.**
+
+```powershell
+git add -A
+git commit -m "ce que le moteur fait maintenant"
+git push
+```
+
+**3. Copier vers le site, toujours depuis `vassi-stream`.**
+
+```powershell
+npm.cmd run player:sync
+```
+
+La commande dit ce qu'elle a copie et quel commit elle a enregistre. Si elle affiche
+`Le moteur n'est pas commite`, c'est l'etape 2 qui a ete sautee : commiter, puis relancer cette
+commande.
+
+**4. Committer le site, dans `vassi.click`.**
+
+```powershell
+git add -A
+git commit -m "moteur audio a jour"
+git push
+```
+
+**Ne jamais editer les fichiers dans `frontend/src/lib/vassi-stream/`** : la copie suivante les
+ecrase sans prevenir. Un `README.md` le rappelle sur place, dans le dossier lui-meme.
+
+### Si tout est oublie
+
+Il n'y a rien a retenir par coeur. `npm run check` echoue tant que la copie du site est en retard,
+et son message donne la commande a lancer. Le pire cas — copier avant de commiter — ne casse rien
+non plus : le manifeste porte alors `+modifie`, et `player:check` rappelle a chaque passage qu'il
+suffit de relancer `player:sync`.
 
 ## Ou les deux depots doivent se trouver
 
@@ -90,11 +129,28 @@ Le script est ecrit pour que les erreurs previsibles soient impossibles plutot q
   difference reelle, et elle se voit.
 - **Les deux dossiers gardent leurs noms.** Le decodeur importe `../protocol/audio-packet.ts` : les
   laisser cote a cote garde cet import valide sans toucher une ligne du moteur.
-- **Le manifeste n'est reecrit que si le contenu change.** Une copie qui ne change rien ne produit
-  aucune difference dans git.
+- **Le manifeste n'est reecrit que si le contenu ou le commit change.** Une copie qui ne change rien
+  ne produit aucune difference dans git.
 
 `tests/player-sync.test.ts` couvre chacun de ces points, plus le cas qui compte le plus : un seul
 octet different entre les deux copies doit faire echouer la verification.
+
+## Pourquoi commiter avant de copier
+
+Le champ `commit` du manifeste dit de quel commit sort la copie. C'est ce qui permet, en ouvrant le
+site, de savoir quelle version du moteur il embarque.
+
+Copier avant de commiter est le geste naturel, et il donnait un manifeste qui pointait sur le commit
+**parent** : `player:sync` lit `HEAD`, et `HEAD` est encore le commit precedent tant que le nouveau
+n'existe pas. Rien ne le disait, et resynchroniser apres coup ne corrigeait rien puisque les
+empreintes, elles, n'avaient pas bouge.
+
+Deux changements ferment ce piege. Le manifeste porte `<commit>+modifie` quand le moteur a des
+changements pas encore commites : l'etiquette avoue alors son retard au lieu d'affirmer un faux.
+Et il est reecrit quand ce seul champ change, donc relancer `player:sync` apres le commit pose le bon
+nom sans recopier un octet ni bouger la date de copie. `player:check` signale un manifeste marque,
+sans echouer : les fichiers sont bons, seule l'etiquette est en retard, et echouer la-dessus rendrait
+`npm run check` rouge a chaque commit du depot, y compris ceux qui ne touchent pas au moteur.
 
 ## Ce que le site a du ajouter de son cote
 

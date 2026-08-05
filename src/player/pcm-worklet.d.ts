@@ -8,6 +8,7 @@ export declare const PCM_PROCESSOR_NAME: string;
 export declare const PCM_CHANNELS: number;
 export declare const PCM_SAMPLE_RATE: number;
 export declare const PCM_CAPACITY_FRAMES: number;
+export declare const NET_CEILING_MAX_MS: number;
 export declare const CONTROL_WRITE_INDEX: number;
 export declare const CONTROL_READ_INDEX: number;
 export declare const CONTROL_UNDERRUNS: number;
