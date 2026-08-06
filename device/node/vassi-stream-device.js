@@ -76,8 +76,10 @@ const publisher = new Publisher({
 	// L'etat du relais sort sur un mot different de celui du pont : les deux restent lisibles
 	// separement dans le device, et le patch du bloc 5 continue de fonctionner sans modification.
 	onState: (state, detail) => send("publisher", state, detail),
-	// L'encodeur ne tourne que pendant une session acceptee par le relais.
-	onEncoder: (action) => send("encoder", action)
+	// L'encodeur ne tourne que pendant une session acceptee par le relais. Il recoit deux sortes
+	// d'ordres : `start` et `stop`, sans valeur, et `bitrate` suivi du debit a appliquer, que le
+	// regulateur revoit pendant tout le direct.
+	onEncoder: (action, value) => (value === undefined ? send("encoder", action) : send("encoder", action, value))
 });
 
 const bridge = new FrameBridge({
@@ -170,6 +172,16 @@ Max.addHandler("stats", () => {
 		publisher.stats.framesDropped,
 		publisher.stats.sessions,
 		publisher.stats.reconnects
+	);
+	// Le debit reellement produit, le plafond choisi, et le retard courant du lien montant. Ces trois
+	// chiffres ensemble disent si le lien tient : un debit colle au plafond avec un retard nul est un
+	// lien sain, un debit qui s'en ecarte est un lien qui retrecit.
+	const bitrate = publisher.bitrateController;
+	send(
+		"bitrate-stats",
+		bitrate === null ? 0 : bitrate.report().applied,
+		bitrate === null ? 0 : bitrate.report().ceiling,
+		Math.round(publisher.oldestPendingMs())
 	);
 });
 

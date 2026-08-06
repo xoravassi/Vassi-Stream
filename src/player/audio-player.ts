@@ -60,11 +60,15 @@ export class AudioPlayer {
     decoded: 0,
     refused: 0,
     discontinuities: 0,
+    concealedMs: 0,
     underruns: 0,
     overflows: 0,
     skips: 0,
   };
   private lastRefusal: string | null = null;
+  // Ce dernier trou dit ou le son a disparu : sur le poste Ableton, ou entre le relais et cet
+  // auditeur. Le compteur de discontinuites, lui, dit seulement combien il y en a eu.
+  private lastGap: { reason: string; missingMs: number; recovered: boolean } | null = null;
   private lastPacketAt: number | null = null;
   private lastLevelAt: number | null = null;
   private bufferMs = 0;
@@ -86,7 +90,17 @@ export class AudioPlayer {
     this.audio = new BrowserAudio(setup, {
       onLevel: (availableMs, underruns, overflows, skips) =>
         this.handleLevel(availableMs, underruns, overflows, skips),
-      onDiscontinuity: () => this.machine.discontinuity(),
+      // Un trou comble sur place n'interrompt pas la lecture : le decodeur a ecrit la duree
+      // manquante dans la file, la chronologie est juste, et rebufferiser ne ferait qu'ajouter du
+      // silence a un trou deja passe. Seul un trou trop grand pour etre comble fait repartir la
+      // bufferisation, parce que la file a alors ete jetee.
+      onDiscontinuity: (note) => {
+        this.lastGap = note;
+
+        if (!note.recovered) {
+          this.machine.discontinuity();
+        }
+      },
       onRefusal: (reason) => {
         this.lastRefusal = reason;
       },
@@ -97,6 +111,7 @@ export class AudioPlayer {
         this.counters.decoded = stats.decoded;
         this.counters.refused = stats.refused;
         this.counters.discontinuities = stats.discontinuities;
+        this.counters.concealedMs = stats.concealedMs;
         this.lastRefusal = stats.lastRefusal;
       },
       onFailure: (area, reason) => this.fail(area, reason),
@@ -171,6 +186,9 @@ export class AudioPlayer {
       refused: this.counters.refused,
       lastRefusal: this.lastRefusal,
       discontinuities: this.counters.discontinuities,
+      concealedMs: this.counters.concealedMs,
+      lastGapReason: this.lastGap === null ? null : this.lastGap.reason,
+      lastGapMs: this.lastGap === null ? null : this.lastGap.missingMs,
 
       audio: this.audio.stage,
       contextState: this.audio.contextState,

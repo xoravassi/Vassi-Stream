@@ -3,6 +3,7 @@
 const { WebSocket } = require("ws");
 const { readConfig } = require("./publisher-config.js");
 const { backoffDelayMs } = require("./publisher-backoff.js");
+const { BitrateController } = require("./publisher-bitrate.js");
 const protocol = require("./publisher-protocol.js");
 
 // Ces etats sont ceux affiches par le device. Ils ne decrivent que le lien avec le relais.
@@ -34,6 +35,10 @@ const MAX_INBOUND_BYTES = 4096;
 const SEQUENCE_LIMIT = protocol.MAX_UINT32 - 1000;
 // Valeur de `readyState` d'une connexion ouverte, definie par la norme WebSocket.
 const SOCKET_OPEN = 1;
+// Ecart de debit en dessous duquel l'encodeur n'est pas prevenu. La rampe du regulateur avance par
+// tres petits pas, et un message par trame chargerait Max pour rien : seuls les pas qui comptent
+// traversent.
+const BITRATE_STEP_BYTES = 1000;
 
 // Cette classe tient la connexion WebSocket vers le relais et l'etat visible par le device.
 // Elle ne connait ni Max ni le socket loopback : elle recoit des frames deja pretes.
@@ -75,6 +80,18 @@ class Publisher {
 		// Instant ou la connexion courante est passee en direct, ou zero hors direct.
 		this.liveSince = 0;
 		this.discontinuityPending = false;
+		// Ce regulateur decide du debit reellement produit. Il est cree au demarrage du live, quand
+		// la qualite choisie est connue : c'est elle qui devient son plafond.
+		this.bitrateController = null;
+		// Dernier debit annonce a l'encodeur, pour ne pas repeter le meme ordre cinquante fois par
+		// seconde.
+		this.appliedBitrate = 0;
+		// Instants d'envoi des trames audio que la socket n'a pas encore ecrites. L'age de la plus
+		// ancienne est la mesure du retard du lien montant : une duree, donc comparable directement au
+		// budget de latence, et qui commence a croitre des que le systeme cesse d'accepter des octets.
+		// `bufferedAmount` ne le dirait pas — il reste nul tant que le tampon du noyau n'est pas plein,
+		// puis saute d'un coup.
+		this.pendingSends = [];
 		this.stats = { framesSent: 0, framesDropped: 0, bytesSent: 0, sessions: 0, reconnects: 0 };
 	}
 
@@ -108,6 +125,10 @@ class Publisher {
 		this.config = config;
 		this.wanted = true;
 		this.attempt = 0;
+		// La qualite choisie devient le plafond du regulateur, jamais une valeur figee : produire
+		// moins vaut toujours mieux que jeter, et c'est la seule reponse a un lien qui retrecit.
+		this.bitrateController = new BitrateController(this.bitrate);
+		this.appliedBitrate = this.bitrate;
 		this.connect();
 	}
 
@@ -116,6 +137,7 @@ class Publisher {
 	stop(reason = "user_stop") {
 		this.wanted = false;
 		this.clearTimers();
+		this.bitrateController = null;
 		this.onEncoder("stop");
 
 		if (this.state === LIVE && this.session !== null) {
@@ -250,6 +272,10 @@ class Publisher {
 			return false;
 		}
 
+		// Le debit est revu a chaque trame, avant tout abandon. C'est l'ordre qui compte : jeter est
+		// l'aveu que le lien ne suit plus, et produire moins evite d'en arriver la.
+		this.reviewBitrate();
+
 		// Une sortie reseau en retard signifie que l'audio le plus ancien serait joue trop tard.
 		// La frame est abandonnee et la suivante porte le bit de discontinuite.
 		if (this.socket.bufferedAmount > MAX_BUFFERED_BYTES) {
@@ -288,8 +314,56 @@ class Publisher {
 		this.discontinuityPending = false;
 		this.stats.framesSent += 1;
 		this.stats.bytesSent += packet.length;
-		this.trySend(packet);
+		this.trackedSend(packet);
 		return true;
+	}
+
+	// Cette methode fait avancer le regulateur d'une trame et transmet le debit qui en sort.
+	//
+	// Un ordre ne part que lorsque le debit a bouge d'assez : la rampe du regulateur avance par pas
+	// minuscules, et cinquante messages par seconde vers Max ne diraient rien de plus.
+	reviewBitrate() {
+		if (this.bitrateController === null) {
+			return;
+		}
+
+		const applied = this.bitrateController.update(this.oldestPendingMs(), this.now());
+
+		if (Math.abs(applied - this.appliedBitrate) < BITRATE_STEP_BYTES) {
+			return;
+		}
+
+		this.appliedBitrate = applied;
+		this.onEncoder("bitrate", applied);
+	}
+
+	// Cette methode rend l'age de la plus vieille trame que la socket n'a pas encore ecrite.
+	oldestPendingMs() {
+		const oldest = this.pendingSends[0];
+
+		return oldest === undefined ? 0 : this.now() - oldest;
+	}
+
+	// Cette methode envoie une trame audio en notant combien de temps la socket met a l'accepter.
+	//
+	// `ws` rend la main a ce rappel quand les octets sont ecrits sur le socket, donc acceptes par le
+	// systeme. Tant qu'il ne revient pas, le lien montant est en retard, et c'est cette duree que le
+	// regulateur lit. Les rappels arrivent dans l'ordre des envois : retirer le plus ancien suffit.
+	trackedSend(packet) {
+		const socket = this.socket;
+
+		if (socket === null || socket.readyState !== SOCKET_OPEN) {
+			return;
+		}
+
+		this.pendingSends.push(this.now());
+
+		try {
+			socket.send(packet, () => this.pendingSends.shift());
+		} catch (error) {
+			this.pendingSends.shift();
+			this.dropSocket("envoi impossible");
+		}
 	}
 
 	// Cette methode place une frame du pont sur la chronologie de la session courante.
@@ -349,6 +423,13 @@ class Publisher {
 		this.liveSince = 0;
 		this.closeReason = "";
 		this.authPending = false;
+		// Les rappels d'envoi de la connexion perdue n'arriveront jamais : les garder ferait croire a
+		// un retard permanent et bloquerait le debit au plancher pour toujours.
+		this.pendingSends = [];
+		// Le lien d'apres n'a aucune raison de ressembler a celui d'avant : le debit repart du
+		// plafond et redescend si besoin.
+		this.bitrateController?.reset();
+		this.appliedBitrate = this.bitrate;
 		this.clearAuthTimer();
 		this.clearSilenceTimer();
 		this.clearHeartbeat();
@@ -410,6 +491,7 @@ class Publisher {
 		this.closeReason = "";
 		this.authPending = false;
 		this.liveSince = 0;
+		this.pendingSends = [];
 		this.clearSilenceTimer();
 		this.clearHeartbeat();
 

@@ -247,7 +247,25 @@ Le timestamp est un entier non signe de 64 bits exprime en microsecondes. Il ind
 
 Le bit de discontinuite est pose uniquement sur le premier paquet transmis apres une perte ou un abandon local d'audio, par exemple apres un overflow de queue. Avant d'encoder ce paquet, le worker remet l'encodeur Opus a son etat initial avec `OPUS_RESET_STATE`. Une nouvelle session n'utilise pas ce bit pour annoncer son debut, car son nouveau `stream_state` impose deja la remise a zero. Les bits 1 a 7 restent a zero dans la version 1.
 
-Quand le player recoit ce bit, il abandonne le PCM encore en attente, remet le decodeur Opus a son etat initial avec `OPUS_RESET_STATE`, decode le paquet marque puis repasse en bufferisation jusqu'au seuil du profil actif. Il ne genere ni silence ni PLC pour la duree abandonnee, afin de reprendre sur l'audio le plus recent.
+Quand le player recoit ce bit, il remet le decodeur Opus a son etat initial avec `OPUS_RESET_STATE`, comme l'encodeur l'a fait de son cote, puis decode le paquet marque.
+
+Il ne vide pas le PCM en attente. La regle v1 le demandait, et la mesure du 2026-08-06 a montre qu'elle etait nuisible : vider n'avance pas la lecture, puisque le consommateur trouve alors la file vide et ecrit du silence jusqu'a la fin de la rebufferisation, pour retrouver exactement le meme retard qu'avant. Le vidage ne coute que du son deja decode, et sur un lien qui perd regulierement il efface la file plus vite qu'elle ne se remplit.
+
+**Le player ecrit a la place la duree manquante**, mesuree par l'ecart de timestamp et non par l'ecart de numeros de sequence : une perte survenue avant la construction du paquet n'utilise aucun numero, alors qu'elle avance toujours le timestamp. Cette ecriture n'est pas un confort d'ecoute, c'est ce qui garde la chronologie juste : sans elle le trou disparaitrait de la timeline, le niveau de la file baisserait definitivement d'autant, et rien ne le ferait remonter puisque la production et la consommation tournent toutes deux a 48 kHz.
+
+Au-dela de 500 millisecondes manquantes, le comblement s'arrete d'avoir un sens : le silence s'entendrait plus longtemps que la rebufferisation qu'il evite. Le player reprend alors l'ancien traitement — file videe, decodeur remis a zero, bufferisation jusqu'au seuil du profil actif.
+
+La duree manquante est comblee par du silence. Une frame de dissimulation produite par le decodeur s'entendrait mieux, et rien dans ce protocole ne l'interdit : le choix appartient au player.
+
+Un trou dans les numeros de sequence, sans bit de discontinuite, recoit le meme traitement a une exception pres : **le decodeur n'est pas remis a zero.** L'encodeur, lui, n'a rien remis a zero dans ce cas — il ignore que le relais a jete ces paquets — et effacer un etat encore aligne sur le sien allongerait l'artefact au lieu de l'ecourter.
+
+La combinaison des deux signaux dit ou le son a disparu, ce qu'aucun des deux ne dit seul :
+
+| Bit de discontinuite | Trou de sequence | Origine de la perte |
+|---|---|---|
+| pose | oui | le publisher a jete faute de lien montant : il consomme un numero sans envoyer |
+| pose | non | l'encodeur ou le pont a perdu avant de construire le paquet |
+| absent | oui | le relais a jete pour cet auditeur en retard |
 
 ## Paquet audio binaire
 

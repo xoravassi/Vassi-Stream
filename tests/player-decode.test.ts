@@ -118,12 +118,135 @@ test("traite un trou de sequence comme une discontinuite", async (t) => {
   assert.equal(sink.left.length, 2 * 960);
   assert.equal(notes.length, 0);
 
-  // Ce paquet saute deux numeros : le player doit vider le PCM en attente.
+  // Ce paquet saute deux numeros. Le trou vient donc du reseau, apres l'envoi : seul le relais jette
+  // des paquets deja transmis. Il est comble sur place, sans rien jeter de ce qui est deja decode.
   await decoder.push(packets[4] as Uint8Array);
 
-  assert.deepEqual(notes, [{ type: "discontinuity", reason: "sequence_gap" }]);
+  assert.deepEqual(notes, [
+    { type: "discontinuity", reason: "relay_drop", missingMs: 40, recovered: true },
+  ]);
+  // Rien n'est vide : les deux frames deja decodees sont du bon son, et les jeter ne rapprocherait
+  // pas du direct.
+  assert.equal(sink.clears, 0);
+  // Deux frames decodees, plus les 40 ms du trou ecrites en silence, plus la frame de ce paquet.
+  assert.equal(sink.left.length, 5 * 960);
+  assert.equal(decoder.stats().concealedMs, 40);
+});
+
+// Ce test couvre le seul cas ou vider la file est le bon choix : un trou trop grand pour etre
+// comble. Une seconde de silence s'entendrait plus longtemps que la rebufferisation qu'elle evite.
+test("jette la file quand le trou depasse le plafond de comblement", async (t) => {
+  const { decoder, sink, notes } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+  const source = packets[0];
+  assert.ok(source !== undefined);
+
+  await decoder.push(source);
+  assert.equal(sink.left.length, 960);
+
+  // Ce paquet arrive une seconde plus tard sur la chronologie : 980 ms manquent, bien au-dela des
+  // 500 ms comblables.
+  const loin = encodeAudioPacket({
+    sessionId: FIXTURE_SESSION_ID,
+    sequenceNumber: 50,
+    timestampMicros: 1000000n,
+    payload: source.subarray(28),
+    flags: 0,
+  });
+
+  await decoder.push(loin);
+
+  assert.deepEqual(notes, [
+    { type: "discontinuity", reason: "relay_drop", missingMs: 980, recovered: false },
+  ]);
   assert.equal(sink.clears, 1);
   assert.equal(sink.left.length, 960);
+  assert.equal(decoder.stats().concealedMs, 0);
+});
+
+// Ce test decrit un lien degrade qui ne laisse passer qu'un tiers des paquets : un trou toutes les
+// quelques trames, pendant longtemps. C'est la situation ou la continuite se joue.
+//
+// Deux proprietes la definissent, et ce test tient les deux :
+//
+//   1. la file n'est jamais videe, donc le son deja decode n'est jamais perdu ;
+//   2. la chronologie reste exacte — le PCM produit vaut exactement la duree audio couverte, donc la
+//      marge anti-gigue ne s'use pas trou apres trou.
+//
+// La seconde depend entierement du comblement : sans lui la file baisserait de la duree de chaque
+// trou, definitivement, et rien ne la ferait remonter.
+test("garde la file et la chronologie sur un lien qui perd deux paquets sur trois", async (t) => {
+  const { decoder, sink, notes } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+  const source = packets[0];
+  assert.ok(source !== undefined);
+
+  // Un paquet sur trois arrive, cinquante fois de suite.
+  const recus = 50;
+  const pas = 3;
+
+  for (let index = 0; index < recus; index += 1) {
+    await decoder.push(
+      encodeAudioPacket({
+        sessionId: FIXTURE_SESSION_ID,
+        sequenceNumber: index * pas,
+        timestampMicros: BigInt(index * pas) * 20000n,
+        payload: source.subarray(28),
+        flags: 0,
+      }),
+    );
+  }
+
+  // Aucun vidage : chaque trou laisse intact le son deja accumule.
+  assert.equal(sink.clears, 0);
+
+  // Le PCM produit couvre exactement la duree audio du premier au dernier paquet : chaque frame
+  // recue, plus chaque trou comble.
+  const framesCouvertes = (recus - 1) * pas + 1;
+  assert.equal(sink.left.length, framesCouvertes * 960);
+
+  // Chaque trou vaut deux frames manquantes, et il y en a un par paquet sauf le premier.
+  assert.equal(decoder.stats().concealedMs, (recus - 1) * 40);
+
+  // Chaque trou est signale comme comble : la machine d'etats n'a donc jamais a rebufferiser.
+  assert.equal(notes.length, recus - 1);
+  assert.ok(notes.every((note) => note.type === "discontinuity" && note.recovered === true));
+});
+
+// Ce test verifie la troisieme origine possible d'un trou : le poste Ableton a perdu de l'audio
+// avant de construire le paquet. Aucun numero de sequence n'est saute — l'encodeur ne numerote que
+// ce qu'il construit — mais le timestamp avance de la duree perdue.
+test("reconnait une perte survenue dans l'encodeur, sans trou de sequence", async (t) => {
+  const { decoder, sink, notes } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+  const source = packets[0];
+  assert.ok(source !== undefined);
+
+  await decoder.push(source);
+
+  // Numero suivant, mais timestamp avance de trois frames au lieu d'une : 40 ms ont disparu chez
+  // l'encodeur. Le bit accompagne toujours ce cas, pose par le device.
+  const perdu = encodeAudioPacket({
+    sessionId: FIXTURE_SESSION_ID,
+    sequenceNumber: 1,
+    timestampMicros: 60000n,
+    payload: source.subarray(28),
+    flags: 1,
+  });
+
+  await decoder.push(perdu);
+
+  assert.deepEqual(notes, [
+    { type: "discontinuity", reason: "encoder_loss", missingMs: 40, recovered: true },
+  ]);
+  assert.equal(sink.clears, 0);
+  assert.equal(sink.left.length, 4 * 960);
 });
 
 // Ce test verifie que le bit de discontinuite pose par le device produit le meme traitement, sans
@@ -138,7 +261,10 @@ test("traite le bit de discontinuite du device", async (t) => {
 
   await decoder.push(source);
 
-  // Ce paquet reprend le payload de la fixture avec le bit de discontinuite et le numero attendu.
+  // Ce paquet reprend le payload de la fixture avec le bit de discontinuite, le numero attendu et
+  // le timestamp attendu : le device signale une perte, mais aucune duree ne manque reellement.
+  // C'est ce que produit une reconnexion du pont loopback, ou le device se declare non autonome
+  // sans qu'aucun temps audio se soit ecoule.
   const marque = encodeAudioPacket({
     sessionId: FIXTURE_SESSION_ID,
     sequenceNumber: 1,
@@ -149,9 +275,13 @@ test("traite le bit de discontinuite du device", async (t) => {
 
   await decoder.push(marque);
 
-  assert.deepEqual(notes, [{ type: "discontinuity", reason: "flag" }]);
-  assert.equal(sink.clears, 1);
-  assert.equal(sink.left.length, 960);
+  assert.deepEqual(notes, [
+    { type: "discontinuity", reason: "encoder_loss", missingMs: 0, recovered: true },
+  ]);
+  // Le bit remet le decodeur a zero, comme l'encodeur l'a fait de son cote. Aucune duree ne manque :
+  // il n'y a donc rien a combler, et rien a jeter.
+  assert.equal(sink.clears, 0);
+  assert.equal(sink.left.length, 2 * 960);
 });
 
 // Ce test verifie que les paquets recus pendant une pause sont jetes. Reprendre doit repartir du

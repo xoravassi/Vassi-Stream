@@ -32,6 +32,9 @@ const SAIN: PlayerDiagnostics = {
   refused: 0,
   lastRefusal: null,
   discontinuities: 0,
+  concealedMs: 0,
+  lastGapReason: null,
+  lastGapMs: null,
 
   audio: "RUNNING",
   contextState: "running",

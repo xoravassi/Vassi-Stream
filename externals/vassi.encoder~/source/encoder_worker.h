@@ -34,6 +34,10 @@ struct t_encoder_worker {
   t_atomic_worker_long error;
   t_atomic_worker_long input_rate;
   t_atomic_worker_long bitrate;
+  // Debit demande par le regulateur du publisher, pas encore applique. Il traverse un atomique parce
+  // que Max l'ecrit depuis son thread message alors que l'encodeur vit sur le thread du worker, et
+  // que libopus n'est pas reentrant sur un meme etat d'encodeur. Zero veut dire « rien de nouveau ».
+  t_atomic_worker_long pending_bitrate;
   t_atomic_worker_long last_payload_size;
   t_atomic_worker_long last_flags;
   t_atomic_worker_double last_left;
@@ -63,6 +67,12 @@ void encoder_worker_stop(t_encoder_worker *worker);
 
 // Cette fonction indique si une instance de thread est actuellement possedee.
 bool encoder_worker_is_started(const t_encoder_worker *worker);
+
+// Cette fonction demande un nouveau debit pendant un direct, depuis le thread message de Max.
+//
+// Elle ne touche pas a l'encodeur : elle depose la valeur, que le thread du worker applique avant
+// son prochain bloc. C'est la seule facon sure de changer un reglage de libopus depuis l'exterieur.
+bool encoder_worker_request_bitrate(t_encoder_worker *worker, int bitrate);
 
 // Cette fonction prepare le sample rate et le profil du prochain live.
 bool encoder_worker_configure(t_encoder_worker *worker, unsigned int input_rate, int bitrate);
