@@ -19,12 +19,18 @@ export type AudioStage = "IDLE" | "STARTING" | "RUNNING" | "FAILED" | "CLOSED";
 export type PlayerDiagnostics = {
   state: PlayerState;
   sessionId: number | null;
+  // Debit annonce par la session, en bits par seconde, ou `null` hors direct. C'est un plafond : le
+  // device produit en dessous des qu'il juge que le lien ne suit plus.
+  sessionBitrate: number | null;
   targetBufferMs: number;
   shared: boolean;
 
   // Reseau : ce qui arrive du relais.
   connected: boolean;
   packets: number;
+  // Octets audio recus depuis la connexion. Rapporte a une duree, il donne le debit reellement porte
+  // par le lien, en-tetes du protocole compris.
+  bytes: number;
   sincePacketMs: number | null;
   // Duree ecoulee depuis l'annonce de la session en cours, ou `null` hors direct. Elle remplace la
   // precedente tant qu'aucun paquet n'est arrive.

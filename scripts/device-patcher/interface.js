@@ -36,6 +36,10 @@ const CONTENT_WIDTH = DEVICE_WIDTH - MARGIN * 2;
 // libelles sont en 10 dans 453 cas contre 122 en 9, et toutes les commandes sans exception. La
 // valeur qu'on lit d'abord — ici l'etat du direct — est la seule a monter plus haut.
 const LABEL_SIZE = 10;
+// Largeur reservee a la version, a droite de la ligne d'etat de l'encodeur. Elle tient la forme la
+// plus longue que `stamp-version.js` produit — `v0.1.0 · build 9999+` — et laisse a la ligne d'etat
+// les deux tiers de la largeur, dont elle a besoin : ses phrases sont plus longues.
+const VERSION_WIDTH = 100;
 const STATE_SIZE = 16;
 
 // Un libelle occupe sa police plus huit pixels. Cette regle se lit dans les memes 78 devices, sans
@@ -193,7 +197,20 @@ export function buildInterface() {
 		button("save-button", "Enregistrer", [620, 130, 120, 15], [64, 86, 120, 15], "Enregistrer"),
 		button("check-button", "Tester le relais", [750, 130, 120, 15], [192, 86, 120, 15], "Tester"),
 		label("relay-line", "relais non testé", [620, 155, 250, 18], [MARGIN, 103, CONTENT_WIDTH, textBox(LABEL_SIZE)], LABEL_SIZE),
-		label("bridge-line", "encodeur en attente", [620, 175, 250, 18], [MARGIN, 121, CONTENT_WIDTH, textBox(LABEL_SIZE)], LABEL_SIZE),
+		// Cette ligne partage sa hauteur avec la version : l'etat de l'encodeur tient a gauche, la
+		// version se range a droite. La page des reglages n'a plus de ligne libre sous celle-ci, et
+		// une version merite moins de place qu'un etat.
+		label("bridge-line", "encodeur en attente", [620, 175, 250, 18], [MARGIN, 121, CONTENT_WIDTH - VERSION_WIDTH, textBox(LABEL_SIZE)], LABEL_SIZE),
+		// La version repond a la question qu'on se pose devant un device qui semble ne pas avoir
+		// change : est-ce bien la derniere installation qui tourne. Alignee a droite, elle se lit
+		// apres les deux lignes d'etat qui la precedent — c'est une reference qu'on va chercher, pas
+		// une information qu'on suit.
+		versionLabel("version-line", [620, 195, 250, 18], [
+			MARGIN + CONTENT_WIDTH - VERSION_WIDTH,
+			121,
+			VERSION_WIDTH,
+			textBox(LABEL_SIZE)
+		]),
 
 		// --- Bandeau du bas, visible sur les deux pages ------------------------------------
 		//
@@ -228,9 +245,28 @@ export function buildInterface() {
 			"save-button",
 			"check-button",
 			"relay-line",
-			"bridge-line"
+			"bridge-line",
+			"version-line"
 		]
 	};
+}
+
+// Cette fonction cree le libelle de version : un libelle ordinaire, aligne a droite.
+//
+// `justification: 2` range le texte contre le bord droit du device. Sans lui, une version courte
+// flotterait au milieu de sa boite et paraitrait mal posee a cote de l'etat qui la precede.
+function versionLabel(id, at, shows) {
+  return control(id, "live.comment", {
+    at,
+    shows,
+    outlets: 0,
+    attributes: {
+      text: "version inconnue",
+      fontsize: LABEL_SIZE,
+      textcolor: PALETTE.textDim,
+      justification: 2
+    }
+  });
 }
 
 // Cette fonction cree un libelle.

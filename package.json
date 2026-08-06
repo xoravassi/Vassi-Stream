@@ -15,6 +15,8 @@
     "device:build": "node scripts/make-device.js",
     "postdevice:build": "npm run device:install",
     "device:preview": "node scripts/device-preview.js",
+    "version:stamp": "node scripts/stamp-version.js",
+    "predevice:install": "node scripts/stamp-version.js",
     "device:install": "node scripts/install-device.js",
     "config:publisher": "node scripts/set-publisher-config.js",
     "relay": "node relay/main.ts",

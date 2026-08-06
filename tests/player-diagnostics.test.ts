@@ -19,11 +19,13 @@ import {
 const SAIN: PlayerDiagnostics = {
   state: "PLAYING",
   sessionId: 4242,
+  sessionBitrate: 256000,
   targetBufferMs: 400,
   shared: true,
 
   connected: true,
   packets: 1500,
+  bytes: 1500 * 668,
   sincePacketMs: 20,
   sinceLiveMs: 30000,
 

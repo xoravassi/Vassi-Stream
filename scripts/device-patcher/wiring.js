@@ -25,7 +25,7 @@ import { connect, message, object } from "./parts.js";
 const NODE_SCRIPT = "node.script vassi-stream-device.js @autostart 1";
 
 // Ces mots sont ceux que le script Node place devant ses messages, dans cet ordre.
-const NODE_MESSAGES = ["port", "publisher", "encoder", "config", "saved", "relay", "status", "urlfield"];
+const NODE_MESSAGES = ["port", "publisher", "encoder", "config", "saved", "relay", "status", "urlfield", "version"];
 
 // Ces cinq etats viennent de `publisher.js`. Chacun recoit un mot francais affichable.
 const STATES = [
@@ -101,6 +101,9 @@ export function buildWiring(pages) {
 		object("bridge-name", "prepend Encodeur", { at: [1080, 480, 120, 22], inlets: 2 }),
 		object("bridge-set", "prepend set", { at: [1080, 520, 80, 22], inlets: 2 }),
 		object("url-set", "prepend set", { at: [1220, 480, 80, 22], inlets: 2 }),
+		// La version arrive de Node sous forme de texte et va telle quelle dans son libelle :
+		// `prepend set` est ce qu'attend un `live.comment` pour changer ce qu'il affiche.
+		object("version-set", "prepend set", { at: [1320, 480, 80, 22], inlets: 2 }),
 		object("saved-split", "zl slice 1", { at: [880, 540, 80, 22], inlets: 2, outlets: 2, outletTypes: ["", ""] }),
 		object("saved-ok", "sel 1", { at: [880, 580, 60, 22], inlets: 2, outlets: 2, outletTypes: ["bang", ""] }),
 		message("token-clear", "clear", { at: [880, 620, 50, 22] }),
@@ -154,6 +157,7 @@ function buildLines() {
 		connect("node-route", 5, "relay-set", 0),
 		connect("node-route", 6, "bridge-name", 0),
 		connect("node-route", 7, "url-set", 0),
+		connect("node-route", 8, "version-set", 0),
 
 		// L'etat se separe en un mot et un detail : le mot est traduit, le detail est affiche tel quel.
 		connect("state-split", 0, "state-select", 0),
@@ -169,6 +173,7 @@ function buildLines() {
 		connect("bridge-name", 0, "bridge-set", 0),
 		connect("bridge-set", 0, "bridge-line", 0),
 		connect("url-set", 0, "url-field", 0),
+		connect("version-set", 0, "version-line", 0),
 
 		// Un enregistrement reussi efface le champ du token et affiche son resultat.
 		connect("saved-split", 0, "saved-ok", 0),

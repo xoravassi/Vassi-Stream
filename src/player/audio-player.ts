@@ -56,6 +56,10 @@ export class AudioPlayer {
   // son ne sort pas : les paquets arrivent-ils, sont-ils decodes, le thread audio tourne-t-il ?
   private counters = {
     packets: 0,
+    // Octets audio recus du relais. Compte avec les paquets, il donne le debit reellement porte par
+    // le lien — la seule mesure qui vienne du bout de la chaine, apres tout ce qui a pu se produire
+    // en amont. Le debit annonce par la session, lui, n'est qu'un plafond.
+    bytes: 0,
     accepted: 0,
     decoded: 0,
     refused: 0,
@@ -173,11 +177,13 @@ export class AudioPlayer {
     return {
       state: status.state,
       sessionId: status.session === null ? null : status.session.sessionId,
+      sessionBitrate: status.session === null ? null : status.session.bitrate,
       targetBufferMs: this.machine.targetBufferMs(),
       shared: this.audio.shared,
 
       connected: this.socket.connected,
       packets: this.counters.packets,
+      bytes: this.counters.bytes,
       sincePacketMs: this.lastPacketAt === null ? null : at - this.lastPacketAt,
       sinceLiveMs: this.liveSince === null ? null : at - this.liveSince,
 
@@ -281,6 +287,9 @@ export class AudioPlayer {
   // Cette methode compte un paquet recu et le transmet aux pieces du navigateur.
   private sendPacket(packet: ArrayBuffer): void {
     this.counters.packets += 1;
+    // La taille est lue avant le transfert au worker : un `ArrayBuffer` transfere est vide pour son
+    // ancien proprietaire, et sa longueur y retombe a zero.
+    this.counters.bytes += packet.byteLength;
     this.lastPacketAt = this.now();
     this.audio.sendPacket(packet);
   }

@@ -7,6 +7,24 @@ const { ConfigEditor } = require("./config-editor.js");
 const { checkRelay } = require("./relay-health.js");
 const protocol = require("./publisher-protocol.js");
 
+// Cette fonction rend la version gravee par `scripts/stamp-version.js` a l'installation.
+//
+// Elle repond a une seule question, posee devant un device qui ne semble pas avoir change : ce qui
+// tourne dans Ableton est-il bien ce qui vient d'etre installe. Un fichier absent donne une version
+// inconnue plutot qu'une erreur : le device doit demarrer meme lance depuis un dossier non installe.
+function readVersion() {
+	try {
+		const version = require("./version.json");
+		// Le suffixe marque un dossier modifie depuis son dernier commit : le numero de build ne le
+		// dirait pas, puisqu'il ne compte que les commits.
+		const suffixe = version.etat === "propre" ? "" : "+";
+
+		return `v${version.version} · build ${version.numero}${suffixe}`;
+	} catch (error) {
+		return "version inconnue";
+	}
+}
+
 // Ces tableaux traduisent les trois positions des dials du device en valeurs du protocole.
 const QUALITY_BITRATES = protocol.ALLOWED_BITRATES;
 const LATENCY_PROFILES = protocol.ALLOWED_LATENCY_PROFILES;
@@ -235,6 +253,9 @@ bridge
 	.listen()
 	.then((port) => {
 		send("port", port);
+		// La version part une seule fois, a l'ouverture du device : elle ne change pas tant que le
+		// script tourne, et l'onglet Reglages la garde affichee.
+		send("version", readVersion());
 		publishBridgeStatus("stopped", "aucun encodeur connecte");
 		// L'etat de la configuration part sans attendre de question : le device montre des
 		// l'ouverture s'il manque une adresse ou un token, avant tout clic sur Lancer.

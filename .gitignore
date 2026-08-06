@@ -28,3 +28,7 @@ Desktop.ini
 
 # La maquette du device se regenere a la demande depuis le patcher : elle n'a rien a suivre.
 device-preview.html
+
+# La version du device est gravee a l'installation depuis l'etat de git. La suivre creerait une
+# boucle : le fichier porte le commit courant, donc le commiter changerait ce qu'il decrit.
+device/node/version.json
