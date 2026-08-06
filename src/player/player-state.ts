@@ -62,6 +62,27 @@ export const RECOVERY_CONFIRM_STEP = 2;
 // secondes et demie de silence apres que tout est rentre dans l'ordre.
 export const RECOVERY_CONFIRM_MAX_REPORTS = 25;
 
+// Les trois constantes suivantes rejouent le meme principe pour les rebufferisations declenchees
+// par une discontinuite (`discontinuity()`), pas par une derive (`reportLevel()`). Un lien
+// descendant degrade produit des trous rapproches — c'est ce que le journal du 6 aout 2026 montre
+// sous un throttle 3G, plusieurs cycles REBUFFERING/PLAYING en une poignee de secondes — et une
+// reprise a deux rapports fixes a chaque fois laisse le player flapper au lieu d'attendre que la
+// rafale de trous se calme.
+//
+// Ce compteur reste volontairement separe de celui de la derive (`driftFlushes`) : les deux causes
+// ne se ressemblent pas. Un vidage de derive signale un backlog physique — le thread audio s'est
+// arrete, la file a grossi sans etre consommee — et sa confirmation attend que ce backlog ait eu le
+// temps de se resorber, ce qui justifie une escalade longue (jusqu'a 25 rapports). Une discontinuite
+// ne laisse rien de tel derriere elle : le trou est deja comble ou deja rebufferise, rien ne dit
+// qu'un vidage de derive en cours ait une cause commune avec elle, et partager le meme compteur
+// ferait payer a une discontinuite isolee la confirmation deja allongee par une rafale de derive
+// sans rapport. D'ou des constantes propres, avec un plafond bien plus bas : une discontinuite
+// comblee ne devrait normalement produire aucun manque perceptible, la confirmation n'a donc pas a
+// s'etirer aussi longtemps qu'une derive reelle.
+export const GAP_RECOVERY_CONFIRM_REPORTS = 2;
+export const GAP_RECOVERY_CONFIRM_STEP = 2;
+export const GAP_RECOVERY_CONFIRM_MAX_REPORTS = 6;
+
 // Ce type regroupe tout ce que la page a besoin de connaitre.
 export type PlayerStatus = {
   state: PlayerState;
@@ -88,6 +109,11 @@ export class PlayerStateMachine {
   private recoveringFromDrift = false;
   private stableReports = 0;
   private driftFlushes = 0;
+  // Ces trois champs rejouent les memes trois roles pour la rafale de discontinuites, en parallele
+  // et independamment de la rafale de derive ci-dessus : voir `GAP_RECOVERY_CONFIRM_STEP`.
+  private recoveringFromGap = false;
+  private gapStableReports = 0;
+  private gapFlushes = 0;
   private onChange: (status: PlayerStatus) => void;
 
   constructor(onChange: (status: PlayerStatus) => void = () => {}) {
@@ -121,6 +147,7 @@ export class PlayerStateMachine {
       this.session = null;
       this.lastUnderruns = 0;
       this.resetDriftRecovery();
+      this.resetGapRecovery();
       this.moveTo("OFFLINE");
       return;
     }
@@ -136,6 +163,7 @@ export class PlayerStateMachine {
 
     this.lastUnderruns = 0;
     this.resetDriftRecovery();
+    this.resetGapRecovery();
 
     if (this.state === "PAUSED") {
       return;
@@ -156,6 +184,7 @@ export class PlayerStateMachine {
     this.session = null;
     this.lastUnderruns = 0;
     this.resetDriftRecovery();
+    this.resetGapRecovery();
     this.moveTo("OFFLINE");
   }
 
@@ -221,6 +250,10 @@ export class PlayerStateMachine {
       this.recoveringFromDrift = true;
       this.stableReports = 0;
       this.driftFlushes += 1;
+      // Un vidage de derive est un vidage plus large que celui d'une discontinuite : il jette toute
+      // la file, pas seulement un trou comble. Une rafale de discontinuites en cours n'a plus de sens
+      // une fois ce vidage fait, donc elle n'a pas a allonger la confirmation qui suit.
+      this.resetGapRecovery();
 
       if (this.state === "PLAYING") {
         this.moveTo("REBUFFERING");
@@ -237,23 +270,43 @@ export class PlayerStateMachine {
       // rebond autour du seuil. Sinon un blocage bref suffit a faire osciller le player entre
       // REBUFFERING et PLAYING.
       if (availableMs >= targetBufferMs) {
-        if (!this.recoveringFromDrift) {
+        if (!this.recoveringFromDrift && !this.recoveringFromGap) {
           this.moveTo("PLAYING");
           return;
         }
 
-        // Une reprise qui suit un vidage par derive doit se confirmer sur deux rapports propres
-        // d'affilee : le rattrapage peut arriver par rafale, et un seul rapport correct glisse parfois
-        // entre deux rapports encore trop pleins. Le rendre a `PLAYING` tout de suite ferait repartir
-        // la lecture juste avant que la rafale ne la fasse rebufferiser de nouveau.
-        this.stableReports += 1;
+        // Une reprise qui suit un vidage par derive ou par discontinuite doit se confirmer sur
+        // plusieurs rapports propres d'affilee : le rattrapage peut arriver par rafale, et un seul
+        // rapport correct glisse parfois entre deux rapports encore trop pleins. Le rendre a
+        // `PLAYING` tout de suite ferait repartir la lecture juste avant que la rafale ne la fasse
+        // rebufferiser de nouveau. Les deux rafales se confirment chacune a son rythme : rien
+        // n'empeche qu'elles soient toutes deux en cours a la fois.
+        let confirme = true;
 
-        if (this.stableReports >= this.requiredStableReports()) {
+        if (this.recoveringFromDrift) {
+          this.stableReports += 1;
+
+          if (this.stableReports < this.requiredStableReports()) {
+            confirme = false;
+          }
+        }
+
+        if (this.recoveringFromGap) {
+          this.gapStableReports += 1;
+
+          if (this.gapStableReports < this.requiredGapStableReports()) {
+            confirme = false;
+          }
+        }
+
+        if (confirme) {
           this.resetDriftRecovery();
+          this.resetGapRecovery();
           this.moveTo("PLAYING");
         }
       } else {
         this.stableReports = 0;
+        this.gapStableReports = 0;
       }
 
       return;
@@ -274,13 +327,26 @@ export class PlayerStateMachine {
   }
 
   // Cette methode traite une discontinuite signalee par le decodeur : bit du device ou trou dans
-  // les numeros de sequence. Le PCM en attente est deja jete par le decodeur, donc le player
-  // repasse en bufferisation.
+  // les numeros de sequence, trop grand pour etre comble. Le PCM en attente est deja jete par le
+  // decodeur, donc le player repasse en bufferisation.
+  //
+  // Elle agit aussi pendant une REBUFFERING deja en cours, pas seulement depuis PLAYING : c'est ce
+  // qui permet a une rafale de trous rapproches d'allonger sa propre confirmation, exactement comme
+  // le fait une rafale de derive dans `reportLevel`. `moveTo` ne fait rien de plus qu'emettre si
+  // l'etat ne change pas, donc rappeler REBUFFERING depuis REBUFFERING est sans effet visible : seul
+  // le compteur de rafale avance.
   discontinuity(): void {
-    if (this.state === "PLAYING") {
-      this.resetDriftRecovery();
-      this.moveTo("REBUFFERING");
+    if (this.state !== "PLAYING" && this.state !== "REBUFFERING") {
+      return;
     }
+
+    // Une discontinuite est une cause differente d'une derive : un vidage de derive en cours n'a
+    // plus de sens une fois que le decodeur a lui-meme jete son etat sur un trou trop grand.
+    this.resetDriftRecovery();
+    this.recoveringFromGap = true;
+    this.gapStableReports = 0;
+    this.gapFlushes += 1;
+    this.moveTo("REBUFFERING");
   }
 
   // Cette methode declare une panne. Aucune transition ordinaire n'en sort : seul `recover()` le
@@ -305,6 +371,7 @@ export class PlayerStateMachine {
     this.errorReason = null;
     this.lastUnderruns = 0;
     this.resetDriftRecovery();
+    this.resetGapRecovery();
     this.moveTo(this.session === null ? "OFFLINE" : "READY");
   }
 
@@ -318,13 +385,30 @@ export class PlayerStateMachine {
     return Math.min(Math.max(required, RECOVERY_CONFIRM_REPORTS), RECOVERY_CONFIRM_MAX_REPORTS);
   }
 
-  // Cette methode oublie la rafale en cours. Elle est appelee des qu'une reprise est confirmee, et a
-  // chaque evenement qui rend la rafale precedente sans objet : nouvelle session, coupure,
-  // discontinuite, sortie de panne.
+  // Cette methode oublie la rafale de derive en cours. Elle est appelee des qu'une reprise est
+  // confirmee, et a chaque evenement qui rend la rafale precedente sans objet : nouvelle session,
+  // coupure, vidage de derive posterieur, sortie de panne.
   private resetDriftRecovery(): void {
     this.recoveringFromDrift = false;
     this.stableReports = 0;
     this.driftFlushes = 0;
+  }
+
+  // Cette methode rend le nombre de rapports propres d'affilee exiges avant de reprendre la lecture
+  // apres une rafale de discontinuites. Meme forme que `requiredStableReports`, plafond plus bas :
+  // voir `GAP_RECOVERY_CONFIRM_MAX_REPORTS`.
+  private requiredGapStableReports(): number {
+    const required = GAP_RECOVERY_CONFIRM_REPORTS + GAP_RECOVERY_CONFIRM_STEP * (this.gapFlushes - 1);
+
+    return Math.min(Math.max(required, GAP_RECOVERY_CONFIRM_REPORTS), GAP_RECOVERY_CONFIRM_MAX_REPORTS);
+  }
+
+  // Cette methode oublie la rafale de discontinuites en cours, aux memes moments que
+  // `resetDriftRecovery` oublie celle de derive.
+  private resetGapRecovery(): void {
+    this.recoveringFromGap = false;
+    this.gapStableReports = 0;
+    this.gapFlushes = 0;
   }
 
   // Cette methode rend le seuil de bufferisation de la session courante.

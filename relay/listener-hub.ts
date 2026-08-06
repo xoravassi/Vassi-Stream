@@ -6,15 +6,44 @@ import type { LogFields } from "./log.ts";
 // Ce module tient la liste des auditeurs et leur envoie l'etat puis les paquets audio.
 // Il ne lit jamais le contenu des paquets : il rediffuse les memes octets.
 
-// Au-dela de ce nombre d'octets en attente, la sortie du listener est en retard d'environ deux
-// secondes en qualite Studio. Les paquets suivants sont abandonnes plutot qu'empiles : l'audio
-// ancien n'a plus d'interet dans un direct.
-export const DROP_BYTES = 65536;
-// Au-dela de cette limite, environ seize secondes d'audio, la connexion est consideree bloquee.
-// Elle est coupee : elle ne rattrapera pas son retard et sa file grandirait sans fin.
-export const CLOSE_BYTES = 524288;
+// Ces valeurs recopient le mapping de `LATENCY_TARGET_MS` dans `src/player/player-protocol.ts`. Le
+// relais ne peut pas l'importer — il ne connait rien du navigateur, et ce module tourne sous Node
+// seul — mais un seuil de rejet qui ignore le profil choisi par l'auditeur reproduit exactement le
+// defaut mesure le 6 aout 2026 (`docs/validation/incident-meet-2026-08-06.md`, section 4) : le
+// relais gardait un backlog plus genereux (1,95 s, `DROP_BYTES` a l'ancienne valeur en octets) que
+// ce que l'auditeur tolere lui-meme avant de tout jeter (1,4 s pour Equilibree). Une rafale liberee
+// par le relais apres une congestion poussait alors mecaniquement le player au-dessus de son propre
+// seuil de vidage : les deux mecanismes travaillaient l'un contre l'autre.
+const LATENCY_TARGET_MS: Record<string, number> = { low: 200, balanced: 400, stable: 800 };
+// Meme valeur que `LATENCY_TARGET_MS.balanced`, ecrite a part : un acces par cle sur un `Record`
+// reste `number | undefined` pour le compilateur, y compris pour une cle connue a l'ecriture.
+const DEFAULT_TARGET_MS = 400;
+
+// Cette marge rejoue exactement celle du player (`LATE_MARGIN_MS`, `src/player/player-state.ts`) :
+// au-dela, l'auditeur jette lui-meme tout le son en attente et repart du direct. Le relais doit se
+// delester avant ce point, pas apres : sinon il continue d'envoyer un backlog que l'auditeur va de
+// toute facon jeter des qu'il arrive, ce qui gaspille la bande passante et grossit la rafale de
+// rattrapage qui declenche ce vidage cote player.
+const RELAY_LATE_MARGIN_MS = 1000;
+
+// Au-dela de cette duree de retard, la connexion est consideree bloquee : elle ne rattrapera pas et
+// sa file grandirait sans fin. Une valeur fixe, independante du profil : il ne s'agit plus ici de
+// suivre la tolerance de lecture de l'auditeur, mais de detecter un lien qui ne repond plus du tout.
+export const CLOSE_MS = 8000;
 // Un listener qui ne repond pas a deux pings de suite est considere disparu.
 export const MISSED_PONG_LIMIT = 2;
+
+// Cette fonction rend la duree de retard au-dela de laquelle un auditeur de cette session perd des
+// paquets plutot que d'en accumuler. C'est un temps, pas un nombre d'octets : le debit reel d'une
+// session Opus VBR varie trame a trame (mesure a ~173 kbit/s reels pour un plafond annonce de
+// 256 kbit/s dans l'incident du 6 aout), donc convertir un budget de latence en octets via un debit
+// nominal ou moyen serait systematiquement faux dans un sens ou dans l'autre. Comparer un temps a un
+// temps n'a pas cette approximation.
+function dropThresholdMs(session: SessionConfig | null): number {
+  const target = session === null ? DEFAULT_TARGET_MS : (LATENCY_TARGET_MS[session.latencyProfile] ?? DEFAULT_TARGET_MS);
+
+  return target + RELAY_LATE_MARGIN_MS;
+}
 
 // Ce code de fermeture WebSocket signale que le serveur s'arrete.
 const CLOSE_GOING_AWAY = 1001;
@@ -27,6 +56,13 @@ const CLOSE_TRY_AGAIN_LATER = 1013;
 type Listener = {
   socket: WebSocket;
   missedPongs: number;
+  // Horodatages des paquets audio confies a `send()` mais dont le rappel n'est pas encore revenu :
+  // c'est le systeme qui n'a pas fini de les ecrire. L'age du plus ancien mesure le retard reel de
+  // cet auditeur, exactement comme `pendingSends`/`oldestPendingMs` le font deja cote publisher
+  // (`device/node/publisher.js`) pour la meme raison : `bufferedAmount` reste nul tant que le
+  // tampon du noyau n'est pas plein, puis saute d'un coup — un signal binaire retarde, pas une
+  // duree comparable au budget de latence.
+  pendingSends: number[];
 };
 
 // Ce type regroupe les compteurs affiches par la route de sante.
@@ -52,15 +88,23 @@ export class ListenerHub {
 
   private listeners = new Map<WebSocket, Listener>();
   private stateMessage = buildStreamState(null);
+  // Retenue a part du message JSON deja construit : c'est elle qui donne le profil de latence, et
+  // donc le seuil de rejet, sans avoir a la relire depuis le texte du message a chaque diffusion.
+  private session: SessionConfig | null = null;
   private onEvent: (event: string, fields?: LogFields) => void;
   private maxListeners: number;
+  private now: () => number;
 
   constructor(options: {
     maxListeners: number;
     onEvent?: (event: string, fields?: LogFields) => void;
+    // Remplacee par les tests, qui ne peuvent pas attendre des secondes reelles pour simuler un
+    // retard d'envoi.
+    now?: () => number;
   }) {
     this.maxListeners = options.maxListeners;
     this.onEvent = options.onEvent ?? (() => {});
+    this.now = options.now ?? Date.now;
   }
 
   // Cette methode donne le nombre d'auditeurs connectes.
@@ -90,7 +134,7 @@ export class ListenerHub {
       return;
     }
 
-    const listener: Listener = { socket, missedPongs: 0 };
+    const listener: Listener = { socket, missedPongs: 0, pendingSends: [] };
 
     socket.on("close", () => this.remove(socket));
     socket.on("error", () => this.drop(socket));
@@ -118,6 +162,7 @@ export class ListenerHub {
   // Cette methode annonce une nouvelle session ou la fin du direct a tous les auditeurs.
   // Elle memorise l'etat : un auditeur qui arrive ensuite recoit exactement le meme message.
   setSession(session: SessionConfig | null): void {
+    this.session = session;
     this.stateMessage = buildStreamState(session);
 
     // La liste est copiee avant l'envoi : une erreur de socket retire son auditeur pendant la
@@ -129,6 +174,9 @@ export class ListenerHub {
 
   // Cette methode diffuse un paquet audio deja valide, sans en modifier un seul octet.
   broadcast(packet: Buffer): void {
+    const now = this.now();
+    const dropMs = dropThresholdMs(this.session);
+
     for (const listener of [...this.listeners.values()]) {
       const socket = listener.socket;
 
@@ -136,21 +184,25 @@ export class ListenerHub {
         continue;
       }
 
+      const oldest = listener.pendingSends[0];
+      const oldestPendingMs = oldest === undefined ? 0 : now - oldest;
+
       // Une file d'envoi bloquee ne se videra plus : la connexion est coupee tout de suite.
-      if (socket.bufferedAmount > CLOSE_BYTES) {
+      if (oldestPendingMs > CLOSE_MS) {
         this.stats.closedSlow += 1;
-        this.onEvent("listener_closed_slow", { bufferedAmount: socket.bufferedAmount });
+        this.onEvent("listener_closed_slow", { oldestPendingMs });
         this.drop(socket);
         continue;
       }
 
-      // Une file d'envoi en retard laisse passer le paquet suivant plutot que d'empiler l'ancien.
-      if (socket.bufferedAmount > DROP_BYTES) {
+      // Un retard au-dela de ce que cet auditeur tolere lui-meme laisse passer le paquet suivant
+      // plutot que d'empiler de l'audio qu'il jettera de toute facon des qu'il arrivera.
+      if (oldestPendingMs > dropMs) {
         this.stats.framesDropped += 1;
         continue;
       }
 
-      this.send(socket, packet, true);
+      this.sendTracked(listener, packet);
       this.stats.framesSent += 1;
     }
   }
@@ -229,6 +281,27 @@ export class ListenerHub {
     try {
       socket.send(data, { binary }, () => {});
     } catch {
+      this.drop(socket);
+    }
+  }
+
+  // Cette methode envoie un paquet audio en notant combien de temps la socket met a l'accepter.
+  //
+  // `ws` rend la main a ce rappel quand les octets sont ecrits sur le socket, donc acceptes par le
+  // systeme. Tant qu'il ne revient pas, cet auditeur est en retard, et c'est cette duree que
+  // `broadcast` lit avant le prochain paquet. Les rappels arrivent dans l'ordre des envois : retirer
+  // le plus ancien suffit. Meme principe que `trackedSend` dans `device/node/publisher.js`.
+  private sendTracked(listener: Listener, packet: Buffer): void {
+    const socket = listener.socket;
+
+    listener.pendingSends.push(this.now());
+
+    try {
+      socket.send(packet, { binary: true }, () => {
+        listener.pendingSends.shift();
+      });
+    } catch {
+      listener.pendingSends.pop();
       this.drop(socket);
     }
   }

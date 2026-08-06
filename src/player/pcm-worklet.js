@@ -16,16 +16,22 @@ export const PCM_CHANNELS = 2;
 // La sortie audio du protocole est a 48 kHz.
 export const PCM_SAMPLE_RATE = 48000;
 
-// La file contient trois secondes d'audio, soit plus du triple du plus grand buffer cible.
-// Une capacite fixe, choisie une fois, evite toute allocation pendant le direct.
-export const PCM_CAPACITY_FRAMES = PCM_SAMPLE_RATE * 3;
+// La file contient quatre secondes d'audio, soit dix fois le plus petit buffer cible et cinq fois
+// le plus grand. Une capacite fixe, choisie une fois, evite toute allocation pendant le direct.
+//
+// Trois secondes suffisaient aux deux premiers profils, mais laissaient au profil Stable (800 ms,
+// vidage a 1800 ms) une marge de 200 ms seulement avant que le filet ci-dessous n'intervienne — vu
+// dans le journal du 6 aout 2026, ou une rafale de rattrapage faisait sauter les deux mecanismes
+// presque ensemble (`sauts` +2, +3 d'affilee). Une seconde de plus donne 2666 ms de plafond, donc
+// 866 ms de marge meme pour Stable : voir le calcul dans `applyCommands` (`audio-player.ts`).
+export const PCM_CAPACITY_FRAMES = PCM_SAMPLE_RATE * 4;
 
 // Le filet du processeur audio ne peut jamais etre place plus haut que les deux tiers de la file.
 // Le tiers restant absorbe ce qu'une rafale ecrit entre deux blocs : le processeur ne verifie sa
 // file qu'une fois toutes les 2,7 ms, et un plafond colle a la capacite la laisserait deborder dans
 // cet intervalle — exactement ce que le filet est charge d'empecher.
 //
-// Trois secondes de file donnent 2000 ms, et cette borne decide pour les trois profils de latence :
+// Quatre secondes de file donnent 2666 ms, et cette borne decide pour les trois profils de latence :
 // aucun ne demande un plafond plus bas. Le tableau des valeurs reelles est dans `applyCommands`
 // (`audio-player.ts`), qui est l'endroit ou le plafond se calcule.
 export const NET_CEILING_MAX_MS = Math.round((PCM_CAPACITY_FRAMES * 2 * 1000) / (3 * PCM_SAMPLE_RATE));

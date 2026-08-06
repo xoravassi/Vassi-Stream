@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { readStreamState, type StreamState } from "../src/player/player-protocol.ts";
 import {
+  GAP_RECOVERY_CONFIRM_MAX_REPORTS,
   LATE_MARGIN_MS,
   PlayerStateMachine,
   RECOVERY_CONFIRM_MAX_REPORTS,
@@ -183,6 +184,108 @@ test("rebufferise apres une discontinuite", () => {
 
   machine.discontinuity();
   assert.equal(machine.status().state, "REBUFFERING");
+});
+
+// Ce test verifie qu'une discontinuite isolee repart aussi vite qu'avant ce correctif : deux
+// rapports propres, pas plus. La rafale de discontinuites ne doit pas ralentir le cas ordinaire.
+test("repart en deux rapports apres une discontinuite isolee", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  machine.discontinuity();
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING");
+});
+
+// Ce test verifie le motif vu dans le journal du 6 aout 2026 sous throttle 3G : des trous
+// rapproches font flapper REBUFFERING/PLAYING en boucle rapide. Une seconde discontinuite qui
+// arrive avant que la premiere ne se soit confirmee doit allonger la confirmation qui suit, comme
+// le fait deja une rafale de derive.
+test("allonge la confirmation quand des discontinuites se rapprochent", () => {
+  const { machine, etats } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  machine.discontinuity();
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  // La seconde discontinuite arrive alors que la premiere n'est pas encore confirmee : la rafale
+  // continue, `discontinuity()` agit donc aussi depuis REBUFFERING.
+  machine.discontinuity();
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  const transitionsAvant = etats.length;
+
+  // Deux discontinuites rapprochees demandent quatre rapports propres, pas deux : les trois
+  // premiers ne suffisent pas.
+  machine.reportLevel(400, 0);
+  machine.reportLevel(400, 0);
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "REBUFFERING", "deux discontinuites demandent quatre rapports propres");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING");
+  // La reprise n'a bascule qu'une fois : pas d'aller-retour REBUFFERING/PLAYING au milieu.
+  const bascules = etats.slice(transitionsAvant).filter((etat) => etat === "PLAYING").length;
+  assert.equal(bascules, 1);
+});
+
+// Ce test verifie que le plafond de confirmation existe aussi pour la rafale de discontinuites,
+// avec sa propre valeur, plus basse que celle de la derive.
+test("plafonne la confirmation d'une longue rafale de discontinuites", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  for (let trou = 0; trou < 10; trou += 1) {
+    machine.discontinuity();
+  }
+
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  for (let rapport = 0; rapport < GAP_RECOVERY_CONFIRM_MAX_REPORTS; rapport += 1) {
+    machine.reportLevel(400, 0);
+  }
+
+  assert.equal(machine.status().state, "PLAYING", "la reprise arrive au plafond, quel que soit le nombre de trous");
+});
+
+// Ce test verifie qu'un vidage de derive oublie une rafale de discontinuites en cours : les deux
+// causes sont differentes, et le vidage de derive jette deja toute la file.
+test("un vidage de derive oublie la rafale de discontinuites en cours", () => {
+  const { machine } = makeMachine();
+
+  machine.setStream(live(1));
+  machine.play();
+  machine.reportLevel(400, 0);
+
+  machine.discontinuity();
+  machine.discontinuity();
+  assert.equal(machine.status().state, "REBUFFERING");
+
+  // Un vidage de derive survient pendant la rafale de discontinuites.
+  machine.reportLevel(3000, 0);
+
+  // La rafale de discontinuites est oubliee : deux rapports propres suffisent desormais, pas
+  // quatre. Seule la confirmation de derive (elle aussi a deux rapports pour un vidage isole)
+  // reste a satisfaire.
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
+
+  machine.reportLevel(400, 0);
+  assert.equal(machine.status().state, "PLAYING");
 });
 
 // Ce test verifie qu'une coupure reseau n'annule pas la demande de l'auditeur. Une coupure de deux

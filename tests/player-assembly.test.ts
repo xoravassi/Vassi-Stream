@@ -149,10 +149,13 @@ test("lance la lecture au seuil annonce par le processeur audio", async (t) => {
 // Ces trois lignes sont les bornes reellement transmises au processeur audio pour chaque profil de
 // latence. Elles sont ecrites en clair, sans etre recalculees a partir du code teste : c'est le seul
 // moyen qu'une formule changee sans qu'on le veuille se voie.
+//
+// Seul Stable bute sur le plafond de la file (2667 ms, `NET_CEILING_MAX_MS`) : Faible et Equilibree
+// demandent moins que cette borne et l'obtiennent telle quelle.
 const BORNES = [
-  { profil: "low", cibleMs: 200, plafondMs: 2000 },
-  { profil: "balanced", cibleMs: 400, plafondMs: 2000 },
-  { profil: "stable", cibleMs: 800, plafondMs: 2000 },
+  { profil: "low", cibleMs: 200, plafondMs: 2200 },
+  { profil: "balanced", cibleMs: 400, plafondMs: 2400 },
+  { profil: "stable", cibleMs: 800, plafondMs: 2667 },
 ];
 
 // Ce test fixe la hauteur du filet du processeur audio, profil par profil.
@@ -202,15 +205,15 @@ test("borne le filet du processeur audio, pour les trois profils de latence", as
   }
 });
 
-// Ce test verifie que la hauteur de saut suit une nouvelle session, alors que le plafond ne bouge
-// pas.
+// Ce test verifie que la hauteur de saut suit une nouvelle session, meme quand elle s'accompagne
+// d'un changement de plafond.
 //
-// C'est le piege que `browser-audio.ts` decrit et que rien ne verifiait : le plafond bute toujours
-// sur la borne de la file, donc comparer le seul plafond pour decider s'il faut renvoyer un ordre
-// laisserait la hauteur de saut a sa valeur precedente. Un auditeur qui rejoint un direct relance en
-// Stable garderait alors le saut d'un direct en Faible, et repartirait 600 ms trop court a chaque
-// rafale.
-test("suit la hauteur de saut d'une nouvelle session quand le plafond ne bouge pas", async (t) => {
+// C'est le piege que `browser-audio.ts` decrit et que rien ne verifiait : `setLimit` ne renvoie un
+// ordre que si le plafond OU la hauteur de saut a change depuis le dernier. Comparer le seul plafond
+// laisserait la hauteur de saut a sa valeur precedente des que les deux profils bute sur la meme
+// borne de file — ce qui n'arrive plus qu'a Stable depuis l'agrandissement de la file, mais reste le
+// comportement a garantir si un futur profil venait la rejoindre.
+test("suit la hauteur de saut d'une nouvelle session meme quand le plafond change aussi", async (t) => {
   const { relay, player, publisher, restore } = await startPlayer({ isolated: true, latencyProfile: "low" });
   t.after(async () => {
     await player.close();
@@ -223,7 +226,7 @@ test("suit la hauteur de saut d'une nouvelle session quand le plafond ne bouge p
   const node = FakeAudioWorkletNode.last;
   assert.ok(node !== null);
   assert.deepEqual(node.port.messagesOfType("limit"), [
-    { type: "limit", ceilingFrames: 96000, keepFrames: 9600 },
+    { type: "limit", ceilingFrames: 105600, keepFrames: 9600 },
   ]);
 
   // Le publisher relance un direct sur un autre profil : le protocole prevoit qu'un second
@@ -232,9 +235,10 @@ test("suit la hauteur de saut d'une nouvelle session quand le plafond ne bouge p
   await waitFor(() => player.status().session?.sessionId === 4243, "seconde session annoncee");
 
   assert.deepEqual(node.port.messagesOfType("limit"), [
-    { type: "limit", ceilingFrames: 96000, keepFrames: 9600 },
-    // Le plafond est le meme, la hauteur de saut a suivi le profil.
-    { type: "limit", ceilingFrames: 96000, keepFrames: 38400 },
+    { type: "limit", ceilingFrames: 105600, keepFrames: 9600 },
+    // Le plafond de Stable bute sur la borne de la file (128016 frames, 2667 ms) ; la hauteur de
+    // saut a suivi le profil.
+    { type: "limit", ceilingFrames: 128016, keepFrames: 38400 },
   ]);
 });
 

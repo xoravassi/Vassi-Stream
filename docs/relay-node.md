@@ -123,13 +123,23 @@ donnent `server_error`, donc une coupure ordinaire suivie d'une reconnexion.
 Un auditeur recoit son `stream_state` avant d'entrer dans la liste de diffusion. Cet ordre garantit
 qu'aucun paquet audio n'arrive avant l'etat qui le decrit.
 
-Deux limites protegent le relais d'un auditeur trop lent, lues sur `bufferedAmount`, le nombre
-d'octets deja remis a `send()` mais pas encore partis :
+Deux limites protegent le relais d'un auditeur trop lent, lues sur l'age du plus vieux paquet dont
+l'envoi n'est pas encore acquitte par le systeme — une duree, pas un nombre d'octets :
 
-- au-dela de 65536 octets, soit environ deux secondes en qualite Studio, les paquets sont abandonnes
-  au lieu d'etre empiles ; l'auditeur reprend la diffusion des qu'il rattrape son retard ;
-- au-dela de 524288 octets, soit environ seize secondes, la connexion est coupee : elle ne rattrapera
-  plus rien et sa file grandirait sans fin.
+- au-dela de la tolerance de l'auditeur lui-meme (la cible de son profil de latence plus 1000 ms, la
+  meme marge que celle du player avant de tout jeter — 1200 ms en Faible, 1400 en Equilibree,
+  1800 en Stable), les paquets suivants sont abandonnes au lieu d'etre empiles ; l'auditeur reprend
+  la diffusion des qu'il rattrape son retard ;
+- au-dela de 8000 ms, la connexion est coupee : elle ne rattrapera plus rien et sa file grandirait
+  sans fin.
+
+Le premier seuil suit le profil de la session, pas une valeur fixe. Jusqu'au 6 aout 2026 il valait
+65536 octets (environ deux secondes en qualite Studio) quel que soit le profil choisi par
+l'auditeur — plus haut que la tolerance du player lui-meme pour Equilibree et Faible. Le relais
+continuait alors d'envoyer un backlog que l'auditeur allait de toute facon jeter a l'arrivee, ce qui
+gaspillait la bande passante et grossissait la rafale de rattrapage qui declenche le vidage cote
+player (voir `docs/validation/incident-meet-2026-08-06.md`, section 4). Un temps compare a un temps,
+aligne sur ce que l'auditeur tolere reellement, evite cette course que le relais perdait d'avance.
 
 Abandonner avant de couper evite de deconnecter un auditeur pour un simple a-coup reseau. Ces
 abandons creent des trous de numero de sequence, que le player du bloc 8 traite comme une

@@ -83,6 +83,20 @@ export class BrowserAudio {
     return this.context === null ? null : this.context.state;
   }
 
+  // Ces deux methodes rendent la latence de sortie annoncee par le contexte audio, en millisecondes,
+  // ou `null` tant qu'aucun contexte n'existe. Aucune des deux n'est lue ailleurs dans le moteur —
+  // elles n'existent que pour le diagnostic. `baseLatency` est l'estimation du navigateur au moment
+  // de la creation du contexte ; `outputLatency` pretend mesurer la sortie materielle reelle, mais ne
+  // l'implemente de facon fiable que sous Firefox a ce jour. Sous Chrome elle peut rendre zero ou une
+  // valeur peu significative selon la version : ne pas conclure sur elle seule.
+  get baseLatencyMs(): number | null {
+    return this.context === null ? null : this.context.baseLatency * 1000;
+  }
+
+  get outputLatencyMs(): number | null {
+    return this.context === null ? null : this.context.outputLatency * 1000;
+  }
+
   // Cette methode construit les pieces, une seule fois. Un deuxieme appel rend la meme promesse.
   async start(): Promise<void> {
     if (this.starting !== null) {

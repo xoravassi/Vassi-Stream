@@ -131,6 +131,10 @@ export class FakeAudioContext {
   state = "running";
   resumes = 0;
   onstatechange: (() => void) | null = null;
+  // Un vrai navigateur les rend toujours en secondes, jamais `undefined`. Une valeur nulle imite un
+  // navigateur qui ne mesure pas de latence de sortie plutot qu'un cas absent.
+  baseLatency = 0;
+  outputLatency = 0;
 
   constructor(settings: Record<string, unknown> = {}) {
     this.settings = settings;

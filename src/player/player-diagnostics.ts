@@ -54,6 +54,15 @@ export type PlayerDiagnostics = {
   // Audio : ce que le contexte et le processeur font des echantillons.
   audio: AudioStage;
   contextState: string | null;
+  // Latence de sortie annoncee par le contexte audio, en millisecondes, ou `null` tant qu'aucun
+  // contexte n'existe. `baseLatencyMs` est l'estimation du navigateur a la creation du contexte ;
+  // `outputLatencyMs` pretend mesurer la sortie materielle reelle, mais n'est fiable que sous
+  // Firefox a ce jour — sous Chrome elle peut rendre zero ou une valeur peu significative selon la
+  // version. Aucune decision du moteur ne se fonde sur ces deux valeurs : elles ne servent qu'a
+  // juger, mesure en main, si `latencyHint: "playback"` (`browser-audio.ts`) vaut la peine d'etre
+  // change.
+  baseLatencyMs: number | null;
+  outputLatencyMs: number | null;
   bufferedMs: number;
   underruns: number;
   overflows: number;

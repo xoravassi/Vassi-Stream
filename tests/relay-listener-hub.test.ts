@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CLOSE_BYTES, DROP_BYTES, ListenerHub, MISSED_PONG_LIMIT } from "../relay/listener-hub.ts";
+import { CLOSE_MS, ListenerHub, MISSED_PONG_LIMIT } from "../relay/listener-hub.ts";
 import type { SessionConfig } from "../relay/protocol.ts";
 import { asSocket, FakeSocket } from "./relay-harness.ts";
 
@@ -11,9 +11,24 @@ import { asSocket, FakeSocket } from "./relay-harness.ts";
 
 const SESSION: SessionConfig = { sessionId: 77, bitrate: 256000, latencyProfile: "balanced" };
 
-// Cette fonction cree un hub vide avec une limite d'auditeurs choisie.
-function makeHub(maxListeners = 10): ListenerHub {
-  return new ListenerHub({ maxListeners });
+// Le profil "balanced" tolere 400 ms de cible plus 1000 ms de marge, comme le player
+// (`LATE_MARGIN_MS`) : au-dela, l'auditeur jette lui-meme le son en attente, donc le relais doit
+// se delester avant. Cette valeur rejoue `dropThresholdMs` sans l'importer, pour qu'un changement
+// de la formule se voie ici au lieu de passer inapercu.
+const BALANCED_DROP_MS = 1400;
+
+// Cette fonction cree un hub vide avec une limite d'auditeurs choisie, et une horloge factice que
+// les tests avancent eux-memes : simuler des secondes de retard reel rendrait la suite trop lente.
+function makeHub(maxListeners = 10, now: () => number = () => 0): ListenerHub {
+  return new ListenerHub({ maxListeners, now });
+}
+
+// Cette fonction cree une horloge factice avancable a la main, et le hub qui la lit.
+function makeClockedHub(maxListeners = 10): { hub: ListenerHub; advance: (ms: number) => void } {
+  let clock = 0;
+  const hub = makeHub(maxListeners, () => clock);
+
+  return { hub, advance: (ms: number) => { clock += ms; } };
 }
 
 // Ce test verifie qu'un auditeur recoit l'etat courant avant tout paquet audio, meme s'il arrive
@@ -34,36 +49,79 @@ test("envoie l'etat courant avant d'inscrire un auditeur", () => {
 });
 
 // Ce test verifie qu'un auditeur en retard perd des paquets au lieu d'accumuler de l'audio ancien.
+// Le retard se mesure desormais a l'age du paquet le plus vieux dont l'envoi n'est pas acquitte,
+// pas a un nombre d'octets : `socket.autoAck = false` simule un lien lent en retenant le rappel de
+// `send()`, exactement comme un vrai systeme qui n'a pas fini d'ecrire.
 test("abandonne les paquets d'un auditeur en retard", () => {
-  const hub = makeHub();
+  const { hub, advance } = makeClockedHub();
   const socket = new FakeSocket();
+  socket.autoAck = false;
   hub.add(asSocket(socket));
+  // `add()` envoie deja l'etat courant avec un rappel : il ne compte pas dans le retard qui nous
+  // interesse ici, donc on le libere tout de suite.
+  socket.ackOldest();
 
-  socket.bufferedAmount = DROP_BYTES + 1;
+  // Ce premier paquet part mais son rappel ne revient jamais : la socket simule un lien lent.
   hub.broadcast(Buffer.from([1]));
-  assert.equal(socket.binaries.length, 0);
+  assert.equal(socket.binaries.length, 1);
+
+  // Le temps passe sans que le rappel ne revienne : le retard depasse la tolerance du profil
+  // annonce (aucune session ici, donc le profil par defaut, "balanced").
+  advance(BALANCED_DROP_MS + 1);
+  hub.broadcast(Buffer.from([2]));
+  assert.equal(socket.binaries.length, 1, "le second paquet est abandonne, pas empile");
   assert.equal(hub.stats.framesDropped, 1);
   assert.equal(socket.terminated, false);
 
-  // La connexion se rattrape : la diffusion reprend sans intervention.
-  socket.bufferedAmount = 0;
-  hub.broadcast(Buffer.from([2]));
-  assert.equal(socket.binaries.length, 1);
+  // La connexion se rattrape : le rappel du premier paquet revient enfin, la diffusion reprend
+  // sans intervention.
+  socket.ackOldest();
+  advance(1);
+  hub.broadcast(Buffer.from([3]));
+  assert.equal(socket.binaries.length, 2);
   assert.equal(hub.size, 1);
 });
 
 // Ce test verifie qu'un auditeur bloque est coupe : sa file d'envoi grandirait sans fin.
 test("coupe un auditeur dont la file d'envoi est bloquee", () => {
-  const hub = makeHub();
+  const { hub, advance } = makeClockedHub();
   const socket = new FakeSocket();
+  socket.autoAck = false;
   hub.add(asSocket(socket));
 
-  socket.bufferedAmount = CLOSE_BYTES + 1;
   hub.broadcast(Buffer.from([1]));
+  advance(CLOSE_MS + 1);
+  hub.broadcast(Buffer.from([2]));
 
   assert.equal(socket.terminated, true);
   assert.equal(hub.size, 0);
   assert.equal(hub.stats.closedSlow, 1);
+});
+
+// Ce test verifie que le seuil de rejet suit le profil de latence de la session, pas une valeur
+// fixe : c'est le correctif du 6 aout 2026 (voir `docs/validation/incident-meet-2026-08-06.md`,
+// section 4). Un meme retard doit etre tolere plus longtemps en Stable qu'en Faible.
+test("le seuil de rejet suit le profil de latence de la session", () => {
+  const { hub, advance } = makeClockedHub();
+  const stable = new FakeSocket();
+  stable.autoAck = false;
+  hub.add(asSocket(stable));
+  hub.setSession({ sessionId: 1, bitrate: 256000, latencyProfile: "stable" });
+
+  hub.broadcast(Buffer.from([1]));
+  // Stable tolere 800 + 1000 = 1800 ms : ce retard depasserait deja le seuil de Faible (1200 ms)
+  // mais pas encore celui de Stable.
+  advance(1500);
+  hub.broadcast(Buffer.from([2]));
+
+  assert.equal(stable.binaries.length, 2, "Stable tolere encore ce retard");
+  assert.equal(hub.stats.framesDropped, 0);
+
+  advance(400);
+  hub.broadcast(Buffer.from([3]));
+
+  assert.equal(stable.binaries.length, 2, "au-dela de 1800 ms, Stable rejette aussi");
+  assert.equal(hub.stats.framesDropped, 1);
 });
 
 // Ce test verifie qu'un auditeur muet finit par etre coupe, et qu'un auditeur qui repond reste.

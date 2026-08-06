@@ -126,6 +126,12 @@ export class FakeSocket {
   closedWith: { code: number; reason: string } | null = null;
   readonly texts: string[] = [];
   readonly binaries: Buffer[] = [];
+  // Tant que ce drapeau est vrai, `send()` rend la main a son rappel tout de suite, comme un envoi
+  // qui part sans attendre. Un test qui simule un lien lent le passe a faux : les rappels
+  // s'accumulent alors dans `pendingAcks` au lieu de partir, et `ackOldest` les libere un par un,
+  // comme le ferait le systeme quand la socket peut enfin ecrire.
+  autoAck = true;
+  private pendingAcks: (() => void)[] = [];
 
   private handlers = new Map<string, ((...args: unknown[]) => void)[]>();
 
@@ -149,12 +155,27 @@ export class FakeSocket {
       this.texts.push(String(data));
     }
 
-    if (typeof options === "function") {
-      options();
+    const callback = typeof options === "function" ? options : done;
+
+    if (callback === undefined) {
       return;
     }
 
-    done?.();
+    if (this.autoAck) {
+      callback();
+      return;
+    }
+
+    this.pendingAcks.push(callback);
+  }
+
+  // Cette methode remet la main aux rappels d'envoi les plus anciens encore en attente, jusqu'a
+  // `count`. Elle sert aux tests qui simulent un lien lent : ils laissent d'abord `autoAck` a faux,
+  // envoient plusieurs paquets, puis liberent les rappels au rythme voulu.
+  ackOldest(count = 1): void {
+    for (let index = 0; index < count && this.pendingAcks.length > 0; index += 1) {
+      this.pendingAcks.shift()!();
+    }
   }
 
   ping(): void {

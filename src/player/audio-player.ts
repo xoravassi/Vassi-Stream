@@ -198,6 +198,8 @@ export class AudioPlayer {
 
       audio: this.audio.stage,
       contextState: this.audio.contextState,
+      baseLatencyMs: this.audio.baseLatencyMs,
+      outputLatencyMs: this.audio.outputLatencyMs,
       bufferedMs: this.bufferMs,
       underruns: this.counters.underruns,
       overflows: this.counters.overflows,
@@ -338,19 +340,21 @@ export class AudioPlayer {
     // n'intervient que lorsqu'une rafale l'a distance. En sautant, il laisse de quoi jouer tout de
     // suite, sinon le saut se paierait d'un manque de donnees.
     //
-    // La marge voulue est de deux fois `LATE_MARGIN_MS`, mais la file la tronque : avec trois
-    // secondes de capacite, aucun profil n'atteint la borne des deux tiers. Les valeurs reellement
-    // appliquees sont donc celles-ci, et le `Math.min` est ce qui decide, pas l'addition :
+    // La marge voulue est de deux fois `LATE_MARGIN_MS`, mais la file la tronque : avec quatre
+    // secondes de capacite (`PCM_CAPACITY_FRAMES`), aucun profil n'atteint la borne des deux tiers.
+    // Les valeurs reellement appliquees sont donc celles-ci, et le `Math.min` est ce qui decide, pas
+    // l'addition :
     //
-    //   Faible 200 ms     vidage a 1200 ms, filet a 2000 ms, marge 800 ms
-    //   Equilibree 400 ms vidage a 1400 ms, filet a 2000 ms, marge 600 ms
-    //   Stable 800 ms     vidage a 1800 ms, filet a 2000 ms, marge 200 ms
+    //   Faible 200 ms     vidage a 1200 ms, filet a 2666 ms, marge 1466 ms
+    //   Equilibree 400 ms vidage a 1400 ms, filet a 2666 ms, marge 1266 ms
+    //   Stable 800 ms     vidage a 1800 ms, filet a 2666 ms, marge 866 ms
     //
-    // L'ordre voulu tient partout — le filet reste au-dessus du vidage — mais la marge de Stable est
-    // mince : une rafale y sera parfois rattrapee par le filet sans que la machine d'etats l'ait vue
-    // passer. Ce n'est pas une perte de service, la file redescend exactement au seuil de lecture et
-    // le son continue ; c'est un saut que seul le compteur `skips` raconte. Agrandir la file
-    // rendrait la marge complete, au prix d'une mesure de charge reelle a refaire.
+    // L'ordre voulu tient partout — le filet reste au-dessus du vidage — et la marge de Stable, la
+    // plus mince des trois, reste confortable : une rafale de rattrapage doit desormais depasser
+    // 866 ms au-dessus du vidage pour que le filet intervienne en plus de la machine d'etats. Avant
+    // ce correctif, la capacite valait trois secondes et cette marge n'etait que de 200 ms : le
+    // journal du 6 aout 2026 montrait le filet et le vidage sauter presque ensemble (`sauts` +2, +3
+    // d'affilee) sur une rafale de rattrapage apres un lien descendant degrade.
     const target = this.machine.targetBufferMs();
     this.audio.setLimit(Math.min(target + 2 * LATE_MARGIN_MS, NET_CEILING_MAX_MS), target);
 

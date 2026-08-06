@@ -40,6 +40,8 @@ const SAIN: PlayerDiagnostics = {
 
   audio: "RUNNING",
   contextState: "running",
+  baseLatencyMs: 10,
+  outputLatencyMs: 20,
   bufferedMs: 410,
   underruns: 0,
   overflows: 0,

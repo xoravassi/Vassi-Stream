@@ -331,7 +331,7 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 - [x] Garder seulement la configuration de session, jamais l’historique audio.
 - [x] Envoyer l’état actuel à chaque nouveau listener, avant tout paquet audio.
 - [x] Diffuser les frames valides sans transformation.
-- [x] Fermer les listeners très lents plutôt que créer un backlog infini : abandon des paquets au-delà de 65536 octets en attente, fermeture au-delà de 524288.
+- [x] Fermer les listeners très lents plutôt que créer un backlog infini : abandon des paquets au-delà de la tolérance du profil de latence de l'auditeur (cible + 1000 ms, comme le player avant de tout jeter), fermeture au-delà de 8000 ms de retard — un temps, pas un nombre d'octets (voir `docs/validation/incident-meet-2026-08-06.md`, section 4).
 - [x] Envoyer `live: false` quand le publisher disparaît, avec ou sans `stream_stop`.
 - [x] Ajouter une route `/health` et quelques compteurs simples : état live, listeners, dernier paquet reçu. Les compteurs avancent pendant le direct et pas seulement à la fermeture d'une connexion, parce que la santé se consulte pendant la panne. `listenerFramesDropped` distingue un son troué venu de la connexion de l'auditeur d'un son troué venu d'avant le relais.
 - [x] Faire porter la limite d'auditeurs par la liste elle-même, en plus du refus HTTP 503 prononcé avant l'ouverture de la connexion.

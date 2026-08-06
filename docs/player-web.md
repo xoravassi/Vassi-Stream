@@ -122,7 +122,10 @@ Disposition memoire :
 
 Les deux index vivent entre `0` et `capacity - 1` et sont lus et ecrits avec `Atomics`. Une case
 reste toujours libre : c'est ce qui distingue une file pleine d'une file vide sans troisieme
-compteur. La capacite est de trois secondes, soit plus du triple du plus grand buffer cible.
+compteur. La capacite est de quatre secondes, soit dix fois le plus petit buffer cible et cinq fois
+le plus grand — assez pour laisser au filet du processeur audio une marge confortable au-dessus du
+vidage de la machine d'etats, meme au profil Stable (voir `PCM_CAPACITY_FRAMES` dans
+`pcm-worklet.js`).
 
 Le producteur est le worker, le consommateur est le processeur audio, et il n'y en a jamais qu'un de
 chaque : c'est une file SPSC, le seul cas ou deux threads peuvent se passer des donnees sans verrou.
