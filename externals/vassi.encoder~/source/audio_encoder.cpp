@@ -48,6 +48,35 @@ bool audio_encoder_bitrate_is_valid(int bitrate) {
     || bitrate == OPUS_BITRATE_STUDIO;
 }
 
+// Cette fonction valide un debit demande pendant un direct. Le regulateur le fait varier de facon
+// continue : toute valeur entre le plancher et la qualite Studio est legitime.
+bool audio_encoder_live_bitrate_is_valid(int bitrate) {
+  return bitrate >= OPUS_BITRATE_FLOOR && bitrate <= OPUS_BITRATE_STUDIO;
+}
+
+// Cette fonction change le debit d'un encodeur en marche.
+//
+// Le champ `bitrate` de la structure et le reglage d'Opus portent toujours la meme valeur, et cette
+// fonction est le seul endroit qui les fait bouger ensemble apres la creation.
+// `audio_encoder_reset_audio_state` reapplique ce champ apres chaque `OPUS_RESET_STATE` : c'est lui
+// qui fait autorite des qu'une discontinuite survient.
+bool audio_encoder_set_bitrate(t_audio_encoder *encoder, int bitrate) {
+  if (encoder == nullptr || encoder->opus == nullptr || !audio_encoder_live_bitrate_is_valid(bitrate)) {
+    return false;
+  }
+
+  if (bitrate == encoder->bitrate) {
+    return true;
+  }
+
+  if (opus_encoder_ctl(encoder->opus, OPUS_SET_BITRATE(bitrate)) != OPUS_OK) {
+    return false;
+  }
+
+  encoder->bitrate = bitrate;
+  return true;
+}
+
 // Cette fonction encode une frame complete et la remet immediatement au consommateur.
 static bool audio_encoder_emit_frame(t_audio_encoder *encoder) {
   t_encoded_audio_frame frame = {};
@@ -150,6 +179,33 @@ t_audio_encoder *audio_encoder_create(
   }
 
   if (opus_encoder_ctl(encoder->opus, OPUS_SET_BITRATE(bitrate)) != OPUS_OK) {
+    audio_encoder_destroy(encoder);
+    return nullptr;
+  }
+
+  // Ces trois reglages rendent la descente en debit sure. Sans eux, un debit qui baisse ne fait pas
+  // que perdre en finesse : il change de nature, et cela s'entend.
+  //
+  // La stereo est forcee. Sous 17,3 kbit/s libopus passe seul en mono (`stereo_music_threshold`), ce
+  // qui sur un mix s'entend comme une panne. Le regulateur ne descend jamais si bas, mais un reglage
+  // qui depend d'un autre reglage est un piege : celui-ci ferme la question.
+  if (opus_encoder_ctl(encoder->opus, OPUS_SET_FORCE_CHANNELS(OUTPUT_CHANNELS)) != OPUS_OK) {
+    audio_encoder_destroy(encoder);
+    return nullptr;
+  }
+
+  // Le signal est declare musical. A defaut, libopus suppose un contenu a moitie vocal et garde
+  // ouverte la possibilite de basculer en mode SILK sur un passage de voix seule. Ce qui sort d'une
+  // piste Master n'est jamais de la parole, et une bascule de mode est un artefact evitable.
+  if (opus_encoder_ctl(encoder->opus, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC)) != OPUS_OK) {
+    audio_encoder_destroy(encoder);
+    return nullptr;
+  }
+
+  // Le VBR contraint borne la taille de chaque paquet autour du debit demande. Le VBR libre laisse
+  // passer des pointes que le lien montant doit absorber d'un coup, ce qui est exactement ce qu'un
+  // lien sature ne sait pas faire. Le CBR, lui, couterait 8 % de qualite.
+  if (opus_encoder_ctl(encoder->opus, OPUS_SET_VBR_CONSTRAINT(1)) != OPUS_OK) {
     audio_encoder_destroy(encoder);
     return nullptr;
   }

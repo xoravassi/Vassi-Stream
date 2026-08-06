@@ -22,6 +22,7 @@ static void vassi_encoder_active(t_vassi_encoder *x, long value);
 static void vassi_encoder_start(t_vassi_encoder *x);
 static void vassi_encoder_stop(t_vassi_encoder *x);
 static void vassi_encoder_quality(t_vassi_encoder *x, long profile);
+static void vassi_encoder_bitrate(t_vassi_encoder *x, long bitrate);
 static void vassi_encoder_port(t_vassi_encoder *x, long port);
 static void vassi_encoder_status_changed(void *context);
 static void vassi_encoder_publish_status(t_vassi_encoder *x);
@@ -40,6 +41,7 @@ extern "C" void ext_main(void *module_ref) {
   class_addmethod(class_ref, (method)vassi_encoder_start, "start", 0);
   class_addmethod(class_ref, (method)vassi_encoder_stop, "stop", 0);
   class_addmethod(class_ref, (method)vassi_encoder_quality, "quality", A_LONG, 0);
+  class_addmethod(class_ref, (method)vassi_encoder_bitrate, "bitrate", A_LONG, 0);
   class_addmethod(class_ref, (method)vassi_encoder_port, "port", A_LONG, 0);
   class_register(CLASS_BOX, class_ref);
 
@@ -290,6 +292,19 @@ static void vassi_encoder_quality(t_vassi_encoder *x, long profile) {
   }
 
   x->bitrate.store(bitrate, std::memory_order_relaxed);
+}
+
+// Cette fonction applique le debit decide par le regulateur du publisher, pendant un direct.
+//
+// Elle differe de `quality` sur trois points : elle accepte une valeur continue et non un profil,
+// elle agit sur le direct en cours au lieu du prochain, et elle ne change pas la qualite choisie par
+// l'utilisateur — celle-ci reste le plafond, et c'est elle que le device continue d'afficher.
+//
+// L'erreur n'est pas signalee a Max : ce message arrive plusieurs fois par seconde depuis Node, et
+// une valeur hors bornes ne doit pas remplir la fenetre console pendant un direct. Elle laisse
+// simplement le debit precedent en place.
+static void vassi_encoder_bitrate(t_vassi_encoder *x, long bitrate) {
+  encoder_worker_request_bitrate(&x->worker, (int)bitrate);
 }
 
 // Cette fonction enregistre le port loopback annonce par node.script.

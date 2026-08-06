@@ -12,7 +12,9 @@ export type WorkerSetup = { buffer: ArrayBufferLike; capacityFrames: number } | 
 
 // Ce type decrit ce que le worker signale a son appelant.
 export type DecodeWorkerEvents = {
-  onDiscontinuity: () => void;
+  // Une discontinuite comblee sur place porte `recovered: true` : la lecture n'a pas ete
+  // interrompue, et seul le diagnostic a besoin de le savoir.
+  onDiscontinuity: (note: { reason: string; missingMs: number; recovered: boolean }) => void;
   onRefusal: (reason: string) => void;
   onStats: (stats: DecoderStats) => void;
   onFailure: (reason: string) => void;
@@ -99,7 +101,14 @@ export class DecodeWorkerHost {
   // afficherait des frames decodees par un worker mort, et la regle « des paquets acceptes mais rien
   // de decode » ne pourrait plus jamais se declencher apres un redemarrage.
   private reportEmptyStats(): void {
-    this.events.onStats({ accepted: 0, decoded: 0, refused: 0, discontinuities: 0, lastRefusal: null });
+    this.events.onStats({
+      accepted: 0,
+      decoded: 0,
+      refused: 0,
+      discontinuities: 0,
+      concealedMs: 0,
+      lastRefusal: null,
+    });
   }
 
   // Cette methode transmet un paquet sans le lire. Le tampon est transfere : le thread principal ne
@@ -145,10 +154,22 @@ export class DecodeWorkerHost {
 
   // Cette methode traite ce que le worker signale pendant le direct.
   private handleMessage(event: MessageEvent): void {
-    const message = event.data as { type: string; reason?: string } & Partial<DecoderStats>;
+    const message = event.data as {
+      type: string;
+      reason?: string;
+      missingMs?: number;
+      recovered?: boolean;
+    } & Partial<DecoderStats>;
 
     if (message.type === "discontinuity") {
-      this.events.onDiscontinuity();
+      this.events.onDiscontinuity({
+        reason: message.reason ?? "inconnue",
+        missingMs: message.missingMs ?? 0,
+        // Un drapeau absent vaut une interruption : la lecture s'arrete le temps de rebufferiser.
+        // C'est le sens le plus prudent des deux, et c'est celui que merite un message dont on ne
+        // sait pas si la file a ete videe.
+        recovered: message.recovered === true,
+      });
       return;
     }
 
@@ -163,6 +184,7 @@ export class DecodeWorkerHost {
         decoded: message.decoded ?? 0,
         refused: message.refused ?? 0,
         discontinuities: message.discontinuities ?? 0,
+        concealedMs: message.concealedMs ?? 0,
         lastRefusal: message.lastRefusal ?? null,
       });
       return;

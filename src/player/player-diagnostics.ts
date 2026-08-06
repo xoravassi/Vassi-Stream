@@ -36,6 +36,14 @@ export type PlayerDiagnostics = {
   refused: number;
   lastRefusal: string | null;
   discontinuities: number;
+  // Duree totale comblee par du silence, en millisecondes. C'est la mesure de ce que le lien a
+  // perdu, independante de tout seuil et jamais remise a zero pendant une session.
+  concealedMs: number;
+  // Ou le son a disparu la derniere fois, et combien il en manquait :
+  // `publisher_drop` sur le lien montant du poste Ableton, `encoder_loss` dans son encodeur ou son
+  // pont, `relay_drop` entre le relais et cet auditeur.
+  lastGapReason: string | null;
+  lastGapMs: number | null;
 
   // Audio : ce que le contexte et le processeur font des echantillons.
   audio: AudioStage;

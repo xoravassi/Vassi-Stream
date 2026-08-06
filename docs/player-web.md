@@ -191,22 +191,51 @@ qu'un paquet en retard d'une session precedente entre dans le son de la nouvelle
 
 ## Discontinuite
 
-Deux evenements produisent une discontinuite, et ils recoivent le meme traitement :
+Deux signaux annoncent une discontinuite, et **leur combinaison dit ou le son a disparu** :
 
-- le bit `discontinuite` pose par le device apres une perte locale d'audio ;
-- un trou dans les numeros de sequence, cause par le relais quand il abandonne les paquets d'un
-  auditeur en retard. Le relais ne modifie jamais les octets d'un paquet, donc il ne peut pas poser
-  le bit lui-meme : le player doit reconnaitre le trou.
+- le bit `discontinuite`, pose par le device quand il a perdu de l'audio chez lui ;
+- un trou dans les numeros de sequence, qui ne peut venir que d'apres l'envoi : le relais abandonne
+  les paquets d'un auditeur en retard, sans jamais modifier un octet, donc sans pouvoir poser le bit.
 
-Traitement, dans cet ordre :
+| Bit | Trou | Origine | Nom du motif |
+|---|---|---|---|
+| oui | oui | le publisher a jete faute de lien montant | `publisher_drop` |
+| oui | non | l'encodeur ou le pont a perdu avant de construire le paquet | `encoder_loss` |
+| non | oui | le relais a jete pour cet auditeur | `relay_drop` |
 
-1. vider le PCM encore en attente ;
-2. remettre le decodeur Opus a son etat initial ;
-3. decoder la frame marquee ;
-4. repasser en `REBUFFERING` jusqu'au seuil du profil.
+C'est exactement la question que l'incident du 2026-08-06 n'a pas pu trancher depuis le navigateur.
 
-Aucun silence et aucun PLC ne remplacent la duree abandonnee : le but est de reprendre sur l'audio le
-plus recent, pas de conserver la duree du direct.
+**La duree manquante vient du timestamp, jamais du numero de sequence.** Une perte survenue avant la
+construction du paquet n'utilise aucun numero — l'encodeur ne numerote que ce qu'il construit — mais
+elle avance toujours le timestamp de la duree perdue.
+
+Traitement d'un trou de moins de 500 ms :
+
+1. ecrire dans la file la duree exacte du trou ;
+2. remettre le decodeur Opus a son etat initial **seulement si le bit est pose** ;
+3. decoder la frame ;
+4. **ne pas changer d'etat** : la lecture continue.
+
+La file n'est pas videe. Vider n'avance pas la lecture — le consommateur trouve alors la file vide et
+ecrit du silence jusqu'a la fin de la rebufferisation, pour retrouver exactement le meme retard
+qu'avant — donc cela ne coute que du son deja decode. Sur un lien qui perd regulierement, cela efface
+la file plus vite qu'elle ne se remplit : c'est le mecanisme qui a rendu l'incident du 2026-08-06
+inecoutable, avec une cinquantaine de remplissages a 400 ms detruits l'un apres l'autre.
+
+Ecrire la duree manquante n'est pas un confort d'ecoute, c'est ce qui garde la chronologie juste.
+Sans cela le trou disparaitrait de la timeline et le niveau de la file baisserait definitivement
+d'autant ; production et consommation tournant toutes deux a 48 kHz, rien ne le ferait remonter, et
+la marge anti-gigue s'userait trou apres trou jusqu'a disparaitre.
+
+Au-dela de 500 ms manquantes, l'ancien traitement reprend : file videe, decodeur remis a zero,
+`REBUFFERING` jusqu'au seuil du profil. Combler une seconde de silence s'entendrait plus longtemps
+que la rebufferisation que cela evite.
+
+Le comblement se fait par du silence. Une frame de dissimulation produite par le decodeur
+s'entendrait mieux, mais `opus-decoder` fige sa taille de frame a 120 ms a la construction
+(`OpusDecoder.js`, `_outputChannelSize = 120 * 48`) alors qu'un trou ordinaire en vaut 20 ou 40 :
+la dissimulation demanderait une autre bibliotheque, et cela se decide sur une mesure d'ecoute, pas
+d'avance. Le compteur `concealedMs` mesure exactement ce que cela vaudrait.
 
 ## Manque de donnees
 

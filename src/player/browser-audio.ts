@@ -32,9 +32,9 @@ export type AudioSetup = {
 // Ce type decrit ce que les pieces signalent a leur appelant.
 export type BrowserAudioEvents = {
   onLevel: (availableMs: number, underruns: number, overflows: number, skips: number) => void;
-  onDiscontinuity: () => void;
+  onDiscontinuity: (note: { reason: string; missingMs: number; recovered: boolean }) => void;
   onRefusal: (reason: string) => void;
-  onStats: (stats: { accepted: number; decoded: number; refused: number; discontinuities: number; lastRefusal: string | null }) => void;
+  onStats: (stats: { accepted: number; decoded: number; refused: number; discontinuities: number; concealedMs: number; lastRefusal: string | null }) => void;
   onFailure: (area: DiagnosticArea, reason: string) => void;
 };
 
