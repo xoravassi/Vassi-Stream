@@ -12,6 +12,8 @@
 // celle deja faite cote device, ou la qualite choisie est devenue un plafond de debit plutot qu'une
 // valeur figee. Dans les deux cas le reglage humain borne le regulateur au lieu de le remplacer.
 
+import { RATE_DEADBAND } from "./pcm-worklet.js";
+
 // Duree nominale entre deux paquets, en millisecondes : la duree d'une trame du protocole v1.1.
 const FRAME_MS = 40;
 
@@ -37,6 +39,29 @@ export const TARGET_SAFETY = 1.5;
 // hoquette encore.
 export const DECAY_MS_PER_SECOND = 5;
 
+// La decroissance ne s'applique que lorsque la file a rejoint le seuil, et cette condition n'est pas
+// un raffinement : sans elle le regulateur ment.
+//
+// Le seuil descend de `DECAY_MS_PER_SECOND` x `TARGET_SAFETY`, soit 7,5 ms par seconde. Le processeur
+// audio, lui, ne peut resorber un exces qu'a `RATE_MAX`, soit 5 ms par seconde au maximum absolu, et
+// bien moins tant que l'ecart reste dans la partie proportionnelle de sa pente. **Le seuil fuit donc
+// plus vite que la lecture ne court**, et l'ecart entre les deux ne se referme jamais : il grandit.
+//
+// Le journal du 6 aout 2026 a 23h18 le montre sur trois minutes — seuil 2000 -> 900 pendant que le
+// tampon ne descendait que de 2023 a 1641, un ecart passe de +23 a +741 ms. Le seuil affichait 900 ms
+// quand l'auditeur en entendait 1641 : il ne decrivait plus rien.
+//
+// Attendre que la file ait rejoint le seuil fait descendre celui-ci au rythme que la lecture sait
+// reellement tenir, par construction et sans aucune constante a accorder. La comparaison se fait a la
+// zone morte du processeur audio, et c'est le bon point : a l'interieur, il ne corrige plus, donc la
+// file est arrivee. Ces deux modules doivent partager cette valeur, d'ou l'import plutot qu'une
+// seconde constante qui pourrait diverger.
+//
+// La porte n'est fermee que par le haut. Une file plus maigre que le seuil ne bloque rien : le seuil
+// et elle se rapprochent alors, ce qui est exactement ce qu'on veut, et tout nouveau blocage le
+// releve de toute facon aussitot.
+export const DECAY_GATE = RATE_DEADBAND;
+
 // Pas de quantification du seuil rendu.
 //
 // Sans lui, le seuil bougerait de quelques millisecondes a chaque paquet, et chaque mouvement
@@ -58,6 +83,9 @@ export class BufferTarget {
   private observedMs = 0;
   private lastPacketAt: number | null = null;
   private lastDecayAt: number | null = null;
+  // Dernier niveau de la file annonce par le processeur audio, ou `null` tant qu'aucun n'est arrive.
+  // Il ne sert qu'a la porte de decroissance : le regulateur ne decide rien d'autre avec.
+  private levelMs: number | null = null;
 
   constructor(floorMs = 400) {
     this.floorMs = floorMs;
@@ -73,6 +101,12 @@ export class BufferTarget {
     this.observedMs = 0;
     this.lastPacketAt = null;
     this.lastDecayAt = null;
+    this.levelMs = null;
+  }
+
+  // Cette methode enregistre le niveau de la file, qui ouvre ou ferme la porte de decroissance.
+  noteLevel(availableMs: number): void {
+    this.levelMs = availableMs;
   }
 
   // Cette methode enregistre l'arrivee d'un paquet.
@@ -101,7 +135,7 @@ export class BufferTarget {
   noteUnderrun(at: number): void {
     this.decayTo(at);
 
-    const grown = this.targetMs(at) * UNDERRUN_GROWTH;
+    const grown = this.boundedTarget() * UNDERRUN_GROWTH;
 
     if (grown > this.observedMs) {
       this.observedMs = Math.min(grown, MAX_TARGET_MS);
@@ -112,10 +146,18 @@ export class BufferTarget {
   targetMs(at: number): number {
     this.decayTo(at);
 
-    const wanted = this.observedMs * TARGET_SAFETY;
-    const bounded = Math.min(Math.max(wanted, this.floorMs), MAX_TARGET_MS);
+    return Math.round(this.boundedTarget() / TARGET_STEP_MS) * TARGET_STEP_MS;
+  }
 
-    return Math.round(bounded / TARGET_STEP_MS) * TARGET_STEP_MS;
+  // Cette methode rend le seuil brut, sans arrondi et sans faire avancer le temps.
+  //
+  // Elle est separee de `targetMs` pour une raison precise : la porte de decroissance a besoin du
+  // seuil, et `targetMs` declenche la decroissance. Les faire passer l'une par l'autre serait une
+  // recursion.
+  private boundedTarget(): number {
+    const wanted = this.observedMs * TARGET_SAFETY;
+
+    return Math.min(Math.max(wanted, this.floorMs), MAX_TARGET_MS);
   }
 
   // Cette methode rend le plus long blocage encore en memoire, pour le journal.
@@ -124,15 +166,29 @@ export class BufferTarget {
   }
 
   // Cette methode efface le souvenir du pire blocage au rythme du temps qui passe.
+  //
+  // L'horloge avance meme quand la porte est fermee, et c'est indispensable : garder le temps ecoule
+  // pour plus tard ferait retomber tout le retard accumule d'un seul coup a la reouverture, soit
+  // exactement la marche que ce module existe pour eviter.
   private decayTo(at: number): void {
     const previous = this.lastDecayAt;
     this.lastDecayAt = at;
 
-    if (previous === null || at <= previous) {
+    if (previous === null || at <= previous || this.levelIsBehind()) {
       return;
     }
 
     const faded = this.observedMs - ((at - previous) * DECAY_MS_PER_SECOND) / 1000;
     this.observedMs = Math.max(0, faded);
+  }
+
+  // Cette methode dit si la file est encore au-dessus du seuil, donc si baisser celui-ci ne ferait
+  // que creuser un ecart que la lecture ne sait pas rattraper. Voir `DECAY_GATE`.
+  private levelIsBehind(): boolean {
+    if (this.levelMs === null) {
+      return false;
+    }
+
+    return this.levelMs > this.boundedTarget() * (1 + DECAY_GATE);
   }
 }

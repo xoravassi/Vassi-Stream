@@ -150,21 +150,22 @@ test("lance la lecture au seuil annonce par le processeur audio", async (t) => {
 // latence. Elles sont ecrites en clair, sans etre recalculees a partir du code teste : c'est le seul
 // moyen qu'une formule changee sans qu'on le veuille se voie.
 //
-// Seul Stable bute sur le plafond de la file (2667 ms, `NET_CEILING_MAX_MS`) : Faible et Equilibree
-// demandent moins que cette borne et l'obtiennent telle quelle.
+// Depuis que la file fait six secondes, la borne des deux tiers vaut 4000 ms et aucun des trois
+// planchers ne l'atteint : les trois obtiennent `cible + 2000` tel quel. Seul le seuil adaptatif a
+// son maximum, 2000 ms, touche cette borne.
 const BORNES = [
   { profil: "low", cibleMs: 200, plafondMs: 2200 },
   { profil: "balanced", cibleMs: 400, plafondMs: 2400 },
-  { profil: "stable", cibleMs: 800, plafondMs: 2667 },
+  { profil: "stable", cibleMs: 800, plafondMs: 2800 },
 ];
 
 // Ce test fixe la hauteur du filet du processeur audio, profil par profil.
 //
 // Il existe parce que la formule qui la calcule ne se lit pas : `audio-player.ts` demande
-// `cible + 2000 ms`, soit 2200, 2400 et 2800, et la borne des deux tiers de la file ramene les trois
-// a 2000 ms. Personne ne peut deviner en lisant l'addition que la marge reelle de Stable vaut 200 ms
-// et non 1000. Ces valeurs sont donc ecrites ici, et un changement de capacite de file ou de marge
-// les fera echouer au lieu de passer inapercu.
+// `cible + 2000 ms` puis tronque a la borne des deux tiers de la file. Personne ne peut deviner en
+// lisant l'addition laquelle des deux decide. Ces valeurs sont donc ecrites ici, et un changement de
+// capacite de file ou de marge les fera echouer au lieu de passer inapercu — c'est exactement ce qui
+// s'est produit quand la file est passee de quatre a six secondes.
 test("borne le filet du processeur audio, pour les trois profils de latence", async (t) => {
   for (const borne of BORNES) {
     const { relay, player, restore } = await startPlayer({ isolated: true, latencyProfile: borne.profil });
@@ -236,9 +237,9 @@ test("suit la hauteur de saut d'une nouvelle session meme quand le plafond chang
 
   assert.deepEqual(node.port.messagesOfType("limit"), [
     { type: "limit", ceilingFrames: 105600, keepFrames: 9600 },
-    // Le plafond de Stable bute sur la borne de la file (128016 frames, 2667 ms) ; la hauteur de
-    // saut a suivi le profil.
-    { type: "limit", ceilingFrames: 128016, keepFrames: 38400 },
+    // Le plafond de Stable vaut cible + 2000 ms (134400 frames, 2800 ms) ; la hauteur de saut a
+    // suivi le profil.
+    { type: "limit", ceilingFrames: 134400, keepFrames: 38400 },
   ]);
 });
 

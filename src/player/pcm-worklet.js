@@ -16,23 +16,27 @@ export const PCM_CHANNELS = 2;
 // La sortie audio du protocole est a 48 kHz.
 export const PCM_SAMPLE_RATE = 48000;
 
-// La file contient quatre secondes d'audio, soit dix fois le plus petit buffer cible et cinq fois
-// le plus grand. Une capacite fixe, choisie une fois, evite toute allocation pendant le direct.
+// La file contient six secondes d'audio. Une capacite fixe, choisie une fois, evite toute allocation
+// pendant le direct.
 //
-// Trois secondes suffisaient aux deux premiers profils, mais laissaient au profil Stable (800 ms,
-// vidage a 1800 ms) une marge de 200 ms seulement avant que le filet ci-dessous n'intervienne — vu
-// dans le journal du 6 aout 2026, ou une rafale de rattrapage faisait sauter les deux mecanismes
-// presque ensemble (`sauts` +2, +3 d'affilee). Une seconde de plus donne 2666 ms de plafond, donc
-// 866 ms de marge meme pour Stable : voir le calcul dans `applyCommands` (`audio-player.ts`).
-export const PCM_CAPACITY_FRAMES = PCM_SAMPLE_RATE * 4;
+// Elle a grandi deux fois, et la seconde fois pour une raison de structure. Trois secondes
+// suffisaient aux profils fixes ; quatre secondes ont donne 2666 ms de plafond au filet, ce qui
+// tenait tant que le seuil ne depassait pas 800 ms. Depuis que le seuil s'adapte et peut monter a
+// 2000 ms, cette borne inverse la hierarchie des mecanismes : le vidage de derive se declenche a
+// `seuil + 1000`, donc a 3000 ms, soit **au-dessus** du filet. Le vidage devenait inatteignable, et
+// le journal du 6 aout 2026 a 23h18 le montre — trois sauts du filet, zero vidage.
+//
+// Six secondes portent le plafond a 4000 ms, ce qui laisse le vidage devant le filet pour tout seuil
+// jusqu'a 3000 ms, donc pour tout ce que `MAX_TARGET_MS` autorise. Le cout est de 2,3 Mo de memoire
+// au lieu de 1,5.
+export const PCM_CAPACITY_FRAMES = PCM_SAMPLE_RATE * 6;
 
 // Le filet du processeur audio ne peut jamais etre place plus haut que les deux tiers de la file.
 // Le tiers restant absorbe ce qu'une rafale ecrit entre deux blocs : le processeur ne verifie sa
 // file qu'une fois toutes les 2,7 ms, et un plafond colle a la capacite la laisserait deborder dans
 // cet intervalle — exactement ce que le filet est charge d'empecher.
 //
-// Quatre secondes de file donnent 2666 ms, et cette borne decide pour les trois profils de latence :
-// aucun ne demande un plafond plus bas. Le tableau des valeurs reelles est dans `applyCommands`
+// Six secondes de file donnent 4000 ms. Le tableau des valeurs reelles est dans `applyCommands`
 // (`audio-player.ts`), qui est l'endroit ou le plafond se calcule.
 export const NET_CEILING_MAX_MS = Math.round((PCM_CAPACITY_FRAMES * 2 * 1000) / (3 * PCM_SAMPLE_RATE));
 

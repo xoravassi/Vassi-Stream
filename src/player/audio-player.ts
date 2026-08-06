@@ -283,6 +283,11 @@ export class AudioPlayer {
     this.counters.trims = level.trims;
     this.ratio = level.ratio;
 
+    // Le niveau part au regulateur avant toute decision : c'est lui qui ouvre ou ferme la porte de
+    // decroissance du seuil, et une decision prise sur le niveau du releve precedent serait fausse
+    // d'un tour au moment ou elle compte le plus.
+    this.bufferTarget.noteLevel(level.availableMs);
+
     // Un manque de donnees prouve que le seuil courant etait trop court. C'est la mesure la plus
     // directe dont le regulateur dispose, et elle prime sur ce que les blocages d'arrivee laissaient
     // prevoir.
@@ -388,21 +393,20 @@ export class AudioPlayer {
     // n'intervient que lorsqu'une rafale l'a distance. En sautant, il laisse de quoi jouer tout de
     // suite, sinon le saut se paierait d'un manque de donnees.
     //
-    // La marge voulue est de deux fois `LATE_MARGIN_MS`, mais la file la tronque : avec quatre
-    // secondes de capacite (`PCM_CAPACITY_FRAMES`), aucun profil n'atteint la borne des deux tiers.
-    // Les valeurs reellement appliquees sont donc celles-ci, et le `Math.min` est ce qui decide, pas
-    // l'addition :
+    // La marge voulue est de deux fois `LATE_MARGIN_MS`, et la borne des deux tiers de la file
+    // (`NET_CEILING_MAX_MS`, 4000 ms) la tronque au-dela d'un seuil de 2000 ms. Le seuil n'etant
+    // jamais superieur a 2000 (`MAX_TARGET_MS`), les valeurs appliquees sont donc :
     //
-    //   Faible 200 ms     vidage a 1200 ms, filet a 2666 ms, marge 1466 ms
-    //   Equilibree 400 ms vidage a 1400 ms, filet a 2666 ms, marge 1266 ms
-    //   Stable 800 ms     vidage a 1800 ms, filet a 2666 ms, marge 866 ms
+    //   plancher Faible 200 ms      vidage a 1200 ms, filet a 2200 ms
+    //   plancher Equilibree 400 ms  vidage a 1400 ms, filet a 2400 ms
+    //   plancher Stable 800 ms      vidage a 1800 ms, filet a 2800 ms
+    //   seuil adaptatif max 2000 ms vidage a 3000 ms, filet a 4000 ms
     //
-    // L'ordre voulu tient partout — le filet reste au-dessus du vidage — et la marge de Stable, la
-    // plus mince des trois, reste confortable : une rafale de rattrapage doit desormais depasser
-    // 866 ms au-dessus du vidage pour que le filet intervienne en plus de la machine d'etats. Avant
-    // ce correctif, la capacite valait trois secondes et cette marge n'etait que de 200 ms : le
-    // journal du 6 aout 2026 montrait le filet et le vidage sauter presque ensemble (`sauts` +2, +3
-    // d'affilee) sur une rafale de rattrapage apres un lien descendant degrade.
+    // L'ordre voulu tient sur toute la plage — le filet reste mille millisecondes au-dessus du
+    // vidage — et c'est ce qui a impose de porter la file a six secondes. Avec quatre secondes le
+    // filet plafonnait a 2666 ms : des que le seuil adaptatif depassait 1666 ms, le vidage se
+    // retrouvait au-dessus de lui et devenait inatteignable. Le journal du 6 aout 2026 a 23h18 le
+    // montre, trois sauts du filet et pas un seul vidage.
     const target = this.machine.targetBufferMs();
     this.audio.setLimit(Math.min(target + 2 * LATE_MARGIN_MS, NET_CEILING_MAX_MS), target);
 

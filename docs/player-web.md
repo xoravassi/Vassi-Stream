@@ -122,10 +122,14 @@ Disposition memoire :
 
 Les deux index vivent entre `0` et `capacity - 1` et sont lus et ecrits avec `Atomics`. Une case
 reste toujours libre : c'est ce qui distingue une file pleine d'une file vide sans troisieme
-compteur. La capacite est de quatre secondes, soit dix fois le plus petit buffer cible et cinq fois
-le plus grand — assez pour laisser au filet du processeur audio une marge confortable au-dessus du
-vidage de la machine d'etats, meme au profil Stable (voir `PCM_CAPACITY_FRAMES` dans
-`pcm-worklet.js`).
+compteur. La capacite est de six secondes (voir `PCM_CAPACITY_FRAMES` dans `pcm-worklet.js`).
+
+Cette taille est dictee par l'ordre des mecanismes, pas par le confort. Le filet du processeur audio
+ne peut jamais depasser les deux tiers de la file, soit 4000 ms ; le vidage de derive se declenche a
+`seuil + 1000`. Avec quatre secondes de file le filet plafonnait a 2666 ms, donc des que le seuil
+adaptatif depassait 1666 ms le vidage passait au-dessus de lui et devenait inatteignable — le journal
+du 6 aout 2026 a 23h18 montre trois sauts du filet et pas un seul vidage. Six secondes laissent le
+vidage devant le filet sur toute la plage du seuil.
 
 Le producteur est le worker, le consommateur est le processeur audio, et il n'y en a jamais qu'un de
 chaque : c'est une file SPSC, le seul cas ou deux threads peuvent se passer des donnees sans verrou.
@@ -193,10 +197,24 @@ d'une trame ; tout ce qui depasse est du temps pendant lequel la file s'est vide
 donc exactement la duree de tampon qu'il aurait fallu avoir. Le seuil est le plus long de ces
 blocages, majore de moitie, borne entre le plancher du profil et deux secondes.
 
-La montee est immediate, la descente lente — cinq millisecondes de seuil par seconde de calme. La
-dissymetrie est voulue : garder trop de tampon coute de la latence, n'en pas garder assez coute une
-coupure. Un manque de donnees, lui, fait autorite sur la mesure : il prouve directement que le seuil
-courant etait trop court, et le releve d'un quart.
+La montee est immediate, la descente lente — cinq millisecondes par seconde de calme. La dissymetrie
+est voulue : garder trop de tampon coute de la latence, n'en pas garder assez coute une coupure. Un
+manque de donnees, lui, fait autorite sur la mesure : il prouve directement que le seuil courant
+etait trop court, et le releve d'un quart.
+
+**La descente est suspendue tant que la file n'a pas rejoint le seuil**, et cette condition n'est pas
+un raffinement : sans elle le seuil ment. Il descend de 7,5 ms par seconde une fois la marge
+appliquee, alors que la vitesse de consommation ne peut resorber un exces qu'a 5 ms par seconde au
+mieux. Un seuil qui baisse pendant que la file est encore au-dessus creuse donc un ecart qui ne se
+referme jamais. Le journal du 6 aout 2026 a 23h18 le montre sur trois minutes : seuil 2000 → 900
+pendant que le tampon ne descendait que de 2023 a 1641, un ecart passe de 23 a 741 ms. Le seuil
+affichait 900 ms quand l'auditeur en entendait 1641.
+
+Attendre que la file ait rejoint le seuil le fait descendre au rythme que la lecture sait reellement
+tenir, par construction et sans aucune constante a accorder. La comparaison se fait a la zone morte
+du regulateur de vitesse — a l'interieur, il ne corrige plus, donc la file est arrivee — et les deux
+modules partagent la constante plutot que d'en tenir chacun une. La porte ne ferme que par le haut :
+une file plus maigre que le seuil ne bloque rien.
 
 Ce choix vient des journaux du 6 aout 2026, qui montrent qu'aucune valeur fixe ne convient. A 400 ms,
 un lien noye par un appel Meet produit 46 rebufferisations en deux minutes et demie. A 800 ms sur un

@@ -183,3 +183,108 @@ Le prochain direct doit repondre a trois questions, et les diagnostics sont fait
    S'il reste a zero sur un lien sain, le seuil reste au plancher et c'est le resultat voulu.
 3. **Que gagnent reellement les trames de 40 ms ?** Comparer les kbit/s recus a debit Opus egal avec
    les journaux du 6 aout : le surcout d'encapsulation doit avoir baisse d'une vingtaine de kbit/s.
+
+---
+
+# Deuxieme passe — journal du 6 aout, 23h18
+
+Premier direct avec le moteur `e35127d`. 10 min 17 s, profil **400 ms / 256 kbit/s** sur 4G,
+`SharedArrayBuffer` absent (mode port de messages). La combinaison la plus dure du systeme, sur un
+lien franchement mauvais : dix creux reels a 10-18 paquets par seconde, 1596 ms comblees, et trois
+episodes ou le poste Ableton a perdu de l'audio chez lui.
+
+## Ce que le correctif a rendu
+
+| | 128k/800 ms, 29 min | 23h18, 256k/400 ms, 10 min |
+|---|---:|---:|
+| Rattrapages brutaux | 11 | **0** |
+| Montee en cliquet | +150 a +530 ms par manque | **aucune** |
+| Manques de donnees | 0,55/min | 0,39/min |
+| Lignes « debit recu… » | 139 | 10 |
+
+Cinq ebarbages, cinq retours au seuil. Le regulateur de vitesse travaille en continu et
+visiblement — `-5000 ppm` quand la file se vide, `+5000 ppm` quand elle deborde. Les trames de 40 ms
+rendent ce qui etait calcule : **261 kbit/s recus pour 256 kbit/s d'Opus**, soit les 5,6 kbit/s
+d'en-tetes VSA1 attendus a 25 paquets par seconde, contre 11,2 a cinquante.
+
+## Ce qu'il a revele, et qui est corrige ici
+
+### Le seuil descendait plus vite que la lecture ne pouvait suivre
+
+```
+23:23:38  tampon 2023  seuil 2000   ecart   +23
+23:24:38  tampon 2013  seuil 1550   ecart  +463
+23:25:08  tampon 1977  seuil 1300   ecart  +677
+23:26:39  tampon 1641  seuil  900   ecart  +741
+```
+
+Le seuil descend de 6,1 ms/s mesures, le tampon de 2,1 ms/s. L'ecart grandit au lieu de se refermer.
+
+L'arithmetique le disait d'avance : `DECAY_MS_PER_SECOND` (5) x `TARGET_SAFETY` (1,5) fait descendre
+le seuil de **7,5 ms/s**, alors que `RATE_MAX` (0,005) ne permet de resorber un exces qu'a **5 ms/s**
+au maximum absolu — et bien moins tant que l'ecart reste dans la partie proportionnelle de la pente.
+Le seuil fuyait plus vite que la lecture ne courait, et affichait 900 ms quand l'auditeur en
+entendait 1641.
+
+**Correctif :** la decroissance est suspendue tant que la file est au-dessus du seuil, la comparaison
+se faisant a la zone morte du regulateur de vitesse. Le seuil descend alors au rythme que la lecture
+tient reellement, par construction. La porte ne ferme que par le haut, et l'horloge avance meme
+fermee — garder le temps pour plus tard rendrait la marche d'un seul coup a la reouverture.
+
+Deux autres pistes ont ete ecartees. Baisser `DECAY_MS_PER_SECOND` ne suffit pas : a 2 ms/s le seuil
+descendrait encore de 3 ms/s, et l'equilibre s'etablirait a un ecart de 45 % du seuil, soit 450 ms a
+un seuil de 1000. Monter `RATE_MAX` a 1 % ferait 17 cents de desaccord, audible sur un son tenu.
+
+### La hierarchie des mecanismes s'etait inversee
+
+Le vidage de derive se declenche a `seuil + 1000`, le filet du worklet a
+`min(seuil + 2000, NET_CEILING_MAX_MS)`. Avec quatre secondes de file, cette borne valait 2666 ms :
+**au-dessus d'un seuil de 1666 ms, le vidage passait au-dessus du filet et devenait inatteignable.**
+Le journal le confirme — trois sauts du filet, zero vidage, les deux episodes a seuil 2000.
+
+Le hasard a bien fait les choses, ce qui merite d'etre note : le filet est en realite le plus doux
+des deux. Il jette l'ancien et garde le seuil, la lecture continue ; le vidage jette tout *et* impose
+une rebufferisation, donc un silence. Mais la marge se retrecissait quand elle aurait du grandir : a
+seuil 800 il y avait 1866 ms entre le seuil et le filet, a seuil 2000 il n'en restait que 666.
+
+**Correctif :** la file passe de quatre a six secondes, ce qui porte le plafond du filet a 4000 ms.
+L'ordre tient alors pour tout seuil jusqu'a 3000 ms, donc pour tout ce que `MAX_TARGET_MS` autorise.
+Cout : 2,3 Mo de memoire au lieu de 1,5.
+
+Ce qui a declenche ces sauts merite d'etre garde en tete : a 23:22:30 le decodeur a ecrit **734 ms de
+silence d'un seul coup** pour combler un trou, par-dessus une rafale TCP. La file a franchi son
+plafond entre deux releves espaces de quarante millisecondes.
+
+### « le device a baissé son débit à 7 kbit/s » : ce n'etait pas le regulateur
+
+Les deux premieres mesures du journal annoncent 6 a 7 kbit/s avec un flux complet a 25 paquets par
+seconde. C'est **35 octets par paquet**, a peine plus que les 28 octets d'en-tete.
+
+Ce n'est pas un defaut de mesure : c'est Opus qui n'avait presque rien a encoder. Le master d'Ableton
+etait silencieux pendant les six premieres secondes, et le VBR d'Opus reduit une trame de silence a
+quelques octets. A 23:18:37 le flux est a 261 kbit/s. Le plancher du regulateur du device est a
+32 kbit/s : un flux complet au-dessous ne peut donc structurellement pas venir de lui.
+
+**Correctif :** sous 30 kbit/s, le journal ecrit « flux quasi silencieux » au lieu d'attribuer la
+baisse au regulateur. Depuis le poste d'ecoute, rien ne permet de distinguer les deux autrement, et
+affirmer une cause qu'on ne peut pas etablir est pire que ne rien dire.
+
+### Deux defauts de journal
+
+**65 lignes « seuil abaisse » en dix minutes.** La decroissance franchit un pas de 50 ms toutes les
+sept secondes environ, et chaque franchissement ecrivait une ligne. Les baisses ne sont desormais
+notees qu'au franchissement d'une bande de 200 ms ; les hausses le restent toujours, ce sont elles
+qui portent l'information.
+
+**« plus long blocage observe 2000 ms »** alors qu'aucun blocage de deux secondes n'avait eu lieu :
+la valeur melange le plus long blocage mesure et ce qu'un manque de donnees a impose apres coup, puis
+bute sur `MAX_TARGET_MS`. Elle s'appelle maintenant **besoin estime**.
+
+## Ce qui reste ouvert
+
+Les 1596 ms comblees de cette seance portent toutes la mention `l'encodeur ou le pont du poste
+Ableton a perdu du son`. **Ce n'est pas le reseau : c'est le poste Ableton qui perd de l'audio chez
+lui**, file de l'external pleine ou pont loopback en retard. C'est la seule cause de perte reelle du
+direct, et l'etape 1 du plan de la matinee — afficher `audio_queue.overflow_count`,
+`frame_sender.dropped_count` et `publisher.stats.framesDropped` dans le device — reste a faire. Sans
+ces trois chiffres, on ne peut pas departager le processeur du pont.

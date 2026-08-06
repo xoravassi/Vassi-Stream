@@ -143,3 +143,83 @@ test("ne rend que des seuils au pas de cinquante millisecondes", () => {
     assert.equal(regulateur.targetMs(at) % 50, 0, `seuil non quantifie apres un blocage de ${blocage} ms`);
   }
 });
+
+// Ce test couvre le defaut que le journal du 6 aout 2026 a 23h18 a revele, et qui rendait le seuil
+// menteur.
+//
+// Le seuil descend de 7,5 ms par seconde ; le processeur audio ne sait resorber un exces qu'a 5 ms
+// par seconde au mieux. Un seuil qui descend pendant que la file est encore au-dessus creuse donc un
+// ecart qui ne se referme jamais : sur trois minutes de ce journal, le seuil est passe de 2000 a
+// 900 ms pendant que le tampon ne descendait que de 2023 a 1641. Le seuil affichait 900 quand
+// l'auditeur en entendait 1641.
+test("ne baisse pas le seuil tant que la file est restee au-dessus", () => {
+  const regulateur = new BufferTarget(400);
+
+  let at = fluxRegulier(regulateur, 1000, 10);
+  at += 1200;
+  regulateur.notePacket(at);
+
+  const hausse = regulateur.targetMs(at);
+  assert.ok(hausse > 1000, "un blocage d'une seconde doit relever le seuil");
+
+  // La file est restee loin au-dessus du seuil pendant une minute entiere.
+  regulateur.noteLevel(hausse * 2);
+  assert.equal(regulateur.targetMs(at + 60000), hausse, "le seuil ne doit pas avoir bouge");
+});
+
+// Ce test verifie que la porte se rouvre : le seuil reprend sa descente des que la file l'a rejoint.
+// Sans cela le correctif precedent gelerait la latence pour toujours.
+test("reprend la descente des que la file a rejoint le seuil", () => {
+  const regulateur = new BufferTarget(400);
+
+  let at = fluxRegulier(regulateur, 1000, 10);
+  at += 1200;
+  regulateur.notePacket(at);
+
+  const hausse = regulateur.targetMs(at);
+  regulateur.noteLevel(hausse * 2);
+  at += 60000;
+  assert.equal(regulateur.targetMs(at), hausse);
+
+  regulateur.noteLevel(hausse);
+  assert.ok(regulateur.targetMs(at + 30000) < hausse, "le seuil doit repartir vers le bas");
+});
+
+// Ce test verifie que le temps passe porte fermee n'est pas garde pour plus tard. Le rendre d'un coup
+// a la reouverture produirait exactement la marche que ce module existe pour eviter.
+test("n'accumule pas la decroissance suspendue", () => {
+  const regulateur = new BufferTarget(400);
+
+  let at = fluxRegulier(regulateur, 1000, 10);
+  at += 1200;
+  regulateur.notePacket(at);
+  const hausse = regulateur.targetMs(at);
+
+  // Une minute porte fermee, puis la file rejoint le seuil et une seconde s'ecoule.
+  regulateur.noteLevel(hausse * 2);
+  at += 60000;
+  regulateur.targetMs(at);
+  regulateur.noteLevel(hausse);
+
+  const apresUneSeconde = regulateur.targetMs(at + 1000);
+
+  // Une seconde de decroissance vaut 7,5 ms de seuil, bien en dessous du pas de quantification :
+  // le seuil ne doit donc pas encore avoir bouge, et surtout pas s'etre effondre d'un coup.
+  assert.equal(apresUneSeconde, hausse);
+});
+
+// Ce test verifie que la porte ne bloque que par le haut. Une file plus maigre que le seuil doit
+// laisser celui-ci redescendre : les deux se rapprochent alors, ce qui est le but, et tout nouveau
+// blocage le releve de toute facon aussitot.
+test("laisse le seuil redescendre quand la file est sous lui", () => {
+  const regulateur = new BufferTarget(400);
+
+  let at = fluxRegulier(regulateur, 1000, 10);
+  at += 1200;
+  regulateur.notePacket(at);
+  const hausse = regulateur.targetMs(at);
+
+  regulateur.noteLevel(0);
+
+  assert.ok(regulateur.targetMs(at + 30000) < hausse);
+});
