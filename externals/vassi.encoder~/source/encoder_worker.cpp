@@ -51,7 +51,7 @@ static bool encoder_worker_reset_after_send_drop(t_encoder_worker *worker, t_aud
     return true;
   }
 
-  // La frame perdue a deja avance le timestamp de ses 20 ms : le trou supplementaire est nul.
+  // La frame perdue a deja avance le timestamp de ses 40 ms : le trou supplementaire est nul.
   worker->discontinuity_count.fetch_add(1, std::memory_order_relaxed);
   return audio_encoder_reset_after_loss(encoder, 0);
 }

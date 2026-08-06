@@ -81,7 +81,7 @@ test("controle chaque champ de stream_start", () => {
     bitrate: 192000,
     sampleRate: 48000,
     channels: 2,
-    frameDurationMs: 20,
+    frameDurationMs: 40,
     latencyProfile: "stable",
   };
 
@@ -126,7 +126,7 @@ test("construit les deux etats du direct", () => {
     bitrate: 128000,
     sampleRate: 48000,
     channels: 2,
-    frameDurationMs: 20,
+    frameDurationMs: 40,
     latencyProfile: "low",
   });
 });

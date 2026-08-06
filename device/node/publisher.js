@@ -26,9 +26,29 @@ const HEARTBEAT_INTERVAL_MS = 15000;
 // du premier palier. Sans cette regle, un relais qui accepte le token puis coupe aussitot serait
 // rappele toutes les secondes sans fin, parce que chaque session remettrait les paliers a zero.
 const STABLE_CONNECTION_MS = 30000;
-// Cette limite vaut environ 250 ms d'audio en qualite Studio. Au-dela, la sortie reseau est en
-// retard : la frame est jetee pour rester en direct au lieu d'empiler de l'audio ancien.
-const MAX_BUFFERED_BYTES = 8192;
+// Duree d'audio que la file d'envoi garde au plus, en millisecondes.
+//
+// Au-dela, le lien montant est en retard d'une demi-seconde et le rattrapera d'autant moins qu'on
+// continue d'empiler. La file jette alors sa trame **la plus ancienne**, et c'est tout l'objet de ce
+// module : jusqu'ici le publisher jetait la plus recente, celle qui venait d'etre encodee, en
+// gardant les vieilles. Dans un direct c'est l'inverse qu'il faut. Le journal du 6 aout 2026 en
+// montre le prix : un trou de 2920 ms d'un seul tenant, le pire evenement du direct sain.
+//
+// Une demi-seconde parce que le player la rattrape maintenant sans coupure — son seuil monte jusqu'a
+// deux secondes quand le lien le demande — alors qu'un abandon, lui, est definitif.
+const MAX_QUEUE_MS = 500;
+
+// Nombre de trames confiees a la socket sans que le systeme ait encore accuse reception.
+//
+// C'est ce plafond qui donne son sens a la file ci-dessus. Node n'expose aucun reglage de la taille
+// du tampon d'envoi du noyau : sans cette fenetre, une seconde d'audio s'empilerait dans le noyau,
+// invisible et hors de portee, et la file applicative resterait vide pendant que le retard grandit.
+// En n'en confiant que quelques-unes a la fois, le retard s'accumule la ou on peut le voir et
+// decider quoi jeter.
+//
+// Quatre trames font 160 ms. Sur un lien sain le rappel d'ecriture revient en moins d'une
+// milliseconde et cette fenetre n'est jamais atteinte : elle ne coute rien tant que rien ne va mal.
+const MAX_INFLIGHT_FRAMES = 4;
 // Le relais n'envoie que de courts messages JSON : une trame plus grande est refusee d'office.
 const MAX_INBOUND_BYTES = 4096;
 // Une nouvelle session est creee avant d'atteindre la fin du compteur de sequence de 32 bits.
@@ -92,6 +112,10 @@ class Publisher {
 		// `bufferedAmount` ne le dirait pas — il reste nul tant que le tampon du noyau n'est pas plein,
 		// puis saute d'un coup.
 		this.pendingSends = [];
+		// Trames encodees par l'external et pas encore confiees a la socket, avec leur date d'entree.
+		// C'est la seule file du systeme dont le publisher decide du contenu : celle du noyau ne se
+		// regle pas depuis Node, et celle de `ws` se remplit sans qu'on puisse choisir quoi y laisser.
+		this.queue = [];
 		this.stats = { framesSent: 0, framesDropped: 0, bytesSent: 0, sessions: 0, reconnects: 0 };
 	}
 
@@ -265,6 +289,10 @@ class Publisher {
 	}
 
 	// Cette methode publie une frame du pont loopback sous la forme du paquet binaire v1.
+	//
+	// La frame n'est plus envoyee tout de suite : elle entre dans une file bornee en temps, que
+	// `drain` vide au rythme que le lien accepte. C'est cette indirection qui permet de choisir *quoi*
+	// jeter quand le lien ne suit plus, au lieu de subir ce que le systeme refuse.
 	sendFrame(frame) {
 		if (this.state !== LIVE || this.socket === null || this.session === null) {
 			this.stats.framesDropped += 1;
@@ -276,18 +304,52 @@ class Publisher {
 		// l'aveu que le lien ne suit plus, et produire moins evite d'en arriver la.
 		this.reviewBitrate();
 
-		// Une sortie reseau en retard signifie que l'audio le plus ancien serait joue trop tard.
-		// La frame est abandonnee et la suivante porte le bit de discontinuite.
-		if (this.socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+		// Une frame que l'en-tete public ne peut pas porter est refusee avant d'entrer dans la file.
+		// Refusee apres coup, elle aurait deja pris une place dans la chronologie.
+		if (!sendableFrame(frame)) {
 			this.stats.framesDropped += 1;
 			this.discontinuityPending = true;
 			return false;
 		}
 
-		// Une frame que l'en-tete public ne peut pas porter est refusee avant d'entrer dans la
-		// session. Refusee apres coup, elle aurait deja ancre la chronologie : le premier paquet
-		// reellement transmis ne partirait alors ni de la sequence zero ni du timestamp zero.
-		if (!sendableFrame(frame)) {
+		this.enqueue(frame);
+		this.drain();
+		return true;
+	}
+
+	// Cette methode met une frame en file et jette la plus ancienne quand la file deborde.
+	//
+	// L'ordre est celui-la et pas l'inverse : la frame qui arrive est toujours acceptee, et c'est le
+	// vieux fond de file qui part. Une trame d'il y a une demi-seconde n'a plus aucune valeur dans un
+	// direct, alors que celle qui vient d'etre encodee en a toute.
+	enqueue(frame) {
+		this.queue.push({ frame, at: this.now() });
+
+		const limit = Math.max(1, Math.floor(MAX_QUEUE_MS / protocol.FRAME_DURATION_MS));
+
+		while (this.queue.length > limit) {
+			this.queue.shift();
+			this.stats.framesDropped += 1;
+			// La prochaine frame reellement transmise portera le bit : c'est ce qui dit au player que
+			// le trou vient du lien montant, et non du relais.
+			this.discontinuityPending = true;
+		}
+	}
+
+	// Cette methode transmet ce que la fenetre d'envoi permet, et pas plus.
+	drain() {
+		while (this.queue.length > 0 && this.pendingSends.length < MAX_INFLIGHT_FRAMES) {
+			const entry = this.queue.shift();
+
+			if (!this.transmit(entry.frame)) {
+				return;
+			}
+		}
+	}
+
+	// Cette methode place une frame sur la chronologie, l'encode et la confie a la socket.
+	transmit(frame) {
+		if (this.state !== LIVE || this.socket === null || this.session === null) {
 			this.stats.framesDropped += 1;
 			this.discontinuityPending = true;
 			return false;
@@ -337,11 +399,25 @@ class Publisher {
 		this.onEncoder("bitrate", applied);
 	}
 
-	// Cette methode rend l'age de la plus vieille trame que la socket n'a pas encore ecrite.
+	// Cette methode rend l'age de la plus vieille trame qui attend quelque part.
+	//
+	// Les deux attentes se suivent dans cet ordre : la socket tient les plus anciennes, la file les
+	// plus recentes. Il suffit donc de regarder la socket d'abord, et la file seulement si la socket
+	// n'a plus rien en vol.
+	//
+	// C'est cette duree que lit le regulateur de debit, et elle vaut maintenant beaucoup mieux
+	// qu'avant : elle commence a croitre des que la fenetre d'envoi se ferme, alors que le retard du
+	// noyau seul ne se voyait qu'une fois son tampon plein.
 	oldestPendingMs() {
-		const oldest = this.pendingSends[0];
+		const oldestSend = this.pendingSends[0];
 
-		return oldest === undefined ? 0 : this.now() - oldest;
+		if (oldestSend !== undefined) {
+			return this.now() - oldestSend;
+		}
+
+		const oldestQueued = this.queue[0];
+
+		return oldestQueued === undefined ? 0 : this.now() - oldestQueued.at;
 	}
 
 	// Cette methode envoie une trame audio en notant combien de temps la socket met a l'accepter.
@@ -359,7 +435,13 @@ class Publisher {
 		this.pendingSends.push(this.now());
 
 		try {
-			socket.send(packet, () => this.pendingSends.shift());
+			socket.send(packet, () => {
+				this.pendingSends.shift();
+				// La fenetre vient de se rouvrir d'une place : ce qui attendait peut partir. Sans ce
+				// rappel, la file ne se viderait qu'a l'arrivee de la trame suivante, donc jamais plus
+				// vite que la cadence de l'encodeur, et un retard pris ne se rattraperait pas.
+				this.drain();
+			});
 		} catch (error) {
 			this.pendingSends.shift();
 			this.dropSocket("envoi impossible");
@@ -424,8 +506,10 @@ class Publisher {
 		this.closeReason = "";
 		this.authPending = false;
 		// Les rappels d'envoi de la connexion perdue n'arriveront jamais : les garder ferait croire a
-		// un retard permanent et bloquerait le debit au plancher pour toujours.
+		// un retard permanent et bloquerait le debit au plancher pour toujours. La file part avec eux :
+		// son contenu appartient a une session terminee, et la reprise ouvrira la sienne.
 		this.pendingSends = [];
+		this.queue = [];
 		// Le lien d'apres n'a aucune raison de ressembler a celui d'avant : le debit repart du
 		// plafond et redescend si besoin.
 		this.bitrateController?.reset();
@@ -492,6 +576,7 @@ class Publisher {
 		this.authPending = false;
 		this.liveSince = 0;
 		this.pendingSends = [];
+		this.queue = [];
 		this.clearSilenceTimer();
 		this.clearHeartbeat();
 
@@ -619,7 +704,8 @@ module.exports = {
 	LIVE,
 	RECONNECTING,
 	ERROR,
-	MAX_BUFFERED_BYTES,
+	MAX_QUEUE_MS,
+	MAX_INFLIGHT_FRAMES,
 	AUTH_TIMEOUT_MS,
 	SILENCE_TIMEOUT_MS,
 	HEARTBEAT_INTERVAL_MS,

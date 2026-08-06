@@ -20,7 +20,7 @@ function buildFrame(sequence: number, payload: Buffer): Buffer {
   const frame = Buffer.alloc(HEADER_SIZE + payload.length);
   frame.write("VSF1", 0, "ascii");
   frame.writeUInt32BE(sequence, 4);
-  frame.writeBigUInt64BE(BigInt(sequence) * 20000n, 8);
+  frame.writeBigUInt64BE(BigInt(sequence) * 40000n, 8);
   frame.writeUInt8(0, 16);
   frame.writeUInt8(0, 17);
   frame.writeUInt16BE(payload.length, 18);

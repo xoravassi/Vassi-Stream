@@ -219,10 +219,10 @@ test("expose un diagnostic par bang hors routine audio", () => {
 });
 
 // Ce test verrouille le format audio fixe remis a libopus.
-test("encode des frames Opus stereo de 20 ms pour la musique", () => {
+test("encode des frames Opus stereo de 40 ms pour la musique", () => {
   const encoder = readEncoderFiles();
 
-  assert.match(encoder, /OPUS_FRAME_SAMPLES\s*=\s*960/);
+  assert.match(encoder, /OPUS_FRAME_SAMPLES\s*=\s*1920/);
   assert.match(encoder, /OUTPUT_RATE\s*=\s*48000/);
   assert.match(encoder, /OUTPUT_CHANNELS\s*=\s*2/);
   assert.match(encoder, /opus_encoder_create\(OUTPUT_RATE,\s*OUTPUT_CHANNELS,\s*OPUS_APPLICATION_AUDIO/);
@@ -260,7 +260,7 @@ test("avance le timestamp de la duree abandonnee", () => {
   assert.match(queue, /queue->dropped_frames\.fetch_add\(skipped/);
   assert.match(worker, /current > \*known_dropped \? current - \*known_dropped : 0/);
   assert.match(encoder, /encoder->timestamp_us \+= lost_us \+ discarded_us/);
-  assert.match(encoder, /OPUS_MAX_PACKET_BYTES\s*=\s*1276/);
+  assert.match(encoder, /OPUS_MAX_PACKET_BYTES\s*=\s*2560/);
 });
 
 // Ce test verifie qu'un compteur de pertes remis a zero ne cree jamais une duree perdue enorme.

@@ -18,9 +18,10 @@ export const PING_INTERVAL_MS = 20000;
 // Plusieurs connexions publisher peuvent attendre leur token en meme temps, par exemple pendant une
 // reconnexion. Cette limite empeche un inconnu d'ouvrir des connexions sans jamais s'authentifier.
 export const MAX_PENDING_PUBLISHERS = 4;
-// Le plus grand paquet audio du protocole fait 1304 octets. Cette limite refuse tout de suite une
-// trame plus grande, avant qu'elle occupe la memoire du relais.
-const PUBLISHER_MAX_PAYLOAD = 2048;
+// Le plus grand paquet audio du protocole fait 2588 octets depuis que la trame dure 40 ms : 28 pour
+// l'en-tete VSA1 et 2560 pour un paquet Opus de deux frames CELT. Cette limite refuse tout de suite
+// une trame plus grande, avant qu'elle occupe la memoire du relais.
+const PUBLISHER_MAX_PAYLOAD = 4096;
 // Les auditeurs n'envoient rien : une trame de leur part est deja une faute.
 const LISTENER_MAX_PAYLOAD = 512;
 

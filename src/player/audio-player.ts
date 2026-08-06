@@ -1,5 +1,6 @@
 import { BackgroundAudio, type BackgroundAudioDeps, type BackgroundAudioTitle } from "./background-audio.ts";
-import { BrowserAudio } from "./browser-audio.ts";
+import { BufferTarget } from "./buffer-target.ts";
+import { BrowserAudio, type PcmLevel } from "./browser-audio.ts";
 import { ListenerSocket } from "./listener-socket.ts";
 import type { DiagnosticArea, PlayerDiagnostics } from "./player-diagnostics.ts";
 import { NET_CEILING_MAX_MS } from "./pcm-worklet.js";
@@ -68,7 +69,13 @@ export class AudioPlayer {
     underruns: 0,
     overflows: 0,
     skips: 0,
+    trims: 0,
   };
+  // Vitesse de consommation appliquee par le processeur audio au dernier releve.
+  private ratio = 1;
+  // Ce regulateur decide du seuil de bufferisation a partir des blocages d'arrivee reellement
+  // observes. Le profil choisi par l'auditeur lui sert de plancher.
+  private bufferTarget = new BufferTarget();
   private lastRefusal: string | null = null;
   // Ce dernier trou dit ou le son a disparu : sur le poste Ableton, ou entre le relais et cet
   // auditeur. Le compteur de discontinuites, lui, dit seulement combien il y en a eu.
@@ -92,8 +99,7 @@ export class AudioPlayer {
     });
 
     this.audio = new BrowserAudio(setup, {
-      onLevel: (availableMs, underruns, overflows, skips) =>
-        this.handleLevel(availableMs, underruns, overflows, skips),
+      onLevel: (level) => this.handleLevel(level),
       // Un trou comble sur place n'interrompt pas la lecture : le decodeur a ecrit la duree
       // manquante dans la file, la chronologie est juste, et rebufferiser ne ferait qu'ajouter du
       // silence a un trou deja passe. Seul un trou trop grand pour etre comble fait repartir la
@@ -179,6 +185,7 @@ export class AudioPlayer {
       sessionId: status.session === null ? null : status.session.sessionId,
       sessionBitrate: status.session === null ? null : status.session.bitrate,
       targetBufferMs: this.machine.targetBufferMs(),
+      stallMs: this.bufferTarget.stallMs,
       shared: this.audio.shared,
 
       connected: this.socket.connected,
@@ -204,6 +211,8 @@ export class AudioPlayer {
       underruns: this.counters.underruns,
       overflows: this.counters.overflows,
       skips: this.counters.skips,
+      trims: this.counters.trims,
+      ratio: this.ratio,
       sinceLevelMs: this.lastLevelAt === null ? null : at - this.lastLevelAt,
 
       errorReason: status.errorReason,
@@ -265,15 +274,45 @@ export class AudioPlayer {
   }
 
   // Cette methode enregistre le niveau annonce par le processeur audio et le remet a la machine.
-  private handleLevel(availableMs: number, underruns: number, overflows: number, skips: number): void {
-    this.bufferMs = availableMs;
-    this.counters.underruns = underruns;
-    this.counters.overflows = overflows;
-    this.counters.skips = skips;
+  private handleLevel(level: PcmLevel): void {
+    const at = this.now();
+
+    this.bufferMs = level.availableMs;
+    this.counters.overflows = level.overflows;
+    this.counters.skips = level.skips;
+    this.counters.trims = level.trims;
+    this.ratio = level.ratio;
+
+    // Un manque de donnees prouve que le seuil courant etait trop court. C'est la mesure la plus
+    // directe dont le regulateur dispose, et elle prime sur ce que les blocages d'arrivee laissaient
+    // prevoir.
+    if (level.underruns > this.counters.underruns) {
+      this.bufferTarget.noteUnderrun(at);
+    }
+
+    this.counters.underruns = level.underruns;
     // Cette date est la preuve que le thread audio tourne encore. Un contexte suspendu cesse
     // d'appeler le processeur, donc plus aucun niveau n'arrive.
-    this.lastLevelAt = this.now();
-    this.machine.reportLevel(availableMs, underruns);
+    this.lastLevelAt = at;
+    this.applyBufferTarget(at);
+    this.machine.reportLevel(level.availableMs, level.underruns);
+  }
+
+  // Cette methode transmet le seuil decide par le regulateur, quand il a bouge.
+  //
+  // Le seuil ne circule pas tout seul : il decide de la reprise dans la machine d'etats, du plafond
+  // du filet et du niveau vise par le regulateur de vitesse. Les trois se recalculent donc ensemble,
+  // et seulement lorsqu'il change vraiment — le pas de quantification du regulateur fait que cela
+  // n'arrive qu'une fois toutes les quelques secondes, au pire.
+  private applyBufferTarget(at: number): void {
+    const target = this.bufferTarget.targetMs(at);
+
+    if (target === this.machine.targetBufferMs()) {
+      return;
+    }
+
+    this.machine.setTargetBufferMs(target);
+    this.applyCommands(this.machine.status());
   }
 
   // Cette methode declare une panne en retenant sa famille.
@@ -289,6 +328,10 @@ export class AudioPlayer {
   // Cette methode compte un paquet recu et le transmet aux pieces du navigateur.
   private sendPacket(packet: ArrayBuffer): void {
     this.counters.packets += 1;
+    // L'ecart entre deux arrivees est le signal du regulateur de seuil. Il est releve ici, au plus
+    // pres du reseau : tout ce qui vient apres — decodage, file, thread audio — a sa propre gigue et
+    // brouillerait la mesure.
+    this.bufferTarget.notePacket(this.now());
     // La taille est lue avant le transfert au worker : un `ArrayBuffer` transfere est vide pour son
     // ancien proprietaire, et sa longueur y retombe a zero.
     this.counters.bytes += packet.byteLength;
@@ -311,6 +354,11 @@ export class AudioPlayer {
     this.announcedSessionId = sessionId;
     this.lastPacketAt = null;
     this.liveSince = sessionId === 0 ? null : this.now();
+    // Le regulateur repart de zero et reprend le profil du nouveau direct comme plancher. Le seuil
+    // adaptatif est efface dans le meme geste : sans cela, la machine d'etats garderait celui du
+    // direct precedent jusqu'au premier releve du processeur audio.
+    this.bufferTarget.reset(session === null ? 400 : session.targetBufferMs);
+    this.machine.setTargetBufferMs(null);
   }
 
   // Cette methode transmet la session courante au decodeur.

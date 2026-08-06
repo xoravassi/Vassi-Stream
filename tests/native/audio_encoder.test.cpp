@@ -94,7 +94,7 @@ static void decode_energy(const t_frame_list &list, double *left_energy, double 
       (int)OPUS_FRAME_SAMPLES,
       0
     );
-    require(decoded == (int)OPUS_FRAME_SAMPLES, "chaque paquet doit etre decodable en 960 samples");
+    require(decoded == (int)OPUS_FRAME_SAMPLES, "chaque paquet doit etre decodable en 1920 samples");
     for (int sample = 0; sample < decoded; sample += 1) {
       *left_energy += (double)pcm[sample * 2] * (double)pcm[sample * 2];
       *right_energy += (double)pcm[(sample * 2) + 1] * (double)pcm[(sample * 2) + 1];
@@ -107,15 +107,15 @@ static void decode_energy(const t_frame_list &list, double *left_energy, double 
 static void test_rates_and_sequence() {
   const t_frame_list direct = encode_signal(48000, OPUS_BITRATE_STUDIO, 48000, true, true);
   const t_frame_list resampled = encode_signal(44100, OPUS_BITRATE_STUDIO, 44100, true, true);
-  require(direct.frames.size() == 50, "48 kHz doit produire exactement 50 frames par seconde");
+  require(direct.frames.size() == 25, "48 kHz doit produire exactement 25 frames par seconde");
   require(
-    resampled.frames.size() >= 49 && resampled.frames.size() <= 50,
-    "44,1 kHz doit produire 49 ou 50 frames par seconde"
+    resampled.frames.size() >= 24 && resampled.frames.size() <= 25,
+    "44,1 kHz doit produire 24 ou 25 frames par seconde"
   );
 
   for (std::size_t index = 0; index < direct.frames.size(); index += 1) {
     require(direct.frames[index].sequence == index, "la sequence doit avancer d'une unite");
-    require(direct.frames[index].timestamp_us == index * 20000, "le timestamp doit avancer de 20 ms");
+    require(direct.frames[index].timestamp_us == index * 40000, "le timestamp doit avancer de 40 ms");
     require(direct.frames[index].payload_size > 0, "chaque payload Opus doit etre non vide");
   }
 }
@@ -143,7 +143,7 @@ static void test_quality_profiles() {
     const t_frame_list list = encode_signal(48000, bitrate, 48000, true, true);
     double left_energy = 0.0;
     double right_energy = 0.0;
-    require(list.frames.size() == 50, "chaque profil doit produire 50 frames par seconde");
+    require(list.frames.size() == 25, "chaque profil doit produire 25 frames par seconde");
     decode_energy(list, &left_energy, &right_energy);
     require(left_energy > 0.0 && right_energy > 0.0, "chaque profil doit decoder les deux canaux");
   }
@@ -170,7 +170,7 @@ static void test_resets() {
   require(list.frames[1].sequence == 1, "une perte locale doit conserver la sequence de session");
   require(list.frames[1].flags == 1, "la premiere frame apres perte doit porter le flag");
   require(
-    list.frames[1].timestamp_us == list.frames[0].timestamp_us + 20000 + 500000,
+    list.frames[1].timestamp_us == list.frames[0].timestamp_us + 40000 + 500000,
     "une perte locale doit avancer le timestamp de la duree abandonnee"
   );
 
@@ -205,7 +205,7 @@ static void test_partial_frame_is_counted() {
   );
   require(list.frames.size() == 2, "la frame suivante doit produire un seul paquet");
   require(
-    list.frames[1].timestamp_us == 20000 + 10000,
+    list.frames[1].timestamp_us == 40000 + 10000,
     "les 480 samples jetes doivent ajouter 10 ms au timestamp"
   );
   audio_encoder_destroy(encoder);

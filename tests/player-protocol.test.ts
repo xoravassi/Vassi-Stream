@@ -17,7 +17,7 @@ function liveState(overrides: Record<string, unknown> = {}): string {
     bitrate: 256000,
     sampleRate: 48000,
     channels: 2,
-    frameDurationMs: 20,
+    frameDurationMs: 40,
     latencyProfile: "balanced",
     ...overrides,
   });
@@ -65,7 +65,7 @@ test("traite un direct hors de la v1 comme un etat hors ligne", () => {
     liveState({ codec: "mp3" }),
     liveState({ channels: 1 }),
     liveState({ sampleRate: 44100 }),
-    liveState({ frameDurationMs: 40 }),
+    liveState({ frameDurationMs: 20 }),
     liveState({ sessionId: 0 }),
   ]) {
     assert.deepEqual(readStreamState(invalide), { live: false, session: null }, invalide);

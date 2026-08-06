@@ -1,8 +1,38 @@
-# Protocole Vassi Stream v1
+# Protocole Vassi Stream v1.1
 
 ## But
 
 Ce document fixe le format commun entre le device Max for Live, le relais Node.js et la page `/live`.
+
+## Ce que la v1.1 change, et pourquoi
+
+**La trame passe de 20 ms a 40 ms.** Le numero de version du protocole reste `1` dans l'en-tete
+binaire : la structure ne change pas, seules trois constantes changent de valeur. Mais le format de
+fil, lui, n'est pas compatible avec la v1 — un device v1 et un player v1.1 ne s'entendent pas, et le
+relais refuse un `stream_start` qui annonce encore 20 ms. **Device, relais et site se deploient
+ensemble.**
+
+| | v1 | v1.1 |
+|---|---:|---:|
+| `frameDurationMs` | 20 | **40** |
+| echantillons par canal | 960 | **1920** |
+| payload maximal | 1276 | **2560** |
+| paquets par seconde | 50 | **25** |
+
+Le gain n'est pas dans le codec : a debit egal, Opus rend a peu pres la meme chose en 20 et en 40 ms.
+Il est ailleurs, et il est double.
+
+D'abord l'encapsulation. Chaque paquet traine environ 110 octets fixes — 28 d'en-tete VSA1, 8 de
+cadre WebSocket masque, une vingtaine de TLS, une quarantaine de TCP/IP — soit pres de 44 kbit/s a
+cinquante paquets par seconde, **quel que soit le debit Opus**. Sur un flux a 128 kbit/s, c'est un
+tiers de surcout. La moitie des paquets en coute la moitie.
+
+Ensuite la cadence. Sur un lien mobile, l'ordonnancement se fait par paquet et non par octet :
+diviser le nombre de paquets par deux agit la ou le debit adaptatif ne peut rien, puisque celui-ci
+allege chaque paquet sans jamais en reduire le nombre.
+
+Le cout est de 20 ms de latence supplementaire, et le plancher de payload passe de 1276 a 2560
+octets : a 256 kbit/s, 40 ms d'audio font deja 1280 octets en moyenne.
 
 Le protocole separe deux types de messages :
 - messages JSON pour l'etat, l'authentification et le controle du live ;
@@ -120,7 +150,7 @@ Le publisher envoie ce message avant le premier paquet audio binaire d'une sessi
   "bitrate": 256000,
   "sampleRate": 48000,
   "channels": 2,
-  "frameDurationMs": 20,
+  "frameDurationMs": 40,
   "latencyProfile": "balanced"
 }
 ```
@@ -130,7 +160,7 @@ Valeurs autorisees :
 - `bitrate` : `128000`, `192000` ou `256000` ;
 - `sampleRate` : `48000` ;
 - `channels` : `2` ;
-- `frameDurationMs` : `20` ;
+- `frameDurationMs` : `40` ;
 - `latencyProfile` : `low`, `balanced` ou `stable`.
 
 Le profil de latence fixe le niveau de PCM que le player attend avant de lancer ou relancer la lecture :
@@ -190,7 +220,7 @@ Etat en direct :
   "bitrate": 256000,
   "sampleRate": 48000,
   "channels": 2,
-  "frameDurationMs": 20,
+  "frameDurationMs": 40,
   "latencyProfile": "balanced"
 }
 ```
@@ -225,7 +255,7 @@ Raisons utilisees par le relais, et effet sur la connexion :
 
 Un paquet abime ne ferme pas la connexion : il ne doit pas interrompre un live en cours. Une faute qui laisse le flux dans un etat inconnu la ferme.
 
-Le relais envoie au plus un `server_error` par seconde et par connexion. Un publisher qui envoie cinquante paquets invalides par seconde ne recoit donc pas cinquante reponses par seconde.
+Le relais envoie au plus un `server_error` par seconde et par connexion. Un publisher qui envoie vingt-cinq paquets invalides par seconde ne recoit donc pas vingt-cinq reponses par seconde.
 
 `auth_error` est reserve au token refuse. Une authentification trop lente ou un message mal forme donnent `server_error` : le publisher traite un token refuse comme une panne definitive, alors que les autres cas doivent rester des coupures ordinaires suivies d'une reconnexion.
 
@@ -243,7 +273,7 @@ Le meme `sessionId` apparait dans `stream_start`, dans tous les paquets binaires
 
 Le `sequenceNumber` est un entier non signe de 32 bits. Il recommence a `0` et augmente de `1` pour chaque paquet construit dans la session. Un paquet abandonne apres avoir recu son numero cree donc un trou visible par le listener. Le publisher cree une nouvelle session avant de depasser `4294967295` ; le compteur ne revient jamais silencieusement a `0` dans la meme session.
 
-Le timestamp est un entier non signe de 64 bits exprime en microsecondes. Il indique la position du premier echantillon du paquet sur la timeline audio 48 kHz de la session. Le premier paquet porte `0` et deux paquets consecutifs sans perte sont separes de `20000` microsecondes. Le timestamp ne diminue jamais. Une perte locale conserve le temps audio ecoule : le paquet suivant porte donc un timestamp plus grand que l'increment normal.
+Le timestamp est un entier non signe de 64 bits exprime en microsecondes. Il indique la position du premier echantillon du paquet sur la timeline audio 48 kHz de la session. Le premier paquet porte `0` et deux paquets consecutifs sans perte sont separes de `40000` microsecondes. Le timestamp ne diminue jamais. Une perte locale conserve le temps audio ecoule : le paquet suivant porte donc un timestamp plus grand que l'increment normal.
 
 Le bit de discontinuite est pose uniquement sur le premier paquet transmis apres une perte ou un abandon local d'audio, par exemple apres un overflow de queue. Avant d'encoder ce paquet, le worker remet l'encodeur Opus a son etat initial avec `OPUS_RESET_STATE`. Une nouvelle session n'utilise pas ce bit pour annoncer son debut, car son nouveau `stream_state` impose deja la remise a zero. Les bits 1 a 7 restent a zero dans la version 1.
 
@@ -281,13 +311,15 @@ Les entiers multi-octets sont stockes en big-endian.
 | 8 | 4 | `sessionId` `uint32`, de `1` a `4294967295` |
 | 12 | 4 | `sequenceNumber` `uint32`, de `0` a `4294967295` |
 | 16 | 8 | timestamp relatif `uint64` en microsecondes |
-| 24 | 2 | nombre d'echantillons par canal : `960` |
-| 26 | 2 | taille du payload : de `1` a `1276` octets |
+| 24 | 2 | nombre d'echantillons par canal : `1920` |
+| 26 | 2 | taille du payload : de `1` a `2560` octets |
 | 28 | N | paquet Opus brut |
 
-Le payload est la sortie directe de `opus_encode()` ou `opus_encode_float()` appele avec `frame_size = 960`. La v1 n'ajoute aucun padding et n'utilise aucun repacketizer. L'encodeur recoit un buffer de sortie de 1276 octets et toute erreur d'encodage empeche la creation du paquet Vassi Stream.
+Le payload est la sortie directe de `opus_encode()` ou `opus_encode_float()` appele avec `frame_size = 1920`. Une trame de 40 ms depasse la duree maximale d'une frame CELT : libopus produit donc un paquet de code 3 portant deux frames de 20 ms, ce qui reste un seul appel et un seul paquet Opus du point de vue du protocole. La v1.1 n'ajoute aucun padding et n'utilise aucun repacketizer. L'encodeur recoit un buffer de sortie de 2560 octets et toute erreur d'encodage empeche la creation du paquet Vassi Stream.
 
-Taille totale minimale : 29 octets. Taille totale maximale : 1304 octets.
+La borne de 2560 octets remplace les 1276 de la v1, et ce n'est pas une precaution : a 256 kbit/s, 40 ms d'audio font 1280 octets en moyenne, avant les pointes du VBR. La fixture de test le confirme, 1279 octets de payload moyen sur dix secondes.
+
+Taille totale minimale : 29 octets. Taille totale maximale : 2588 octets.
 
 Le champ `payloadSize` doit etre exactement egal au nombre d'octets apres l'en-tete.
 
@@ -301,8 +333,8 @@ Le serveur refuse un paquet binaire si :
 - un bit de flags reserve est different de `0` ;
 - le nombre de canaux n'est pas `2` ;
 - le `sessionId` vaut `0` ou ne correspond pas a la session active ;
-- le nombre d'echantillons n'est pas `960` ;
-- `payloadSize` est inferieur a `1` ou superieur a `1276` ;
+- le nombre d'echantillons n'est pas `1920` ;
+- `payloadSize` est inferieur a `1` ou superieur a `2560` ;
 - `payloadSize` ne correspond pas a la taille reelle du payload.
 
 Un paquet refuse ne doit pas faire planter le serveur.

@@ -42,6 +42,29 @@ export const CONTROL_READ_INDEX = 1;
 export const CONTROL_UNDERRUNS = 2;
 export const CONTROL_OVERFLOWS = 3;
 export const CONTROL_SKIPS = 4;
+// Les ebarbages a la reprise sont comptes a part des sauts du filet, et la distinction n'est pas
+// cosmetique : un saut du filet est une anomalie — le vidage a ete distance — alors qu'un ebarbage
+// est le fonctionnement normal, silencieux, d'une reprise. Les melanger ferait passer le remede pour
+// le symptome dans le journal.
+export const CONTROL_TRIMS = 5;
+
+// Ecart relatif au seuil en dessous duquel la vitesse de lecture ne bouge pas.
+//
+// Le niveau de la file oscille naturellement de quelques dizaines de millisecondes au rythme des
+// paquets. Corriger ce bruit ferait travailler le regulateur en permanence sans rien gagner.
+export const RATE_DEADBAND = 0.15;
+
+// Ecart relatif, au-dela de la zone morte, qui demande la correction maximale.
+export const RATE_SPAN = 0.5;
+
+// Correction maximale de la vitesse de lecture, en part de la vitesse nominale.
+//
+// Cinq pour mille valent 8,6 cents de desaccord : inaudible sur un mix, et de toute facon transitoire
+// puisque la correction s'annule des que le niveau revient. C'est ce que fait NetEq dans WebRTC et ce
+// que fait dash.js en basse latence, a ceci pres qu'ils vont jusqu'a dix pour cent sur de la parole.
+// Un mix ne le supporterait pas, et n'en a pas besoin : les grandes marches sont reprises par
+// l'ebarbage a la reprise, qui tombe a un instant ou le son est deja interrompu.
+export const RATE_MAX = 0.005;
 
 // Le tableau de controle occupe huit cases de quatre octets. Les quatre cases libres laissent la
 // place a un compteur supplementaire sans changer la disposition memoire.
@@ -83,6 +106,11 @@ export class PcmRing {
     // Ce drapeau retient si la lecture precedente a manque de donnees. Il appartient au seul
     // consommateur, donc il vit dans l'objet et non dans la memoire partagee.
     this.starving = false;
+    // Position de lecture entre deux echantillons, dans [0, 1). Elle n'existe que lorsque la lecture
+    // tourne a une vitesse autre que la vitesse nominale, et elle appartient elle aussi au seul
+    // consommateur : l'index partage reste entier, et cette fraction dit ou en est la lecture a
+    // l'interieur de l'echantillon suivant.
+    this.fraction = 0;
   }
 
   // Cette methode donne le nombre d'echantillons par canal disponibles a la lecture.
@@ -113,6 +141,11 @@ export class PcmRing {
     return Atomics.load(this.control, CONTROL_SKIPS);
   }
 
+  // Cette methode donne le nombre de fois ou la file a ete ramenee au seuil a la reprise.
+  get trims() {
+    return Atomics.load(this.control, CONTROL_TRIMS);
+  }
+
   // Cette methode jette le son le plus ancien pour ne garder que `keepFrames` echantillons.
   //
   // Elle existe parce que le vidage demande par la machine d'etats est un aller-retour : le niveau
@@ -128,7 +161,11 @@ export class PcmRing {
   //
   // Seul l'index de lecture est ecrit, comme le veut la regle de cette file : c'est celui du
   // consommateur, et c'est le consommateur qui appelle cette methode.
-  dropOldest(keepFrames) {
+  // `counter` dit lequel des deux compteurs enregistre l'operation : le filet du processeur audio
+  // compte des sauts, l'ebarbage d'une reprise compte des ebarbages. Les deux jettent exactement de
+  // la meme facon, et c'est bien pour cela qu'ils partagent ce code — mais ils ne racontent pas la
+  // meme histoire, et le journal doit pouvoir les distinguer.
+  dropOldest(keepFrames, counter = CONTROL_SKIPS) {
     const write = Atomics.load(this.control, CONTROL_WRITE_INDEX);
     const read = Atomics.load(this.control, CONTROL_READ_INDEX);
     const used = write >= read ? write - read : write + this.capacity - read;
@@ -145,7 +182,10 @@ export class PcmRing {
     }
 
     Atomics.store(this.control, CONTROL_READ_INDEX, position);
-    Atomics.add(this.control, CONTROL_SKIPS, 1);
+    // La lecture repart sur un echantillon entier : la fraction en cours decrivait une position dans
+    // un son qui vient d'etre jete.
+    this.fraction = 0;
+    Atomics.add(this.control, counter, 1);
     return true;
   }
 
@@ -163,6 +203,12 @@ export class PcmRing {
   // l'auditeur entend jusqu'a trois secondes de memoire perimee. La valeur ecrite est donc relue :
   // si le consommateur a bouge, la remise est refaite sur sa nouvelle position.
   clear() {
+    // La position fractionnaire decrivait un son qui n'existe plus. Elle n'a de sens que pour le
+    // consommateur, donc cette remise n'a d'effet que lorsque producteur et consommateur partagent
+    // le meme objet — le mode messages. En memoire partagee, la fraction laissee derriere vaut moins
+    // d'un echantillon : rien qui merite de traverser le tableau de controle.
+    this.fraction = 0;
+
     for (let attempt = 0; attempt < CLEAR_ATTEMPTS; attempt += 1) {
       const read = Atomics.load(this.control, CONTROL_READ_INDEX);
       Atomics.store(this.control, CONTROL_WRITE_INDEX, read);
@@ -213,11 +259,66 @@ export class PcmRing {
   // seul creux, entendu comme un seul trou, ajouterait une quinzaine d'unites. Le nombre affiche ne
   // dirait alors plus rien de la gravite, et la regle « la file s'est videe depuis le dernier
   // rapport » compterait quinze fois le meme evenement.
-  read(left, right) {
+  // `ratio` est la vitesse de lecture, en part de la vitesse nominale. Il vaut un la plupart du
+  // temps ; il s'en ecarte de quelques millimes quand le niveau de la file s'eloigne du seuil, et
+  // c'est ce qui ramene la latence sans jamais couper le son.
+  //
+  // Ce reglage remplace le seul outil que le player avait pour corriger sa latence : jeter la file.
+  // Jeter s'entend, et le journal du 6 aout 2026 en montrait onze en vingt-neuf minutes. Consommer
+  // cinq pour mille plus vite ne s'entend pas, et rend le meme service en une minute.
+  read(left, right, ratio = 1) {
     const wanted = Math.min(left.length, right.length);
     const write = Atomics.load(this.control, CONTROL_WRITE_INDEX);
     const read = Atomics.load(this.control, CONTROL_READ_INDEX);
     const used = write >= read ? write - read : write + this.capacity - read;
+
+    // A vitesse nominale et sur un echantillon entier, chaque sortie consomme exactement une entree.
+    // C'est le cas de tres loin le plus frequent, et il ne paie ni interpolation ni flottants.
+    if (ratio === 1 && this.fraction === 0) {
+      return this.readAligned(left, right, wanted, read, used);
+    }
+
+    // Nombre d'echantillons qu'il faut avoir en file pour produire `wanted` sorties a cette vitesse.
+    // Le dernier echantillon interpole lit la case suivante : d'ou le `+ 2` et non `+ 1`.
+    const needed = Math.floor(this.fraction + (wanted - 1) * ratio) + 2;
+
+    if (used < needed) {
+      // La file n'a pas de quoi tenir cette vitesse. La vitesse n'est alors plus la question : la
+      // lecture alignee sait completer par du silence et compter le manque, ce que ce chemin-ci ne
+      // sait pas faire. La fraction repart de zero, soit moins d'un echantillon de saut.
+      this.fraction = 0;
+      return this.readAligned(left, right, wanted, read, used);
+    }
+
+    let position = read;
+    let fraction = this.fraction;
+
+    for (let index = 0; index < wanted; index += 1) {
+      const next = position + 1 === this.capacity ? 0 : position + 1;
+      const slot = position * PCM_CHANNELS;
+      const nextSlot = next * PCM_CHANNELS;
+
+      left[index] = this.samples[slot] + (this.samples[nextSlot] - this.samples[slot]) * fraction;
+      right[index] =
+        this.samples[slot + 1] + (this.samples[nextSlot + 1] - this.samples[slot + 1]) * fraction;
+
+      fraction += ratio;
+
+      while (fraction >= 1) {
+        fraction -= 1;
+        position = position + 1 === this.capacity ? 0 : position + 1;
+      }
+    }
+
+    this.fraction = fraction;
+    Atomics.store(this.control, CONTROL_READ_INDEX, position);
+    this.starving = false;
+
+    return wanted;
+  }
+
+  // Cette methode lit a la vitesse nominale, un echantillon de file par echantillon de sortie.
+  readAligned(left, right, wanted, read, used) {
     const count = Math.min(wanted, used);
 
     let position = read;
@@ -269,9 +370,22 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       this.blocksSinceReport = 0;
       // Ces deux bornes viennent du thread principal, qui seul connait le profil de la session. Tant
       // qu'elles valent zero, le filet est inactif : une file non bornee vaut mieux qu'une file
-      // tronquee sur une valeur devinee.
+      // tronquee sur une valeur devinee. `keepFrames` est aussi le seuil de bufferisation, donc la
+      // valeur que le regulateur de vitesse cherche a tenir.
       this.ceilingFrames = 0;
       this.keepFrames = 0;
+      // Vitesse de lecture appliquee au dernier bloc, remontee au thread principal pour le journal.
+      this.ratio = 1;
+      // Cette demande d'ebarbage est posee a chaque reprise de lecture et honoree au bloc suivant.
+      //
+      // C'est le correctif du defaut le plus couteux du player. Une rebufferisation s'arrete des que
+      // la file atteint le seuil, mais elle ne s'arrete pas *au* seuil : TCP relache d'un coup ce
+      // qu'il retenait — le journal du 6 aout 2026 montre des pointes a 96 paquets par seconde pour
+      // une cadence nominale de 25 — et la lecture repartait sur tout ce qui etait arrive. Chaque
+      // manque de donnees ajoutait ainsi 150 a 530 ms de latence definitive, jusqu'a ce que le vidage
+      // de derive coupe le son. Ramener la file au seuil coute ici exactement zero : le son vient
+      // d'etre interrompu, l'oreille est deja au milieu d'une coupure.
+      this.trimPending = false;
 
       // Le thread principal pilote la lecture et l'arret par ce port.
       this.port.onmessage = (event) => {
@@ -292,6 +406,9 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         }
 
         if (message.type === "play") {
+          // Une reprise deja en cours ne redemande rien : `setPlaying` ne transmet que les vraies
+          // transitions, mais ce processeur ne depend pas de cette politesse.
+          this.trimPending = !this.playing;
           this.playing = true;
           return;
         }
@@ -340,15 +457,57 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         this.ring.dropOldest(this.keepFrames);
       }
 
+      // L'ebarbage de reprise vient juste apres, et l'ordre compte : le filet traite le cas ou la
+      // file a explose, l'ebarbage traite le cas ordinaire ou elle depasse simplement le seuil.
+      if (this.trimPending) {
+        this.trimPending = false;
+
+        if (this.keepFrames > 0) {
+          this.ring.dropOldest(this.keepFrames, CONTROL_TRIMS);
+        }
+      }
+
       if (this.playing) {
-        this.ring.read(left, right);
+        this.ratio = this.consumptionRatio();
+        this.ring.read(left, right, this.ratio);
       } else {
+        this.ratio = 1;
         left.fill(0);
         right.fill(0);
       }
 
       this.report();
       return this.running;
+    }
+
+    // Cette methode rend la vitesse a laquelle la file doit etre consommee maintenant.
+    //
+    // Elle est proportionnelle a l'ecart au seuil, nulle dans une zone morte, et bornee a quelques
+    // millimes. C'est la forme la plus simple qui converge : au-dela de la zone morte la correction
+    // croit lineairement jusqu'a son maximum, et elle s'annule d'elle-meme des que le niveau revient.
+    //
+    // Elle sert deux causes a la fois, et c'est voulu. La premiere est le residu que l'ebarbage
+    // laisse derriere lui. La seconde est la derive d'horloge entre le poste Ableton et l'auditeur :
+    // mesuree a moins de 30 ppm sur les journaux du 6 aout 2026, donc negligeable aujourd'hui, mais
+    // un regulateur qui tient le niveau la corrige sans avoir jamais eu a la nommer.
+    consumptionRatio() {
+      if (this.keepFrames <= 0) {
+        return 1;
+      }
+
+      const error = this.ring.available - this.keepFrames;
+      const deadband = this.keepFrames * RATE_DEADBAND;
+
+      if (error > -deadband && error < deadband) {
+        return 1;
+      }
+
+      // L'ecart est compte a partir du bord de la zone morte, pas du seuil : la correction part donc
+      // de zero au bord au lieu de sauter, et rien ne s'entend au passage.
+      const excess = error > 0 ? error - deadband : error + deadband;
+      const correction = Math.max(-1, Math.min(1, excess / (this.keepFrames * RATE_SPAN)));
+
+      return 1 + RATE_MAX * correction;
     }
 
     // Cette methode annonce au thread principal le niveau de la file. Elle le fait une fois sur
@@ -371,6 +530,11 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
         overflows: this.ring.overflows,
         // Les sauts au direct disent que le filet a servi, donc que le vidage a ete distance.
         skips: this.ring.skips,
+        // Les ebarbages disent combien de reprises ont ramene la file au seuil. Contrairement aux
+        // sauts, en voir beaucoup est bon signe : chacun est une latence qui n'a pas ete gardee.
+        trims: this.ring.trims,
+        // La vitesse appliquee dit si le regulateur travaille, et dans quel sens.
+        ratio: this.ratio,
       });
     }
   }

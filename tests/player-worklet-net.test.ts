@@ -150,3 +150,135 @@ test("ne saute jamais tant qu'aucun plafond n'est connu", () => {
   assert.equal(file.available, 900);
   assert.equal(file.skips, 0);
 });
+
+// Ce test couvre le correctif du defaut le plus couteux du player, celui que le journal du 6 aout
+// 2026 montre onze fois en vingt-neuf minutes.
+//
+// Une rebufferisation s'arrete des que la file atteint le seuil, mais elle ne s'arrete pas *au*
+// seuil : TCP relache d'un coup ce qu'il retenait, et la file passe de zero a bien plus que le seuil
+// entre deux releves. Sans ebarbage, cet exces restait la pour toujours — rien dans le player ne
+// pouvait le reprendre — jusqu'a ce que le vidage de derive coupe le son. La latence montait ainsi
+// en cliquet, de 800 ms a 1500, manque de donnees apres manque de donnees.
+test("ramene la file au seuil a la reprise de lecture", () => {
+  const { processeur, file } = monter();
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 600, keepFrames: 200 });
+  // 500 frames : bien au-dessus du seuil, mais sous le plafond du filet. C'est exactement la zone ou
+  // rien n'agissait auparavant.
+  remplir(file, 500);
+  processeur.port.deliver({ type: "play" });
+
+  const bloc = blocDeSortie();
+  processeur.process([], bloc.sorties);
+
+  assert.equal(file.trims, 1, "l'ebarbage doit etre compte");
+  assert.equal(file.skips, 0, "le filet n'a pas a intervenir : la file tenait dans son plafond");
+  assert.equal(file.available, 200 - 128, "la file doit repartir du seuil, moins le bloc consomme");
+  // Garder les 200 dernieres de 500 commence a la frame 300 : la lecture repart bien du son recent.
+  assert.equal(bloc.gauche[0], 300);
+});
+
+// Ce test verifie que l'ebarbage ne se declenche qu'a la reprise. Applique a chaque bloc, il
+// empecherait la file de porter la moindre marge au-dessus du seuil, et le premier soubresaut du
+// reseau produirait un manque de donnees.
+test("n'ebarbe qu'a la reprise, pas a chaque bloc", () => {
+  const { processeur, file } = monter();
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 600, keepFrames: 200 });
+  remplir(file, 500);
+  processeur.port.deliver({ type: "play" });
+
+  processeur.process([], blocDeSortie().sorties);
+  remplir(file, 300);
+  processeur.process([], blocDeSortie().sorties);
+
+  assert.equal(file.trims, 1, "un seul ebarbage pour une seule reprise");
+  assert.equal(file.available, 200 - 128 + 300 - 128);
+});
+
+// Ce test verifie que la lecture arretee n'ebarbe rien : pendant une bufferisation, la file doit
+// pouvoir monter jusqu'au seuil sans que personne y touche.
+test("n'ebarbe pas tant que la lecture n'a pas repris", () => {
+  const { processeur, file } = monter();
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 600, keepFrames: 200 });
+  remplir(file, 500);
+
+  processeur.process([], blocDeSortie().sorties);
+
+  assert.equal(file.trims, 0);
+  assert.equal(file.available, 500);
+});
+
+// Cette fonction fait tourner assez de blocs pour recevoir un releve, et rend le dernier.
+//
+// La file est regarnie d'un bloc avant chaque tour, comme le ferait le decodeur d'un direct sain :
+// le niveau reste alors celui que le test a voulu, au lieu de fondre en une poignee de blocs et de
+// faire mesurer une correction qui ne repond plus a la question posee.
+function dernierReleve(
+  processeur: Processeur,
+  file: InstanceType<typeof PcmRing>,
+  blocs = 17,
+): Record<string, unknown> {
+  for (let index = 0; index < blocs; index += 1) {
+    remplir(file, 128);
+    processeur.process([], blocDeSortie().sorties);
+  }
+
+  const releves = processeur.port.sent.filter((message) => message.type === "level");
+  const dernier = releves[releves.length - 1];
+
+  assert.ok(dernier !== undefined, "le processeur doit avoir annonce au moins un niveau");
+  return dernier;
+}
+
+// Ce test verifie que le regulateur de vitesse se tait quand le niveau est celui qu'on veut. Une
+// correction permanente ferait travailler l'interpolation pour rien, et desaccorderait le son en
+// continu au lieu de le faire seulement le temps de converger.
+test("ne corrige pas la vitesse quand le niveau tient le seuil", () => {
+  const { processeur, file } = monter(4000);
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 3000, keepFrames: 1000 });
+  remplir(file, 1000);
+  processeur.port.deliver({ type: "play" });
+
+  assert.equal(dernierReleve(processeur, file).ratio, 1);
+});
+
+// Ce test verifie que le regulateur accelere quand la file est trop pleine, et qu'il reste dans ses
+// bornes. C'est ce qui remplace le vidage : cinq pour mille valent 8,6 cents de desaccord, la ou
+// jeter une seconde de son s'entend comme une coupure.
+test("accelere la lecture quand la file depasse le seuil, sans depasser sa borne", () => {
+  const { processeur, file } = monter(4000);
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 3000, keepFrames: 1000 });
+  remplir(file, 1000);
+  processeur.port.deliver({ type: "play" });
+  // Ce premier bloc consomme l'ebarbage de la reprise. Sans lui, l'ebarbage ramenerait la file au
+  // seuil et le test mesurerait une correction nulle : c'est bien ce qu'on veut a la reprise, mais
+  // ce n'est pas ce que ce test-ci pose comme question.
+  processeur.process([], blocDeSortie().sorties);
+
+  // Le double du seuil : bien au-dela de la zone morte et de la pente, donc la correction maximale.
+  remplir(file, 1128);
+
+  const ratio = dernierReleve(processeur, file).ratio as number;
+
+  assert.ok(ratio > 1, "la lecture doit consommer plus vite pour resorber l'exces");
+  assert.ok(ratio <= 1.005, `la correction doit rester inaudible, recu ${ratio}`);
+});
+
+// Ce test verifie l'autre sens : une file trop maigre se consomme plus lentement, ce qui laisse au
+// reseau le temps de la regarnir au lieu de la vider jusqu'au manque de donnees.
+test("ralentit la lecture quand la file passe sous le seuil", () => {
+  const { processeur, file } = monter(4000);
+
+  processeur.port.deliver({ type: "limit", ceilingFrames: 3000, keepFrames: 1000 });
+  remplir(file, 300);
+  processeur.port.deliver({ type: "play" });
+
+  const ratio = dernierReleve(processeur, file).ratio as number;
+
+  assert.ok(ratio < 1, "la lecture doit ralentir pour laisser la file se regarnir");
+  assert.ok(ratio >= 0.995, `la correction doit rester inaudible, recu ${ratio}`);
+});

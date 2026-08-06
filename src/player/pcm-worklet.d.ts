@@ -14,6 +14,10 @@ export declare const CONTROL_READ_INDEX: number;
 export declare const CONTROL_UNDERRUNS: number;
 export declare const CONTROL_OVERFLOWS: number;
 export declare const CONTROL_SKIPS: number;
+export declare const CONTROL_TRIMS: number;
+export declare const RATE_DEADBAND: number;
+export declare const RATE_SPAN: number;
+export declare const RATE_MAX: number;
 
 // Cette fonction cree la memoire d'une file PCM, partagee entre threads ou non.
 export declare function createPcmBuffer(shared: boolean, capacityFrames?: number): ArrayBufferLike;
@@ -31,9 +35,13 @@ export declare class PcmRing {
   readonly underruns: number;
   readonly overflows: number;
   readonly skips: number;
+  readonly trims: number;
 
   clear(): void;
-  dropOldest(keepFrames: number): boolean;
+  // `counter` choisit le compteur qui enregistre l'operation : les sauts du filet par defaut, les
+  // ebarbages d'une reprise quand l'appelant passe `CONTROL_TRIMS`.
+  dropOldest(keepFrames: number, counter?: number): boolean;
   write(left: Float32Array, right: Float32Array): boolean;
-  read(left: Float32Array, right: Float32Array): number;
+  // `ratio` est la vitesse de lecture, en part de la vitesse nominale.
+  read(left: Float32Array, right: Float32Array, ratio?: number): number;
 }

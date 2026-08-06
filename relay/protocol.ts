@@ -3,13 +3,13 @@
 
 export const PROTOCOL_VERSION = 1;
 
-// Ces valeurs sont les seules acceptees par la version 1. Toute autre valeur est refusee.
+// Ces valeurs sont les seules acceptees par la version 1.1. Toute autre valeur est refusee.
 export const ALLOWED_BITRATES = [128000, 192000, 256000];
 export const ALLOWED_LATENCY_PROFILES = ["low", "balanced", "stable"];
 export const ALLOWED_STOP_REASONS = ["user_stop", "error"];
 export const OUTPUT_SAMPLE_RATE = 48000;
 export const CHANNEL_COUNT = 2;
-export const FRAME_DURATION_MS = 20;
+export const FRAME_DURATION_MS = 40;
 export const MAX_SESSION_ID = 4294967295;
 
 // Ce type decrit la session annoncee par `stream_start` et rediffusee aux listeners.

@@ -114,6 +114,9 @@ export class PlayerStateMachine {
   private recoveringFromGap = false;
   private gapStableReports = 0;
   private gapFlushes = 0;
+  // Seuil decide par le regulateur de tampon, ou `null` tant qu'il n'a rien dit. Le profil de la
+  // session en est alors le plancher, jamais l'inverse.
+  private adaptiveTargetMs: number | null = null;
   private onChange: (status: PlayerStatus) => void;
 
   constructor(onChange: (status: PlayerStatus) => void = () => {}) {
@@ -411,9 +414,25 @@ export class PlayerStateMachine {
     this.gapFlushes = 0;
   }
 
-  // Cette methode rend le seuil de bufferisation de la session courante.
+  // Cette methode rend le seuil de bufferisation en vigueur.
+  //
+  // Il vient du regulateur quand celui-ci a parle, et du profil de la session sinon. La machine ne
+  // le calcule pas elle-meme : elle raisonne sur des etats, pas sur des mesures de reseau.
   targetBufferMs(): number {
+    if (this.adaptiveTargetMs !== null) {
+      return this.adaptiveTargetMs;
+    }
+
     return this.session === null ? 400 : this.session.targetBufferMs;
+  }
+
+  // Cette methode installe le seuil decide par le regulateur (`buffer-target.ts`).
+  //
+  // Elle ne declenche aucune transition. Le seuil sert de comparaison dans `reportLevel`, qui sera
+  // rappelee au prochain releve du processeur audio, soit dans moins de quarante millisecondes :
+  // changer d'etat ici sur une mesure vieille d'un tour ne ferait qu'ajouter du bruit.
+  setTargetBufferMs(targetMs: number | null): void {
+    this.adaptiveTargetMs = targetMs;
   }
 
   // Cette methode change l'etat et previent une seule fois.

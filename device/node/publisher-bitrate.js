@@ -19,11 +19,21 @@ const MIN_BITRATE = 32000;
 // trame la plus ancienne encore en attente d'envoi : c'est une duree, donc elle se compare
 // directement au budget de latence, et elle ne depend ni du debit ni de la taille des tampons du
 // systeme.
+//
+// Depuis que le publisher tient sa propre file d'envoi, cette mesure vaut bien mieux qu'avant. Elle
+// commence a croitre des que la fenetre d'envoi se ferme, c'est-a-dire des les premieres dizaines de
+// millisecondes de retard, la ou l'ancienne ne voyait rien tant que le tampon du noyau n'etait pas
+// plein — et sautait alors d'un coup a plusieurs centaines de millisecondes.
 const PRESSURE_MS = 150;
 
-// Duree de calme exigee avant de remonter. Elle est longue : une remontee trop rapide replace le
-// flux dans l'etat qui vient d'echouer, et fait osciller le debit au lieu de le stabiliser.
-const CALM_MS = 15000;
+// Duree de calme exigee avant de remonter.
+//
+// Elle etait de quinze secondes, et le journal du 6 aout 2026 en montre le cout : apres une
+// reconnexion a 21:14, le device a mis quatre-vingt-quinze secondes a remonter de 44 a 109 kbit/s
+// sous un plafond de 128, sur un lien qui allait deja tres bien. Dix secondes de lien propre restent
+// un signal solide, et ce n'est de toute facon pas cette duree qui empeche l'oscillation : c'est
+// l'attente de `HOLD_MS` apres chaque decision, pendant laquelle plus rien n'est decide.
+const CALM_MS = 10000;
 
 // Facteur applique a chaque decision de baisse. Une baisse multiplicative rattrape une congestion
 // severe en quelques decisions, la ou une baisse par paliers fixes resterait derriere.

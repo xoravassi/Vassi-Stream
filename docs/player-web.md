@@ -174,16 +174,64 @@ la lecture doit repartir du direct, pas d'un retard egal au temps de pause.
 
 ## Seuils de latence
 
-Le seuil vient du `latencyProfile` annonce par la session, comme le fixe `docs/protocol-v1.md` :
+Le `latencyProfile` annonce par la session donne le **plancher** du seuil, comme le fixe
+`docs/protocol-v1.md` :
 
-| `latencyProfile` | PCM attendu avant de jouer |
+| `latencyProfile` | plancher du seuil |
 |---|---:|
 | `low` | 200 ms |
 | `balanced` | 400 ms |
 | `stable` | 800 ms |
 
-Le player ne choisit pas un autre seuil pour un nom donne. Un profil inconnu est traite comme
-`balanced` : mieux vaut un direct un peu long a demarrer qu'un direct qui ne demarre pas.
+Un profil inconnu est traite comme `balanced` : mieux vaut un direct un peu long a demarrer qu'un
+direct qui ne demarre pas.
+
+### Le seuil au-dessus du plancher est decide par le lien
+
+`buffer-target.ts` mesure l'ecart entre deux arrivees de paquets. En regime normal il vaut la duree
+d'une trame ; tout ce qui depasse est du temps pendant lequel la file s'est videe sans etre remplie,
+donc exactement la duree de tampon qu'il aurait fallu avoir. Le seuil est le plus long de ces
+blocages, majore de moitie, borne entre le plancher du profil et deux secondes.
+
+La montee est immediate, la descente lente — cinq millisecondes de seuil par seconde de calme. La
+dissymetrie est voulue : garder trop de tampon coute de la latence, n'en pas garder assez coute une
+coupure. Un manque de donnees, lui, fait autorite sur la mesure : il prouve directement que le seuil
+courant etait trop court, et le releve d'un quart.
+
+Ce choix vient des journaux du 6 aout 2026, qui montrent qu'aucune valeur fixe ne convient. A 400 ms,
+un lien noye par un appel Meet produit 46 rebufferisations en deux minutes et demie. A 800 ms sur un
+lien 4G sain, il en reste 27 en vingt-neuf minutes, parce que la 4G bloque parfois plus longtemps que
+ca. Le reglage humain borne desormais le regulateur au lieu de le remplacer — la meme conversion que
+celle deja faite cote device, ou la qualite choisie est devenue un plafond de debit.
+
+## Tenir le seuil sans jamais couper
+
+Atteindre le seuil ne suffit pas : encore faut-il y rester. Le player dispose pour cela de deux
+outils, du plus doux au plus brutal, et d'un filet.
+
+**La vitesse de consommation.** Le processeur audio lit la file avec un pointeur fractionnaire et
+une interpolation lineaire (`pcm-worklet.js`). Quand le niveau s'ecarte du seuil de plus de 15 %, il
+consomme jusqu'a cinq pour mille plus vite ou plus lentement, proportionnellement a l'ecart. Cinq
+pour mille valent 8,6 cents de desaccord : inaudible sur un mix, et transitoire puisque la correction
+s'annule des que le niveau revient. C'est ce que fait NetEq dans WebRTC et dash.js en basse latence,
+a ceci pres qu'ils vont jusqu'a dix pour cent sur de la parole — un mix ne le supporterait pas, et
+n'en a pas besoin.
+
+**L'ebarbage a la reprise.** A chaque passage en `PLAYING`, si la file depasse le seuil, l'exces le
+plus ancien est jete. Cela ne coute rien : le son vient d'etre interrompu, l'oreille est deja au
+milieu d'une coupure.
+
+Ce second outil corrige le defaut le plus couteux du player. Une rebufferisation s'arretait des que
+la file atteignait le seuil, mais elle ne s'arretait pas *au* seuil : TCP relache d'un coup ce qu'il
+retenait — les journaux du 6 aout 2026 montrent des pointes a 96 paquets par seconde pour une cadence
+nominale de 50 — et la lecture repartait sur tout ce qui etait arrive. Chaque manque de donnees
+ajoutait ainsi 150 a 530 ms de latence **definitive** : rien, dans le player, ne savait la reprendre.
+Le tampon montait en cliquet de 800 a 1500 ms, puis le vidage de derive coupait le son. Onze fois en
+vingt-neuf minutes.
+
+Les deux compteurs sont distincts dans les diagnostics, et la distinction n'est pas cosmetique :
+`skips` compte les sauts du filet, qui sont une anomalie, `trims` compte les ebarbages, dont voir le
+nombre monter est bon signe.
 
 ## Nouvelle session
 

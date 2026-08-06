@@ -165,15 +165,35 @@ session renouvelee porte le bit de discontinuite, parce qu'un encodeur qui redem
 l'audio. Une session creee par une reconnexion ne pose pas ce bit : son `stream_state` impose deja la
 remise a zero du player.
 
-## Audio ancien jamais accumule
+## Quand le lien ne suit plus, c'est l'audio le plus ancien qui part
 
-Avant chaque envoi, le publisher lit `bufferedAmount`, le nombre d'octets deja remis a `send()` mais
-pas encore partis sur le reseau. Au-dela de 8192 octets, soit environ 250 ms d'audio en qualite
-Studio, la frame est abandonnee et la suivante porte le bit de discontinuite.
+Le publisher ne remet plus ses frames a la socket des qu'il les recoit. Elles passent par une file a
+lui, bornee a 500 ms d'audio, et une **fenetre d'envoi** limite a quatre le nombre de frames confiees
+au systeme sans accuse de reception.
 
-Ce choix suit le meme principe que la queue audio du bloc 3 : quand la sortie est en retard, l'audio
-ancien est jete pour rester en direct. Mettre ces frames en attente ajouterait une latence definitive
-au lieu d'une courte coupure.
+Cette indirection existe pour une seule raison : pouvoir choisir *quoi* jeter. La version precedente
+lisait `bufferedAmount` et abandonnait, au-dela de 8192 octets, **la frame qui venait d'etre
+encodee** — en gardant les anciennes. C'est le bon reflexe pour un fichier et le mauvais pour un
+direct : le son garde etait deja perime au moment ou il partait. Le journal du 6 aout 2026 en montre
+le prix, un trou de 2920 ms d'un seul tenant, le pire evenement du direct sain de la soiree. La file
+fait desormais l'inverse : la frame qui arrive est toujours acceptee, et c'est le vieux fond de file
+qui part.
+
+La fenetre d'envoi est ce qui donne son sens a la file. Node n'expose aucun reglage de la taille du
+tampon d'envoi du noyau : sans elle, une seconde d'audio s'empilerait la, invisible et hors de
+portee, et la file applicative resterait vide pendant que le retard grandit. En n'en confiant que
+quelques-unes a la fois, le retard s'accumule la ou on peut le voir et decider.
+
+Quatre trames font 160 ms. Sur un lien sain le rappel d'ecriture revient en moins d'une milliseconde
+et cette fenetre n'est jamais atteinte : elle ne coute rien tant que rien ne va mal.
+
+Une demi-seconde de file, enfin, parce que le player la rattrape maintenant sans coupure — son seuil
+monte jusqu'a deux secondes quand le lien le demande — alors qu'un abandon, lui, est definitif.
+
+Le regulateur de debit y gagne au passage. Il lit l'age de la plus vieille frame qui attend quelque
+part, et cette duree commence maintenant a croitre des que la fenetre d'envoi se ferme, la ou
+l'ancienne mesure ne voyait rien tant que le tampon du noyau n'etait pas plein — et sautait alors
+d'un coup a plusieurs centaines de millisecondes.
 
 Une frame que l'en-tete public ne peut pas porter est traitee de la meme facon : elle est comptee
 comme perdue et la suivante porte le bit de discontinuite. Ce refus arrive avant l'entree dans la

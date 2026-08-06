@@ -49,7 +49,7 @@ static void read_exactly(SOCKET client, unsigned char *buffer, int size) {
 static t_encoded_audio_frame make_frame(std::uint32_t sequence, unsigned char flags, std::size_t size) {
   t_encoded_audio_frame frame = {};
   frame.sequence = sequence;
-  frame.timestamp_us = (std::uint64_t)sequence * 20000ULL;
+  frame.timestamp_us = (std::uint64_t)sequence * 40000ULL;
   frame.flags = flags;
   frame.payload_size = size;
   for (std::size_t index = 0; index < size; index += 1) {

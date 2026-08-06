@@ -64,7 +64,7 @@ Les entiers sont en big-endian, comme le protocole public.
 | 8 | 8 | timestamp relatif `uint64` en microsecondes |
 | 16 | 1 | flags, bit 0 = discontinuite |
 | 17 | 1 | reserve, toujours `0` |
-| 18 | 2 | taille du payload, de `1` a `1276` |
+| 18 | 2 | taille du payload, de `1` a `2560` |
 | 20 | N | paquet Opus brut |
 
 Le magic sert a se resynchroniser : si le lecteur recoit un octet parasite, il cherche le prochain

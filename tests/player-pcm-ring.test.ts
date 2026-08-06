@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPcmBuffer, PcmRing } from "../src/player/pcm-worklet.js";
+import { CONTROL_TRIMS, createPcmBuffer, PcmRing } from "../src/player/pcm-worklet.js";
 
 // Ce fichier verifie la file PCM qui relie le worker de decodage au processeur audio. C'est la
 // seule piece du bloc 8 traversee par chaque echantillon : une erreur ici s'entend tout de suite.
@@ -276,4 +276,105 @@ test("saute correctement quand la file a fait le tour de sa memoire", () => {
   const right = new Float32Array(4);
   assert.equal(ring.read(left, right), 4);
   assert.deepEqual(Array.from(left), [108, 109, 110, 111]);
+});
+
+// Ce test verifie la lecture ralentie : elle produit autant d'echantillons de sortie qu'on lui en
+// demande, mais en consomme moins, ce qui laisse la file se regarnir.
+//
+// La valeur employee ici est bien plus grande que celle du regulateur — un demi contre cinq pour
+// mille — parce qu'une correction inaudible ne se lit pas dans un tableau. Le mecanisme, lui, est
+// exactement le meme.
+test("lit plus lentement en interpolant entre deux echantillons", () => {
+  const ring = makeRing();
+  const source = block(0, 8);
+  ring.write(source.left, source.right);
+
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+
+  assert.equal(ring.read(left, right, 0.5), 4);
+  assert.deepEqual(Array.from(left), [0, 0.5, 1, 1.5]);
+  assert.deepEqual(Array.from(right), [-0, -0.5, -1, -1.5]);
+  // Quatre sorties a demi-vitesse n'ont consomme que deux entrees : la file en garde six.
+  assert.equal(ring.available, 6);
+});
+
+// Ce test verifie la lecture acceleree : elle consomme plus qu'elle ne rend, ce qui resorbe l'exces
+// de latence sans jamais interrompre le son.
+test("lit plus vite en sautant regulierement des echantillons", () => {
+  const ring = makeRing();
+  const source = block(0, 12);
+  ring.write(source.left, source.right);
+
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+
+  assert.equal(ring.read(left, right, 2), 4);
+  assert.deepEqual(Array.from(left), [0, 2, 4, 6]);
+  assert.equal(ring.available, 4, "quatre sorties a double vitesse consomment huit entrees");
+});
+
+// Ce test verifie que la vitesse nominale ne passe pas par l'interpolation : le chemin d'origine est
+// conserve intact, sans arithmetique flottante ni lecture de la case suivante.
+test("rend exactement les memes echantillons a vitesse nominale", () => {
+  const ring = makeRing();
+  const source = block(10, 8);
+  ring.write(source.left, source.right);
+
+  const left = new Float32Array(8);
+  const right = new Float32Array(8);
+
+  assert.equal(ring.read(left, right, 1), 8);
+  assert.deepEqual(Array.from(left), [10, 11, 12, 13, 14, 15, 16, 17]);
+  assert.equal(ring.available, 0);
+});
+
+// Ce test verifie que la vitesse ne prend jamais le pas sur la famine. Quand la file n'a pas de quoi
+// tenir la vitesse demandee, la lecture repasse au chemin aligne : silence en fin de bloc et manque
+// de donnees compte, exactement comme avant. Une acceleration qui viderait la file en silence sans
+// rien compter serait le pire des deux mondes.
+test("revient a la lecture alignee et compte le manque quand la file ne suit pas", () => {
+  const ring = makeRing();
+  const source = block(0, 3);
+  ring.write(source.left, source.right);
+
+  const left = new Float32Array(6);
+  const right = new Float32Array(6);
+
+  assert.equal(ring.read(left, right, 1.005), 3);
+  assert.deepEqual(Array.from(left), [0, 1, 2, 0, 0, 0]);
+  assert.equal(ring.underruns, 1);
+});
+
+// Ce test verifie que la lecture a vitesse variable suit le tour de la memoire. Un oubli de retour au
+// debut sur la case interpolee ferait lire hors du tableau, donc du silence, une fois par tour.
+test("interpole correctement quand la file fait le tour de sa memoire", () => {
+  const ring = makeRing(16);
+
+  const premier = block(1, 12);
+  ring.write(premier.left, premier.right);
+  ring.read(new Float32Array(12), new Float32Array(12));
+
+  // Cette ecriture repasse par le debut de la memoire.
+  const second = block(100, 12);
+  ring.write(second.left, second.right);
+
+  const left = new Float32Array(4);
+  const right = new Float32Array(4);
+  assert.equal(ring.read(left, right, 0.5), 4);
+  assert.deepEqual(Array.from(left), [100, 100.5, 101, 101.5]);
+});
+
+// Ce test verifie que l'ebarbage compte dans son propre compteur. Le journal doit pouvoir distinguer
+// une reprise ordinaire — qui n'a rien d'inquietant — d'un saut du filet, qui dit que le vidage a
+// ete distance.
+test("compte les ebarbages a part des sauts du filet", () => {
+  const ring = makeRing();
+  const source = block(0, 12);
+  ring.write(source.left, source.right);
+
+  assert.equal(ring.dropOldest(4, CONTROL_TRIMS), true);
+  assert.equal(ring.trims, 1);
+  assert.equal(ring.skips, 0);
+  assert.equal(ring.available, 4);
 });

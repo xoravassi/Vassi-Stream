@@ -80,7 +80,7 @@ test(
     for (let index = 0; index < FRAME_COUNT; index += 1) {
       const frame = received[index]!;
       assert.equal(frame.sequence, index);
-      assert.equal(frame.timestampMicros, BigInt(index) * 20000n);
+      assert.equal(frame.timestampMicros, BigInt(index) * 40000n);
       assert.equal(frame.flags, index % 50 === 0 ? 1 : 0);
       assert.deepEqual(frame.payload, expectedPayload(index));
     }

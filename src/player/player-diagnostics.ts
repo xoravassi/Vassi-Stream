@@ -22,7 +22,12 @@ export type PlayerDiagnostics = {
   // Debit annonce par la session, en bits par seconde, ou `null` hors direct. C'est un plafond : le
   // device produit en dessous des qu'il juge que le lien ne suit plus.
   sessionBitrate: number | null;
+  // Seuil de bufferisation en vigueur. Il n'est plus fixe par le profil : celui-ci en est le
+  // plancher, et le regulateur le remonte quand les blocages d'arrivee le demandent.
   targetBufferMs: number;
+  // Plus long blocage d'arrivee encore en memoire, en millisecondes. C'est ce que le regulateur de
+  // seuil a mesure, donc la raison chiffree du seuil ci-dessus.
+  stallMs: number;
   shared: boolean;
 
   // Reseau : ce qui arrive du relais.
@@ -70,6 +75,12 @@ export type PlayerDiagnostics = {
   // le vidage. Ce compteur ne change aucun verdict : il dit ou regarder quand le son a saute sans
   // qu'aucune rebufferisation ne l'explique.
   skips: number;
+  // Nombre de fois ou une reprise de lecture a ramene la file a son seuil. Contrairement aux sauts,
+  // en voir est bon signe : chacun est une latence qui n'a pas ete gardee jusqu'au vidage suivant.
+  trims: number;
+  // Vitesse de consommation appliquee, en part de la vitesse nominale. Elle vaut 1 au repos et s'en
+  // ecarte de quelques millimes tant que le regulateur ramene le niveau vers le seuil.
+  ratio: number;
   sinceLevelMs: number | null;
 
   errorReason: string | null;
@@ -84,7 +95,7 @@ export type PlayerVerdict = {
 };
 
 // Un direct qui n'envoie plus rien pendant deux secondes a un probleme de reseau : le relais envoie
-// cinquante paquets par seconde, et son ping toutes les vingt secondes garde la connexion ouverte
+// vingt-cinq paquets par seconde, et son ping toutes les vingt secondes garde la connexion ouverte
 // meme sans audio.
 export const SILENT_NETWORK_MS = 2000;
 
@@ -93,8 +104,8 @@ export const SILENT_NETWORK_MS = 2000;
 // peripherique de sortie disparu.
 export const AUDIO_STALL_MS = 500;
 
-// Une demi-seconde de paquets acceptes sans une seule frame decodee est une panne de decodage, pas
-// un demarrage lent.
+// Une seconde de paquets acceptes sans une seule frame decodee est une panne de decodage, pas un
+// demarrage lent. En trames de 40 ms, une seconde fait vingt-cinq paquets.
 export const DECODE_SAMPLE = 25;
 
 // Cette fonction range l'etat courant du moteur dans une famille.

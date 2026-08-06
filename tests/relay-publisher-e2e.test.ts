@@ -19,7 +19,7 @@ function makeFrame(sequence: number): { sequence: number; timestampMicros: bigin
     payload[index] = (sequence * 7 + index) & 0xff;
   }
 
-  return { sequence, timestampMicros: BigInt(sequence) * 20000n, flags: 0, payload };
+  return { sequence, timestampMicros: BigInt(sequence) * 40000n, flags: 0, payload };
 }
 
 // Cette fonction cree le publisher du device branche sur une adresse et un token donnes.
@@ -69,7 +69,7 @@ test("le publisher du device ouvre un direct que le listener recoit", async () =
       const recu = decodeAudioPacket(listener.binary[index] as Buffer);
       assert.equal(recu.header.sessionId, etat.sessionId);
       assert.equal(recu.header.sequenceNumber, index);
-      assert.equal(recu.header.timestampMicros, BigInt(index) * 20000n);
+      assert.equal(recu.header.timestampMicros, BigInt(index) * 40000n);
       assert.deepEqual(Buffer.from(recu.payload), frames[index]?.payload);
     }
 

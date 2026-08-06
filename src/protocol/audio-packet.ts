@@ -4,14 +4,23 @@ export const PROTOCOL_VERSION = 1;
 export const CODEC_OPUS = 1;
 // Cette constante impose un flux stereo dans la version 1.
 export const CHANNEL_COUNT = 2;
-// Cette constante represente 20 ms d'audio a 48 kHz pour chaque canal.
-export const FRAME_SAMPLE_COUNT = 960;
+// Cette constante represente 40 ms d'audio a 48 kHz pour chaque canal.
+//
+// La v1.1 a double la duree de trame, et le gain n'est pas dans le codec : a debit egal, Opus rend a
+// peu pres la meme chose en 20 et en 40 ms. Il est dans ce que chaque paquet traine avec lui —
+// environ 110 octets fixes entre l'en-tete VSA1, le cadre WebSocket, TLS et TCP/IP — soit pres de
+// 44 kbit/s a cinquante paquets par seconde, quel que soit le debit Opus. La moitie des paquets en
+// coute la moitie. Et sur un lien mobile, ou l'ordonnancement se fait par paquet, diviser la cadence
+// par deux agit la ou le debit adaptatif ne peut rien.
+export const FRAME_SAMPLE_COUNT = 1920;
 // Cette constante fixe la taille de l'en-tete avant le payload Opus.
 export const HEADER_SIZE = 28;
 // Ce bit signale le premier paquet transmis apres une perte locale d'audio.
 export const DISCONTINUITY_FLAG = 1;
-// Cette limite contient un paquet Opus constitue d'une seule frame de 20 ms.
-export const MAX_OPUS_PAYLOAD_SIZE = 1276;
+// Cette limite contient un paquet Opus de 40 ms, soit deux frames CELT reunies par le format code 3
+// de la RFC 6716. Elle ne peut plus valoir 1276 comme en v1 : a 256 kbit/s, 40 ms d'audio font deja
+// 1280 octets en moyenne, avant les pointes du VBR.
+export const MAX_OPUS_PAYLOAD_SIZE = 2560;
 
 const MAGIC_TEXT = "VSA1";
 const MAGIC_BYTES = new TextEncoder().encode(MAGIC_TEXT);

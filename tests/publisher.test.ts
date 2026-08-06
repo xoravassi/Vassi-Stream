@@ -7,7 +7,7 @@ import { FakeRelay, waitFor } from "./fake-relay.ts";
 
 // Le code du device reste en CommonJS parce que Node for Max expose max-api par NODE_PATH.
 const require = createRequire(import.meta.url);
-const { Publisher, LIVE, ERROR, RECONNECTING, MAX_BUFFERED_BYTES } = require("../device/node/publisher.js");
+const { Publisher, LIVE, ERROR, RECONNECTING, MAX_QUEUE_MS, MAX_INFLIGHT_FRAMES } = require("../device/node/publisher.js");
 
 const GOOD_TOKEN = "jeton-de-test-tres-secret";
 
@@ -27,7 +27,7 @@ function makeFrame(sequence: number, flags = 0): {
 
   return {
     sequence,
-    timestampMicros: BigInt(sequence) * 20000n,
+    timestampMicros: BigInt(sequence) * 40000n,
     flags,
     payload,
   };
@@ -84,7 +84,7 @@ test("authentifie le publisher puis envoie stream_start et une frame valide", as
   assert.equal(start.bitrate, 256000);
   assert.equal(start.sampleRate, 48000);
   assert.equal(start.channels, 2);
-  assert.equal(start.frameDurationMs, 20);
+  assert.equal(start.frameDurationMs, 40);
   assert.equal(start.latencyProfile, "balanced");
 
   // Le relais doit voir l'ordre exact : authentification, ouverture de session, puis audio.
@@ -123,7 +123,7 @@ test("conserve les trous de sequence et l'avance des timestamps", async (t) => {
 
   const packets = relay.received.binaryMessages.map((bytes) => decodeAudioPacket(bytes).header);
   assert.deepEqual(packets.map((header) => header.sequenceNumber), [0, 1, 5]);
-  assert.deepEqual(packets.map((header) => header.timestampMicros), [0n, 20000n, 100000n]);
+  assert.deepEqual(packets.map((header) => header.timestampMicros), [0n, 40000n, 200000n]);
   assert.deepEqual(packets.map((header) => header.flags), [0, 0, 1]);
 });
 
@@ -302,8 +302,12 @@ test("jette les frames recues hors session", async (t) => {
   assert.equal(decodeAudioPacket(relay.received.binaryMessages[0]!).header.flags, 0);
 });
 
-// Ce test verifie que l'audio ancien n'est jamais accumule dans la sortie WebSocket.
-test("abandonne une frame quand la sortie reseau est en retard", async (t) => {
+// Ce test verifie que la fenetre d'envoi borne ce qui est confie au systeme d'un seul coup.
+//
+// Sans elle, tout partirait vers le noyau, dont Node ne sait ni regler la taille ni lire le retard :
+// une seconde d'audio pourrait y attendre sans que rien ne le montre, et la file applicative
+// resterait vide pendant que la latence grandit.
+test("ne confie a la socket que ce que la fenetre d'envoi autorise", async (t) => {
   const relay = new FakeRelay(GOOD_TOKEN);
   const url = await relay.listen();
   const { publisher } = makePublisher(url, GOOD_TOKEN);
@@ -315,25 +319,66 @@ test("abandonne une frame quand la sortie reseau est en retard", async (t) => {
   publisher.start();
   await waitFor(() => publisher.state === LIVE, "publisher en direct");
 
-  // La sortie reseau est simulee comme saturee : le publisher doit jeter au lieu d'empiler.
-  Object.defineProperty(publisher.socket, "bufferedAmount", {
-    configurable: true,
-    get: () => MAX_BUFFERED_BYTES + 1,
+  // Les rappels d'ecriture de `ws` sont asynchrones : tant que ce tour de boucle dure, aucune place
+  // ne se libere. Ces envois successifs remplissent donc la fenetre puis la file, sans rien attendre.
+  for (let sequence = 0; sequence < MAX_INFLIGHT_FRAMES + 3; sequence += 1) {
+    assert.equal(publisher.sendFrame(makeFrame(sequence)), true);
+  }
+
+  assert.equal(publisher.stats.framesSent, MAX_INFLIGHT_FRAMES, "la fenetre borne ce qui part");
+  assert.equal(publisher.queue.length, 3, "le reste attend dans la file, pas dans le noyau");
+  assert.equal(publisher.stats.framesDropped, 0, "rien n'est jete tant que la file n'est pas pleine");
+
+  // Le tour de boucle suivant libere la fenetre, et tout finit par partir.
+  await waitFor(
+    () => relay.received.binaryMessages.length === MAX_INFLIGHT_FRAMES + 3,
+    "toutes les frames finissent par partir",
+  );
+});
+
+// Ce test verifie le choix qui justifie a lui seul l'existence de cette file : quand le lien ne suit
+// plus, c'est l'audio **le plus ancien** qui part.
+//
+// Le publisher faisait l'inverse jusqu'ici. Il jetait la frame qui venait d'etre encodee et gardait
+// celles d'avant, ce qui est le bon reflexe pour un fichier et le mauvais pour un direct : le son
+// garde etait deja perime au moment ou il partait. Le journal du 6 aout 2026 en montre le resultat,
+// un trou de 2920 ms d'un seul tenant.
+test("jette l'audio le plus ancien, jamais le plus recent, quand le lien ne suit plus", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  const { publisher } = makePublisher(url, GOOD_TOKEN);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
   });
 
-  assert.equal(publisher.sendFrame(makeFrame(10)), false);
-  assert.equal(publisher.stats.framesDropped, 1);
-  assert.equal(publisher.stats.framesSent, 0);
+  publisher.start();
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
 
-  // La sortie se libere : la frame suivante part et porte le bit de discontinuite.
-  Object.defineProperty(publisher.socket, "bufferedAmount", {
-    configurable: true,
-    get: () => 0,
-  });
+  const capacite = Math.floor(MAX_QUEUE_MS / 40);
+  const total = MAX_INFLIGHT_FRAMES + capacite + 5;
 
-  assert.equal(publisher.sendFrame(makeFrame(11)), true);
-  await waitFor(() => relay.received.binaryMessages.length === 1, "frame recue apres retard");
-  assert.equal(decodeAudioPacket(relay.received.binaryMessages[0]!).header.flags, 1);
+  for (let sequence = 0; sequence < total; sequence += 1) {
+    publisher.sendFrame(makeFrame(sequence));
+  }
+
+  assert.equal(publisher.stats.framesDropped, 5, "seul le surplus est jete");
+  assert.equal(publisher.queue.length, capacite, "la file reste bornee");
+  // La derniere trame encodee est encore la : c'est tout l'objet du changement.
+  assert.equal(publisher.queue[publisher.queue.length - 1]!.frame.sequence, total - 1);
+
+  await waitFor(
+    () => relay.received.binaryMessages.length === total - 5,
+    "tout ce qui n'a pas ete jete finit par partir",
+  );
+
+  const paquets = relay.received.binaryMessages.map((bytes) => decodeAudioPacket(bytes).header);
+  const marques = paquets.filter((header) => header.flags === 1);
+
+  assert.equal(marques.length, 1, "un seul bit de discontinuite pour un seul trou");
+  // Le trou se voit aussi dans les numeros : la premiere trame apres l'abandon est celle qui porte
+  // le bit, et son numero saute exactement des cinq trames jetees.
+  assert.equal(marques[0]!.sequenceNumber, MAX_INFLIGHT_FRAMES + 5);
 });
 
 // Ce test verifie qu'un relais qui repete `auth_ok` pendant un live ne relance rien. Sans cette
@@ -471,7 +516,7 @@ test("jette une frame impossible a encoder sans couper le live", async (t) => {
   assert.equal(publisher.sendFrame(empty), false);
 
   const huge = makeFrame(21);
-  huge.payload = Buffer.alloc(2000, 7);
+  huge.payload = Buffer.alloc(3000, 7);
   assert.equal(publisher.sendFrame(huge), false);
 
   assert.equal(publisher.stats.framesDropped, 2);

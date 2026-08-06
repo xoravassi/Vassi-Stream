@@ -17,7 +17,7 @@ static const int OUTPUT_CHANNELS = 2;
 static const int RESAMPLER_QUALITY = 10;
 static const std::size_t CONVERT_BUFFER_FRAMES = 960;
 static const std::size_t RESAMPLE_BUFFER_FRAMES = 2048;
-static const std::uint64_t FRAME_DURATION_US = 20000;
+static const std::uint64_t FRAME_DURATION_US = 40000;
 
 // Cette structure conserve les etats persistants du resampler et d'Opus.
 struct t_audio_encoder {
@@ -104,7 +104,7 @@ static bool audio_encoder_emit_frame(t_audio_encoder *encoder) {
   return true;
 }
 
-// Cette fonction accumule les samples 48 kHz jusqu'a une frame Opus de 20 ms.
+// Cette fonction accumule les samples 48 kHz jusqu'a une frame Opus de 40 ms.
 static bool audio_encoder_append_output(
   t_audio_encoder *encoder,
   const float *samples,

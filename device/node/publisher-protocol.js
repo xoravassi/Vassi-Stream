@@ -2,15 +2,15 @@
 
 const crypto = require("crypto");
 
-// Ces constantes sont celles de docs/protocol-v1.md. Elles ne changent pas dans la version 1.
+// Ces constantes sont celles de docs/protocol-v1.md. Elles ne changent pas dans la version 1.1.
 const PROTOCOL_VERSION = 1;
 const CODEC_OPUS = 1;
 const CHANNEL_COUNT = 2;
-const FRAME_SAMPLE_COUNT = 960;
-const FRAME_DURATION_MS = 20;
+const FRAME_SAMPLE_COUNT = 1920;
+const FRAME_DURATION_MS = 40;
 const OUTPUT_SAMPLE_RATE = 48000;
 const HEADER_SIZE = 28;
-const MAX_PAYLOAD_SIZE = 1276;
+const MAX_PAYLOAD_SIZE = 2560;
 const DISCONTINUITY_FLAG = 1;
 const MAX_UINT32 = 4294967295;
 const MAX_UINT64 = 18446744073709551615n;

@@ -3,9 +3,21 @@
 #include <cstddef>
 #include <cstdint>
 
-static const std::size_t OPUS_FRAME_SAMPLES = 960;
-// Le protocole v1 reserve 1276 octets : un octet TOC suivi d'une frame Opus de 1275 octets au maximum.
-static const std::size_t OPUS_MAX_PACKET_BYTES = 1276;
+// Une frame de 40 ms a 48 kHz, soit deux frames CELT de 20 ms dans un seul paquet Opus.
+//
+// La duree a double au protocole v1.1, et le gain n'est pas dans le codec : a debit egal, Opus rend
+// a peu pres la meme chose en 20 et en 40 ms. Il est dans l'encapsulation et dans la cadence. Chaque
+// paquet traine une centaine d'octets fixes — 28 d'en-tete VSA1, 8 de WebSocket masque, une
+// vingtaine de TLS, une quarantaine de TCP/IP — soit environ 44 kbit/s a cinquante paquets par
+// seconde, quel que soit le debit Opus. Vingt-cinq paquets par seconde en coutent la moitie. Et sur
+// un lien 4G, ou l'ordonnancement se fait par paquet et non par octet, diviser la cadence par deux
+// est un levier que le debit adaptatif ne touche pas.
+static const std::size_t OPUS_FRAME_SAMPLES = 1920;
+// Un paquet de 40 ms porte deux frames CELT : le format code 3 de la RFC 6716 les fait tenir dans un
+// octet TOC, un octet de compte, jusqu'a deux longueurs, puis deux frames de 1275 octets au maximum.
+// Cette borne couvre ce cas avec de la marge. Elle ne peut plus valoir 1276 : a 256 kbit/s, 40 ms
+// d'audio font deja 1280 octets en moyenne, avant meme les pointes du VBR.
+static const std::size_t OPUS_MAX_PACKET_BYTES = 2560;
 static const int OPUS_BITRATE_STABLE = 128000;
 static const int OPUS_BITRATE_HIGH = 192000;
 static const int OPUS_BITRATE_STUDIO = 256000;

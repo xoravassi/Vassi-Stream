@@ -42,7 +42,7 @@ test("relit un paquet du device avec les memes champs", () => {
   const decoded = decodeAudioPacket(packet);
   assert.equal(decoded.header.sessionId, 1);
   assert.equal(decoded.header.sequenceNumber, protocol.MAX_UINT32);
-  assert.equal(decoded.header.sampleCount, 960);
+  assert.equal(decoded.header.sampleCount, 1920);
   assert.equal(decoded.header.channelCount, 2);
   assert.equal(decoded.header.payloadSize, protocol.MAX_PAYLOAD_SIZE);
   assert.deepEqual(Buffer.from(decoded.payload), payload);
@@ -96,7 +96,7 @@ test("construit les messages JSON du protocole v1", () => {
     bitrate: 192000,
     sampleRate: 48000,
     channels: 2,
-    frameDurationMs: 20,
+    frameDurationMs: 40,
     latencyProfile: "low",
   });
 

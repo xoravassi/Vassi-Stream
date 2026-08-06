@@ -25,7 +25,7 @@ function live(sessionId: number, latencyProfile = "balanced"): StreamState {
       bitrate: 256000,
       sampleRate: 48000,
       channels: 2,
-      frameDurationMs: 20,
+      frameDurationMs: 40,
       latencyProfile,
     }),
   );

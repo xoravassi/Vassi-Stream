@@ -13,7 +13,7 @@ import { PcmRing } from "./pcm-worklet.js";
 const SEQUENCE_MODULO = 4294967296;
 
 // Duree d'une frame du protocole v1, en microsecondes.
-const FRAME_MICROS = 20000n;
+const FRAME_MICROS = 40000n;
 
 // Au-dela de ce trou, combler la duree manquante n'a plus de sens : le silence s'entendrait plus
 // longtemps que la rebufferisation qu'il evite, et le son garde en file serait de toute facon
@@ -22,8 +22,9 @@ const FRAME_MICROS = 20000n;
 export const MAX_CONCEAL_MICROS = 500000n;
 
 // Ce bloc de silence sert a combler un trou. Il est cree une fois : combler alloue alors zero octet,
-// ce qui compte parce qu'un lien degrade produit des trous en rafale.
-const SILENCE = new Float32Array(960);
+// ce qui compte parce qu'un lien degrade produit des trous en rafale. Sa taille vaut une trame du
+// protocole, mais rien n'en depend : `fillGap` le repete autant de fois qu'il faut.
+const SILENCE = new Float32Array(1920);
 
 // Ce type de message decrit ce que le decodeur rend a son appelant.
 // - `discontinuity` : le son a saute, le thread principal doit rebufferiser ;

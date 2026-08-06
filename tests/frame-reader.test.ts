@@ -120,7 +120,7 @@ test("ne garde jamais un tampon sans limite", () => {
 test("rend toutes les frames d'un morceau plus grand que la limite de tampon", () => {
   const reader = new FrameReader();
   const parts: Buffer[] = [];
-  const payloadSize = 1276;
+  const payloadSize = 2560;
   const frameCount = Math.ceil((MAX_BUFFERED_BYTES + 1) / (HEADER_SIZE + payloadSize));
 
   for (let index = 0; index < frameCount; index += 1) {

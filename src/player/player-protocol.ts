@@ -84,7 +84,7 @@ function readSession(record: Record<string, unknown>): LiveSession | null {
     return null;
   }
 
-  if (record.frameDurationMs !== 20) {
+  if (record.frameDurationMs !== 40) {
     return null;
   }
 

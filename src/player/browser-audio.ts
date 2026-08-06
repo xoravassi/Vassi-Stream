@@ -29,9 +29,24 @@ export type AudioSetup = {
   workletUrl: URL | string;
 };
 
+// Ce type decrit ce que le processeur audio rapporte a chaque releve, environ toutes les quarante
+// millisecondes. C'est la seule vue que le thread principal ait sur la file PCM.
+export type PcmLevel = {
+  availableMs: number;
+  underruns: number;
+  overflows: number;
+  // Sauts du filet : la file a depasse son plafond, donc le vidage a ete distance. Une anomalie.
+  skips: number;
+  // Ebarbages : une reprise de lecture a ramene la file au seuil. Le fonctionnement normal.
+  trims: number;
+  // Vitesse de consommation appliquee, en part de la vitesse nominale. Un ecart a 1 dit que le
+  // regulateur ramene la latence vers le seuil.
+  ratio: number;
+};
+
 // Ce type decrit ce que les pieces signalent a leur appelant.
 export type BrowserAudioEvents = {
-  onLevel: (availableMs: number, underruns: number, overflows: number, skips: number) => void;
+  onLevel: (level: PcmLevel) => void;
   onDiscontinuity: (note: { reason: string; missingMs: number; recovered: boolean }) => void;
   onRefusal: (reason: string) => void;
   onStats: (stats: { accepted: number; decoded: number; refused: number; discontinuities: number; concealedMs: number; lastRefusal: string | null }) => void;
@@ -317,13 +332,7 @@ export class BrowserAudio {
   // Chaque niveau prouve que le thread audio tourne : c'est ici que le remplissage de la file
   // reprend apres un arret constate.
   private handleLevel(event: MessageEvent): void {
-    const message = event.data as {
-      type: string;
-      availableMs: number;
-      underruns: number;
-      overflows?: number;
-      skips?: number;
-    };
+    const message = event.data as { type: string } & Partial<PcmLevel>;
 
     if (message.type !== "level") {
       return;
@@ -332,7 +341,14 @@ export class BrowserAudio {
     this.gate.noteLevel(this.now());
     this.updateAccepting();
 
-    this.events.onLevel(message.availableMs, message.underruns, message.overflows ?? 0, message.skips ?? 0);
+    this.events.onLevel({
+      availableMs: message.availableMs ?? 0,
+      underruns: message.underruns ?? 0,
+      overflows: message.overflows ?? 0,
+      skips: message.skips ?? 0,
+      trims: message.trims ?? 0,
+      ratio: message.ratio ?? 1,
+    });
   }
 
   // Cette methode detruit les pieces et oublie les ordres deja transmis.

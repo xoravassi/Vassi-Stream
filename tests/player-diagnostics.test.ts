@@ -21,11 +21,12 @@ const SAIN: PlayerDiagnostics = {
   sessionId: 4242,
   sessionBitrate: 256000,
   targetBufferMs: 400,
+  stallMs: 0,
   shared: true,
 
   connected: true,
   packets: 1500,
-  bytes: 1500 * 668,
+  bytes: 1500 * 1308,
   sincePacketMs: 20,
   sinceLiveMs: 30000,
 
@@ -46,6 +47,8 @@ const SAIN: PlayerDiagnostics = {
   underruns: 0,
   overflows: 0,
   skips: 0,
+  trims: 0,
+  ratio: 1,
   sinceLevelMs: 40,
 
   errorReason: null,

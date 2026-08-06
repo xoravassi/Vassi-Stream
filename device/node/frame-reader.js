@@ -3,7 +3,7 @@
 // Ces constantes decrivent l'en-tete interne ecrit par vassi.encoder~.
 const MAGIC = Buffer.from("VSF1", "ascii");
 const HEADER_SIZE = 20;
-const MAX_PAYLOAD_SIZE = 1276;
+const MAX_PAYLOAD_SIZE = 2560;
 const MAX_BUFFERED_BYTES = 64 * 1024;
 
 // Cette classe reassemble les frames VSF1 depuis un flux TCP decoupe en morceaux quelconques.

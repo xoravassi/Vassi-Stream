@@ -228,7 +228,7 @@ export function streamStartMessage(sessionId: number, overrides: Record<string, 
     bitrate: 256000,
     sampleRate: 48000,
     channels: 2,
-    frameDurationMs: 20,
+    frameDurationMs: 40,
     latencyProfile: "balanced",
     ...overrides,
   };
@@ -240,7 +240,7 @@ export function audioPacket(sessionId: number, sequenceNumber: number, marker: n
     encodeAudioPacket({
       sessionId,
       sequenceNumber,
-      timestampMicros: BigInt(sequenceNumber) * 20000n,
+      timestampMicros: BigInt(sequenceNumber) * 40000n,
       payload: new Uint8Array([marker, 11, 22, 33, 44]),
     }),
   );
