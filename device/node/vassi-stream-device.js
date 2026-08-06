@@ -7,6 +7,24 @@ const { ConfigEditor } = require("./config-editor.js");
 const { checkRelay } = require("./relay-health.js");
 const protocol = require("./publisher-protocol.js");
 
+// Cette fonction rend la version gravee par `scripts/stamp-version.js` a l'installation.
+//
+// Elle repond a une seule question, posee devant un device qui ne semble pas avoir change : ce qui
+// tourne dans Ableton est-il bien ce qui vient d'etre installe. Un fichier absent donne une version
+// inconnue plutot qu'une erreur : le device doit demarrer meme lance depuis un dossier non installe.
+function readVersion() {
+	try {
+		const version = require("./version.json");
+		// Le suffixe marque un dossier modifie depuis son dernier commit : le numero de build ne le
+		// dirait pas, puisqu'il ne compte que les commits.
+		const suffixe = version.etat === "propre" ? "" : "+";
+
+		return `v${version.version} · build ${version.numero}${suffixe}`;
+	} catch (error) {
+		return "version inconnue";
+	}
+}
+
 // Ces tableaux traduisent les trois positions des dials du device en valeurs du protocole.
 const QUALITY_BITRATES = protocol.ALLOWED_BITRATES;
 const LATENCY_PROFILES = protocol.ALLOWED_LATENCY_PROFILES;
@@ -76,8 +94,10 @@ const publisher = new Publisher({
 	// L'etat du relais sort sur un mot different de celui du pont : les deux restent lisibles
 	// separement dans le device, et le patch du bloc 5 continue de fonctionner sans modification.
 	onState: (state, detail) => send("publisher", state, detail),
-	// L'encodeur ne tourne que pendant une session acceptee par le relais.
-	onEncoder: (action) => send("encoder", action)
+	// L'encodeur ne tourne que pendant une session acceptee par le relais. Il recoit deux sortes
+	// d'ordres : `start` et `stop`, sans valeur, et `bitrate` suivi du debit a appliquer, que le
+	// regulateur revoit pendant tout le direct.
+	onEncoder: (action, value) => (value === undefined ? send("encoder", action) : send("encoder", action, value))
 });
 
 const bridge = new FrameBridge({
@@ -171,6 +191,16 @@ Max.addHandler("stats", () => {
 		publisher.stats.sessions,
 		publisher.stats.reconnects
 	);
+	// Le debit reellement produit, le plafond choisi, et le retard courant du lien montant. Ces trois
+	// chiffres ensemble disent si le lien tient : un debit colle au plafond avec un retard nul est un
+	// lien sain, un debit qui s'en ecarte est un lien qui retrecit.
+	const bitrate = publisher.bitrateController;
+	send(
+		"bitrate-stats",
+		bitrate === null ? 0 : bitrate.report().applied,
+		bitrate === null ? 0 : bitrate.report().ceiling,
+		Math.round(publisher.oldestPendingMs())
+	);
 });
 
 // Ce handler remet les compteurs a zero avant une nouvelle mesure.
@@ -223,6 +253,9 @@ bridge
 	.listen()
 	.then((port) => {
 		send("port", port);
+		// La version part une seule fois, a l'ouverture du device : elle ne change pas tant que le
+		// script tourne, et l'onglet Reglages la garde affichee.
+		send("version", readVersion());
 		publishBridgeStatus("stopped", "aucun encodeur connecte");
 		// L'etat de la configuration part sans attendre de question : le device montre des
 		// l'ouverture s'il manque une adresse ou un token, avant tout clic sur Lancer.

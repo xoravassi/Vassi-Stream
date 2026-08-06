@@ -5,9 +5,16 @@
 // le reste du code.
 
 // Ce type decrit ce que le decodeur signale a son appelant.
+//
+// `reason` dit ou le son a disparu : `publisher_drop` sur le lien montant du poste Ableton,
+// `encoder_loss` dans l'encodeur ou le pont de ce meme poste, `relay_drop` entre le relais et cet
+// auditeur. `missingMs` donne la duree absente, et `recovered` dit si elle a ete comblee sur place —
+// auquel cas la lecture continue et la machine d'etats n'a rien a faire.
 export type DecoderNote = {
   type: "discontinuity" | "refused";
   reason: string;
+  missingMs?: number;
+  recovered?: boolean;
 };
 
 // Ce type rassemble les compteurs de diagnostic du decodeur.
@@ -16,6 +23,9 @@ export type DecoderStats = {
   decoded: number;
   refused: number;
   discontinuities: number;
+  // Duree totale ecrite en silence pour combler des trous, en millisecondes. C'est la mesure de ce
+  // que le lien a reellement perdu, independante de tout seuil.
+  concealedMs: number;
   lastRefusal: string | null;
 };
 

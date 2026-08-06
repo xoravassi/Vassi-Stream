@@ -1021,7 +1021,7 @@
 					"presentation_rect": [
 						8,
 						121,
-						304,
+						204,
 						18
 					],
 					"text": "encodeur en attente",
@@ -1032,6 +1032,37 @@
 						0.501961,
 						1
 					]
+				}
+			},
+			{
+				"box": {
+					"id": "version-line",
+					"maxclass": "live.comment",
+					"varname": "version-line",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						620,
+						195,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						212,
+						121,
+						100,
+						18
+					],
+					"text": "version inconnue",
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					],
+					"justification": 2
 				}
 			},
 			{
@@ -1425,10 +1456,11 @@
 				"box": {
 					"id": "node-route",
 					"maxclass": "newobj",
-					"text": "route port publisher encoder config saved relay status urlfield",
+					"text": "route port publisher encoder config saved relay status urlfield version",
 					"numinlets": 1,
-					"numoutlets": 9,
+					"numoutlets": 10,
 					"outlettype": [
+						"",
 						"",
 						"",
 						"",
@@ -1798,6 +1830,24 @@
 			},
 			{
 				"box": {
+					"id": "version-set",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1320,
+						480,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
 					"id": "saved-split",
 					"maxclass": "newobj",
 					"text": "zl slice 1",
@@ -1876,7 +1926,7 @@
 				"box": {
 					"id": "show-live",
 					"maxclass": "message",
-					"text": "script hide url-label, script hide url-field, script hide token-label, script hide token-field, script hide save-button, script hide check-button, script hide relay-line, script hide bridge-line, script show state-label, script show state-detail, script show meter-left, script show meter-right, script show band-rule, script show live-title, script show start-toggle, script show quality-label, script show quality-menu, script show latency-label, script show latency-menu",
+					"text": "script hide url-label, script hide url-field, script hide token-label, script hide token-field, script hide save-button, script hide check-button, script hide relay-line, script hide bridge-line, script hide version-line, script show state-label, script show state-detail, script show meter-left, script show meter-right, script show band-rule, script show live-title, script show start-toggle, script show quality-label, script show quality-menu, script show latency-label, script show latency-menu",
 					"numinlets": 2,
 					"numoutlets": 1,
 					"outlettype": [
@@ -1894,7 +1944,7 @@
 				"box": {
 					"id": "show-settings",
 					"maxclass": "message",
-					"text": "script hide state-label, script hide state-detail, script hide meter-left, script hide meter-right, script hide band-rule, script hide live-title, script hide start-toggle, script hide quality-label, script hide quality-menu, script hide latency-label, script hide latency-menu, script show url-label, script show url-field, script show token-label, script show token-field, script show save-button, script show check-button, script show relay-line, script show bridge-line",
+					"text": "script hide state-label, script hide state-detail, script hide meter-left, script hide meter-right, script hide band-rule, script hide live-title, script hide start-toggle, script hide quality-label, script hide quality-menu, script hide latency-label, script hide latency-menu, script show url-label, script show url-field, script show token-label, script show token-field, script show save-button, script show check-button, script show relay-line, script show bridge-line, script show version-line",
 					"numinlets": 2,
 					"numoutlets": 1,
 					"outlettype": [
@@ -2207,6 +2257,18 @@
 			{
 				"patchline": {
 					"source": [
+						"node-route",
+						8
+					],
+					"destination": [
+						"version-set",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
 						"state-split",
 						0
 					],
@@ -2428,6 +2490,18 @@
 					],
 					"destination": [
 						"url-field",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"version-set",
+						0
+					],
+					"destination": [
+						"version-line",
 						0
 					]
 				}

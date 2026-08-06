@@ -12,6 +12,19 @@ import { PcmRing } from "./pcm-worklet.js";
 // Le numero de sequence est un entier non signe de 32 bits, comme le fixe le protocole v1.
 const SEQUENCE_MODULO = 4294967296;
 
+// Duree d'une frame du protocole v1, en microsecondes.
+const FRAME_MICROS = 20000n;
+
+// Au-dela de ce trou, combler la duree manquante n'a plus de sens : le silence s'entendrait plus
+// longtemps que la rebufferisation qu'il evite, et le son garde en file serait de toute facon
+// separe du direct par plus que le seuil du profil le plus court. En dessous, combler est toujours
+// le bon choix, et c'est le cas de tous les trous ordinaires d'un lien qui hoquette.
+export const MAX_CONCEAL_MICROS = 500000n;
+
+// Ce bloc de silence sert a combler un trou. Il est cree une fois : combler alloue alors zero octet,
+// ce qui compte parce qu'un lien degrade produit des trous en rafale.
+const SILENCE = new Float32Array(960);
+
 // Ce type de message decrit ce que le decodeur rend a son appelant.
 // - `discontinuity` : le son a saute, le thread principal doit rebufferiser ;
 // - `refused` : un paquet n'a pas pu etre utilise, avec sa raison.
@@ -26,6 +39,13 @@ export class FrameDecoder {
     this.decoder = null;
     this.sessionId = 0;
     this.lastSequence = null;
+    // Ce timestamp est la position du dernier paquet sur la chronologie audio de la session. C'est
+    // lui, et non le numero de sequence, qui mesure une duree manquante : une perte survenue sur le
+    // poste Ableton avant l'envoi ne saute aucun numero — l'encodeur ne construit pas les paquets
+    // perdus — mais elle avance le timestamp de la duree perdue (`audio_encoder.cpp`,
+    // `audio_encoder_reset_after_loss`). Le numero de sequence, lui, ne voit que ce que le reseau a
+    // perdu apres l'envoi. Les deux ensemble disent donc *ou* le son a disparu.
+    this.lastTimestamp = null;
     this.accepting = false;
     // Les paquets sont traites l'un apres l'autre : la remise a zero du decodeur est asynchrone, et
     // deux frames ne doivent jamais entrer dans le decodeur en meme temps.
@@ -45,6 +65,9 @@ export class FrameDecoder {
     this.decoded = 0;
     this.refused = 0;
     this.discontinuities = 0;
+    // Duree totale comblee par du silence depuis le debut, en millisecondes. C'est la mesure directe
+    // de ce que le lien a perdu : elle ne depend d'aucun seuil et ne se remet pas a zero.
+    this.concealedMs = 0;
     this.lastRefusal = null;
   }
 
@@ -55,6 +78,7 @@ export class FrameDecoder {
       decoded: this.decoded,
       refused: this.refused,
       discontinuities: this.discontinuities,
+      concealedMs: this.concealedMs,
       lastRefusal: this.lastRefusal,
     };
   }
@@ -66,8 +90,17 @@ export class FrameDecoder {
   // ferait rebufferiser une deuxieme fois.
   flush() {
     this.sink.clear();
-    this.lastSequence = null;
+    this.forgetPosition();
     this.epoch += 1;
+  }
+
+  // Cette methode oublie la position du flux sur la chronologie de la session.
+  //
+  // Elle est appelee partout ou la file est videe. Sans elle, le paquet suivant paraitrait separe du
+  // dernier par toute la duree ecoulee, et le decodeur comblerait un trou qui n'existe pas.
+  forgetPosition() {
+    this.lastSequence = null;
+    this.lastTimestamp = null;
   }
 
   // Cette methode cree le decodeur Opus. Elle decrit un flux stereo couple, le seul que la v1
@@ -89,7 +122,7 @@ export class FrameDecoder {
   // decodeur remis a son etat initial, numero de sequence oublie.
   setSession(sessionId) {
     this.sessionId = sessionId;
-    this.lastSequence = null;
+    this.forgetPosition();
     this.sink.clear();
     this.epoch += 1;
 
@@ -109,7 +142,7 @@ export class FrameDecoder {
     this.accepting = accepting;
 
     if (!accepting) {
-      this.lastSequence = null;
+      this.forgetPosition();
       this.sink.clear();
       this.epoch += 1;
     }
@@ -156,21 +189,67 @@ export class FrameDecoder {
 
     this.accepted += 1;
 
-    // Deux evenements produisent une discontinuite. Le device pose le bit apres une perte locale.
-    // Le relais, lui, ne modifie jamais un paquet : quand il abandonne les paquets d'un auditeur en
-    // retard, il ne laisse qu'un trou dans les numeros de sequence, que le player doit reconnaitre.
+    // Deux mesures independantes disent ce qui manque, et leur combinaison dit *ou* le son a disparu.
+    //
+    // Le bit de discontinuite est pose par le device quand il a perdu de l'audio chez lui : file de
+    // l'external pleine parce que le processeur sature, pont loopback coupe, ou sortie reseau en
+    // retard. Le trou dans les numeros de sequence, lui, ne peut venir que d'apres l'envoi : le
+    // relais abandonne les paquets d'un auditeur en retard, sans jamais modifier un octet.
+    //
+    //   bit + trou   le publisher a jete faute de lien montant : il consomme un numero et n'envoie pas
+    //   bit seul     l'encodeur a perdu avant de construire le paquet : aucun numero n'est saute
+    //   trou seul    le relais a jete pour cet auditeur
+    //
+    // La duree manquante, elle, vient toujours du timestamp : c'est le seul champ qui compte le temps
+    // audio et non les paquets, donc le seul juste dans les trois cas.
     const expected = this.lastSequence === null ? header.sequenceNumber : (this.lastSequence + 1) % SEQUENCE_MODULO;
     const marked = (header.flags & DISCONTINUITY_FLAG) !== 0;
     const gap = header.sequenceNumber !== expected;
+    const missingMicros = this.missingMicros(header.timestampMicros);
     this.lastSequence = header.sequenceNumber;
+    this.lastTimestamp = header.timestampMicros;
 
-    if (marked || gap) {
-      // L'ordre compte : vider le PCM en attente, remettre le decodeur a zero, puis seulement
-      // decoder la frame marquee. Rien ne remplace la duree abandonnee.
-      this.sink.clear();
-      await this.resetDecoder();
+    if (marked || gap || missingMicros > 0n) {
+      const reason = gap ? (marked ? "publisher_drop" : "relay_drop") : "encoder_loss";
+      const long = missingMicros > MAX_CONCEAL_MICROS;
+
+      if (long) {
+        // Un trou de cette taille depasse le seuil de tous les profils : le combler ferait entendre
+        // plus de silence que la rebufferisation qu'il evite. La file part, et la lecture reprend au
+        // direct. C'est le seul cas ou vider gagne quelque chose.
+        this.sink.clear();
+        await this.resetDecoder();
+      } else {
+        // La duree manquante entre dans la file, et c'est ce qui garde la chronologie juste. Sans
+        // elle le trou disparaitrait de la timeline et le niveau de la file baisserait
+        // definitivement d'autant : production et consommation tournant toutes deux a 48 kHz, rien
+        // ne le ferait remonter, et la marge anti-gigue s'userait trou apres trou.
+        //
+        // Le son deja decode reste en place. Le jeter ne rapprocherait pas du direct — le
+        // consommateur trouverait la file vide et ecrirait du silence jusqu'a la fin de la
+        // rebufferisation, pour retrouver le meme retard qu'avant — donc cela ne couterait que du
+        // son, et sur un lien qui perd souvent cela viderait la file plus vite qu'elle se remplit.
+        this.fillGap(missingMicros);
+
+        // Le decodeur suit l'encodeur : il se remet a zero quand le bit dit que l'encodeur l'a fait
+        // (`audio_encoder_reset_after_loss`), et seulement alors. Apres un simple trou de sequence
+        // l'encodeur, lui, n'a rien remis a zero — il ignore que le relais a jete ces paquets — et
+        // effacer un etat encore aligne sur le sien allongerait l'artefact au lieu de l'ecourter.
+        if (marked) {
+          await this.resetDecoder();
+        }
+      }
+
       this.discontinuities += 1;
-      this.notify({ type: "discontinuity", reason: marked ? "flag" : "sequence_gap" });
+      this.notify({
+        type: "discontinuity",
+        reason,
+        missingMs: Number(missingMicros / 1000n),
+        // Ce drapeau dit a la machine d'etats si elle doit rebufferiser. Un trou comble ne
+        // l'interesse pas : la lecture continue, et l'interrompre serait exactement le rattrapage
+        // brutal que ce correctif supprime.
+        recovered: !long,
+      });
     }
 
     // La remise a zero du decodeur est asynchrone : une nouvelle session, une pause ou un vidage a
@@ -181,6 +260,45 @@ export class FrameDecoder {
     }
 
     this.decode(bytes.subarray(bytes.byteLength - header.payloadSize));
+  }
+
+  // Cette methode rend la duree audio absente entre le dernier paquet et celui-ci.
+  //
+  // Elle vaut zero pour un flux continu, pour le premier paquet d'une session, et pour un paquet en
+  // retard ou repete — un timestamp qui n'avance pas de plus d'une frame ne decrit aucun trou.
+  missingMicros(timestampMicros) {
+    if (this.lastTimestamp === null) {
+      return 0n;
+    }
+
+    const advance = timestampMicros - this.lastTimestamp;
+
+    return advance > FRAME_MICROS ? advance - FRAME_MICROS : 0n;
+  }
+
+  // Cette methode ecrit dans la file la duree exacte du trou, sous forme de silence.
+  //
+  // Le silence tient ce role parce qu'il est le seul remplissage disponible ici. Une frame de
+  // dissimulation produite par le decodeur prolongerait le son au lieu de le couper, mais
+  // `opus-decoder` fige sa taille de frame a 120 ms a la construction alors qu'un trou ordinaire en
+  // vaut 20 ou 40 : elle rendrait six fois trop d'echantillons. Ce que le silence garantit — une
+  // chronologie exacte a l'echantillon pres — ne depend pas de ce choix, et une dissimulation le
+  // remplacerait sans rien changer autour.
+  fillGap(missingMicros) {
+    if (missingMicros <= 0n) {
+      return;
+    }
+
+    const frames = Number((missingMicros * 48n) / 1000n);
+    let written = 0;
+
+    while (written < frames) {
+      const count = Math.min(SILENCE.length, frames - written);
+      this.sink.write(SILENCE, SILENCE, count);
+      written += count;
+    }
+
+    this.concealedMs += Number(missingMicros / 1000n);
   }
 
   // Cette methode compte un paquet inutilisable et le signale une fois.
@@ -251,9 +369,15 @@ export function createPortSink(port) {
 if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
   let decoder = null;
   let workletPort = null;
-  // Les compteurs partent une fois par seconde, pas a chaque paquet : ils servent a un affichage
-  // humain, et cinquante messages par seconde sur le thread principal ne diraient rien de plus.
-  let sinceStats = 0;
+  // Les compteurs partent sur une minuterie, pas au rythme des paquets recus. La difference compte
+  // precisement quand le diagnostic sert : un lien qui ne laisse plus passer qu'un tiers des paquets
+  // espacerait d'autant les rapports, et un lien muet n'en enverrait plus aucun. La cadence doit
+  // decrire l'incident, pas le subir.
+  //
+  // Une fois par seconde suffit : ces compteurs alimentent un affichage humain, et le journal de la
+  // page les releve quatre fois par seconde.
+  const STATS_INTERVAL_MS = 1000;
+  let statsTimer = null;
 
   self.onmessage = async (event) => {
     const message = event.data;
@@ -268,6 +392,15 @@ if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScop
 
       try {
         await decoder.start();
+        // La minuterie ne part qu'une fois le decodeur pret, et elle lit `decoder` a chaque tour
+        // plutot que de le capturer : un worker reconfigure garde ainsi une seule minuterie, et elle
+        // decrit toujours le decodeur vivant.
+        clearInterval(statsTimer);
+        statsTimer = setInterval(() => {
+          if (decoder !== null) {
+            self.postMessage({ type: "stats", ...decoder.stats() });
+          }
+        }, STATS_INTERVAL_MS);
         self.postMessage({ type: "ready" });
       } catch (error) {
         self.postMessage({ type: "error", reason: error instanceof Error ? error.message : "opus_start_failed" });
@@ -297,17 +430,12 @@ if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScop
 
     if (message.type === "packet") {
       decoder.push(new Uint8Array(message.packet));
-      sinceStats += 1;
-
-      if (sinceStats >= 50) {
-        sinceStats = 0;
-        self.postMessage({ type: "stats", ...decoder.stats() });
-      }
-
       return;
     }
 
     if (message.type === "stop") {
+      clearInterval(statsTimer);
+      statsTimer = null;
       decoder.stop();
       decoder = null;
     }

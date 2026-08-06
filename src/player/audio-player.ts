@@ -56,15 +56,23 @@ export class AudioPlayer {
   // son ne sort pas : les paquets arrivent-ils, sont-ils decodes, le thread audio tourne-t-il ?
   private counters = {
     packets: 0,
+    // Octets audio recus du relais. Compte avec les paquets, il donne le debit reellement porte par
+    // le lien — la seule mesure qui vienne du bout de la chaine, apres tout ce qui a pu se produire
+    // en amont. Le debit annonce par la session, lui, n'est qu'un plafond.
+    bytes: 0,
     accepted: 0,
     decoded: 0,
     refused: 0,
     discontinuities: 0,
+    concealedMs: 0,
     underruns: 0,
     overflows: 0,
     skips: 0,
   };
   private lastRefusal: string | null = null;
+  // Ce dernier trou dit ou le son a disparu : sur le poste Ableton, ou entre le relais et cet
+  // auditeur. Le compteur de discontinuites, lui, dit seulement combien il y en a eu.
+  private lastGap: { reason: string; missingMs: number; recovered: boolean } | null = null;
   private lastPacketAt: number | null = null;
   private lastLevelAt: number | null = null;
   private bufferMs = 0;
@@ -86,7 +94,17 @@ export class AudioPlayer {
     this.audio = new BrowserAudio(setup, {
       onLevel: (availableMs, underruns, overflows, skips) =>
         this.handleLevel(availableMs, underruns, overflows, skips),
-      onDiscontinuity: () => this.machine.discontinuity(),
+      // Un trou comble sur place n'interrompt pas la lecture : le decodeur a ecrit la duree
+      // manquante dans la file, la chronologie est juste, et rebufferiser ne ferait qu'ajouter du
+      // silence a un trou deja passe. Seul un trou trop grand pour etre comble fait repartir la
+      // bufferisation, parce que la file a alors ete jetee.
+      onDiscontinuity: (note) => {
+        this.lastGap = note;
+
+        if (!note.recovered) {
+          this.machine.discontinuity();
+        }
+      },
       onRefusal: (reason) => {
         this.lastRefusal = reason;
       },
@@ -97,6 +115,7 @@ export class AudioPlayer {
         this.counters.decoded = stats.decoded;
         this.counters.refused = stats.refused;
         this.counters.discontinuities = stats.discontinuities;
+        this.counters.concealedMs = stats.concealedMs;
         this.lastRefusal = stats.lastRefusal;
       },
       onFailure: (area, reason) => this.fail(area, reason),
@@ -158,11 +177,13 @@ export class AudioPlayer {
     return {
       state: status.state,
       sessionId: status.session === null ? null : status.session.sessionId,
+      sessionBitrate: status.session === null ? null : status.session.bitrate,
       targetBufferMs: this.machine.targetBufferMs(),
       shared: this.audio.shared,
 
       connected: this.socket.connected,
       packets: this.counters.packets,
+      bytes: this.counters.bytes,
       sincePacketMs: this.lastPacketAt === null ? null : at - this.lastPacketAt,
       sinceLiveMs: this.liveSince === null ? null : at - this.liveSince,
 
@@ -171,6 +192,9 @@ export class AudioPlayer {
       refused: this.counters.refused,
       lastRefusal: this.lastRefusal,
       discontinuities: this.counters.discontinuities,
+      concealedMs: this.counters.concealedMs,
+      lastGapReason: this.lastGap === null ? null : this.lastGap.reason,
+      lastGapMs: this.lastGap === null ? null : this.lastGap.missingMs,
 
       audio: this.audio.stage,
       contextState: this.audio.contextState,
@@ -263,6 +287,9 @@ export class AudioPlayer {
   // Cette methode compte un paquet recu et le transmet aux pieces du navigateur.
   private sendPacket(packet: ArrayBuffer): void {
     this.counters.packets += 1;
+    // La taille est lue avant le transfert au worker : un `ArrayBuffer` transfere est vide pour son
+    // ancien proprietaire, et sa longueur y retombe a zero.
+    this.counters.bytes += packet.byteLength;
     this.lastPacketAt = this.now();
     this.audio.sendPacket(packet);
   }

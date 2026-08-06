@@ -19,12 +19,18 @@ export type AudioStage = "IDLE" | "STARTING" | "RUNNING" | "FAILED" | "CLOSED";
 export type PlayerDiagnostics = {
   state: PlayerState;
   sessionId: number | null;
+  // Debit annonce par la session, en bits par seconde, ou `null` hors direct. C'est un plafond : le
+  // device produit en dessous des qu'il juge que le lien ne suit plus.
+  sessionBitrate: number | null;
   targetBufferMs: number;
   shared: boolean;
 
   // Reseau : ce qui arrive du relais.
   connected: boolean;
   packets: number;
+  // Octets audio recus depuis la connexion. Rapporte a une duree, il donne le debit reellement porte
+  // par le lien, en-tetes du protocole compris.
+  bytes: number;
   sincePacketMs: number | null;
   // Duree ecoulee depuis l'annonce de la session en cours, ou `null` hors direct. Elle remplace la
   // precedente tant qu'aucun paquet n'est arrive.
@@ -36,6 +42,14 @@ export type PlayerDiagnostics = {
   refused: number;
   lastRefusal: string | null;
   discontinuities: number;
+  // Duree totale comblee par du silence, en millisecondes. C'est la mesure de ce que le lien a
+  // perdu, independante de tout seuil et jamais remise a zero pendant une session.
+  concealedMs: number;
+  // Ou le son a disparu la derniere fois, et combien il en manquait :
+  // `publisher_drop` sur le lien montant du poste Ableton, `encoder_loss` dans son encodeur ou son
+  // pont, `relay_drop` entre le relais et cet auditeur.
+  lastGapReason: string | null;
+  lastGapMs: number | null;
 
   // Audio : ce que le contexte et le processeur font des echantillons.
   audio: AudioStage;

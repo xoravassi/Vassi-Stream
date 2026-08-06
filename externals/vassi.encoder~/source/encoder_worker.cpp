@@ -81,6 +81,21 @@ static bool encoder_worker_reset_after_overflow(
   return audio_encoder_reset_after_loss(encoder, lost_us);
 }
 
+// Cette fonction applique le debit demande par le regulateur, s'il y en a un en attente.
+//
+// Elle tourne sur le thread du worker, donc sur celui qui possede l'encodeur. Un echec n'arrete pas
+// le direct : un debit refuse laisse simplement l'ancien en place, ce qui reste ecoutable.
+static void encoder_worker_apply_pending_bitrate(t_encoder_worker *worker, t_audio_encoder *encoder) {
+  const long requested = worker->pending_bitrate.exchange(0, std::memory_order_acq_rel);
+  if (requested == 0) {
+    return;
+  }
+
+  if (audio_encoder_set_bitrate(encoder, (int)requested)) {
+    worker->bitrate.store(requested, std::memory_order_relaxed);
+  }
+}
+
 // Cette fonction consomme, reechantillonne et encode les frames hors du callback audio.
 static void encoder_worker_run(t_encoder_worker *worker) {
   t_audio_encoder *encoder = audio_encoder_create(
@@ -103,6 +118,7 @@ static void encoder_worker_run(t_encoder_worker *worker) {
   while (worker->requested.load(std::memory_order_acquire) != 0) {
     frame_sender_service(worker->sender);
     encoder_worker_publish_connection(worker, &known_connection);
+    encoder_worker_apply_pending_bitrate(worker, encoder);
 
     if (!encoder_worker_reset_after_overflow(worker, encoder, &known_dropped)
         || !encoder_worker_reset_after_send_drop(worker, encoder)) {
@@ -154,6 +170,7 @@ void encoder_worker_construct(t_encoder_worker *worker, t_audio_queue *queue, t_
   new (&worker->error) t_atomic_worker_long(0);
   new (&worker->input_rate) t_atomic_worker_long(48000);
   new (&worker->bitrate) t_atomic_worker_long(OPUS_BITRATE_STUDIO);
+  new (&worker->pending_bitrate) t_atomic_worker_long(0);
   new (&worker->last_payload_size) t_atomic_worker_long(0);
   new (&worker->last_flags) t_atomic_worker_long(0);
   new (&worker->last_left) t_atomic_worker_double(0.0);
@@ -167,6 +184,7 @@ void encoder_worker_destruct(t_encoder_worker *worker) {
   worker->last_left.~t_atomic_worker_double();
   worker->last_flags.~t_atomic_worker_long();
   worker->last_payload_size.~t_atomic_worker_long();
+  worker->pending_bitrate.~t_atomic_worker_long();
   worker->bitrate.~t_atomic_worker_long();
   worker->input_rate.~t_atomic_worker_long();
   worker->error.~t_atomic_worker_long();
@@ -228,6 +246,18 @@ bool encoder_worker_configure(t_encoder_worker *worker, unsigned int input_rate,
 
   worker->input_rate.store((long)input_rate, std::memory_order_relaxed);
   worker->bitrate.store((long)bitrate, std::memory_order_relaxed);
+  return true;
+}
+
+// Cette fonction depose un debit a appliquer, sans jamais toucher a l'encodeur elle-meme.
+bool encoder_worker_request_bitrate(t_encoder_worker *worker, int bitrate) {
+  if (!audio_encoder_live_bitrate_is_valid(bitrate)) {
+    return false;
+  }
+
+  // Un debit depose et pas encore lu est simplement remplace : seule la derniere valeur compte, et
+  // le regulateur en produit plusieurs par seconde.
+  worker->pending_bitrate.store((long)bitrate, std::memory_order_release);
   return true;
 }
 
