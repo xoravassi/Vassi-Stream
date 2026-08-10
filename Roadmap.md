@@ -521,7 +521,7 @@ L'ordre des trois gestes est écrit dans `docs/pont-site-web.md`.
 
 La conception complète est dans `docs/device-max.md`.
 
-**Décision sur la construction du patcher.** Le device compte 64 objets et 77 câbles, soit plusieurs
+**Décision sur la construction du patcher.** Le device compte 97 objets et 119 câbles, soit plusieurs
 milliers de lignes de JSON que personne ne relirait. Il est donc décrit par du code, dans
 `scripts/device-patcher/`, et écrit par `npm.cmd run device:build`. Une fois le device ouvert dans
 Max, c'est le `.maxpat` qui fait foi : Vassi peut y déplacer les objets et enregistrer. Les tests
@@ -570,6 +570,7 @@ Guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guid
 - [x] Garder le token hors de l’état sauvegardé du device. Ableton enregistre l’état d’un device dans le projet `.als` ; un token qui y entrerait partirait avec le projet à chaque partage ou sauvegarde en ligne. Le token va dans `%APPDATA%\Vassi Stream\publisher.json`, propre à la machine, et le device n’en affiche jamais que les quatre derniers caractères.
 - [x] Afficher dans le device si la configuration est présente et si le relais répond, pour qu’une erreur de collage se voie tout de suite. Le bouton Tester le relais interroge la route publique `/health` : aucun token ne circule pour cette vérification.
 - [x] Documenter la configuration initiale de l’URL et du token sans commiter le secret. `docs/device-max.md`, section « Installer sur un nouvel ordinateur ».
+- [x] Ajouter un onglet **Journal** pour pouvoir déboguer un direct raté. Jusqu'ici, la seule trace de ce qui s'était passé vivait dans la fenêtre Max : elle n'est pas ouverte pendant un direct, ne survit pas à la fermeture de Live, et demande de savoir qu'elle existe. Le device garde maintenant 400 lignes datées — état du publisher, connexion de l'encodeur, paliers du régulateur de débit, rafales de trames jetées, bilan de santé toutes les 10 s, bilan de fin de direct — dont les cinq dernières s'affichent, la plus récente en haut. Trois boutons : **Copier** met le journal complet dans le presse-papiers, **Exporter** l'écrit dans `%APPDATA%\Vassi Stream\journaux\` et ouvre le dossier, **Vider** repart d'une page blanche. Aucune ligne n'est écrite trame par trame : un battement d'une seconde lit les compteurs déjà tenus par le publisher et le pont, et les résume — le chemin de l'audio ne traverse rien de ce code. Le token n'entre jamais dans le journal : du champ de saisie, seule sa longueur est notée. Détail dans `docs/device-max.md`, section « Page du journal ».
 
 ### Vérification courte
 

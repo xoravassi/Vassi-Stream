@@ -10,6 +10,7 @@ enregistre, et ce qu'il faut verifier a la premiere ouverture.
 | `device/Vassi Stream.amxd` | le device depose sur le Master |
 | `patchers/vassi-stream.maxpat` | le meme patcher, lisible et modifiable dans Max |
 | `device/node/vassi-stream-device.js` | le script Node lance par le device |
+| `device/node/journal.js` | le journal montre par l'onglet Journal, et ce qui l'exporte |
 | `externals/vassi.encoder~` | l'objet natif de capture et d'encodage |
 
 Le `.amxd` est un conteneur : trois blocs de tete, puis le patcher en JSON. `npm.cmd run
@@ -31,7 +32,7 @@ sinon la copie echoue et le script le dit.
 npm.cmd run device:preview
 ```
 
-Cette commande ecrit `device-preview.html` : les deux pages dessinees a l'echelle 2. Le device
+Cette commande ecrit `device-preview.html` : les pages dessinees a l'echelle 2. Le device
 impose son propre fond, fixe, plutot que de suivre le theme de Live : il n'y a donc qu'un seul
 rendu a regarder. La maquette lit les positions et les couleurs dans le `.maxpat`, donc elle ne peut
 pas mentir sur la mise en page.
@@ -40,23 +41,23 @@ C'est une maquette, pas un rendu : Max dessine les vrais objets, avec ses arrond
 Ce qui se verifie la, ce sont les alignements, les textes trop longs et l'equilibre general — et
 c'est precisement ce qu'on ne voit pas en relisant des coordonnees.
 
-## Les deux pages
+## Les trois pages
 
 Le device tient dans 320 pixels de large. La hauteur ne se choisit pas : Live donne 169 pixels a
-tous les devices. Deux onglets en haut a gauche partagent cette surface.
+tous les devices. Trois onglets en haut a gauche partagent cette surface.
 
 Deux choses restent en place quel que soit l'onglet : les onglets eux-memes et l'adresse du relais
 tout en bas.
 
 La page du direct suit la coupe de Wavetable et d'EQ Eight : **un ecran occupe le haut, une bande de
 commandes serrees tient le bas**. L'ecran porte ce qu'on regarde, la bande porte ce qu'on touche.
-La page des reglages pose ses champs et ses boutons aux memes hauteurs, pour que passer d'un onglet
-a l'autre ne deplace aucun repere.
+Les pages des reglages et du journal posent leurs champs et leurs boutons aux memes hauteurs, pour
+que passer d'un onglet a l'autre ne deplace aucun repere.
 
 ### Page du direct
 
 ```text
-[ Direct | Réglages ]
+[ Direct | Réglages | Journal ]
 ──────────────────────────────────────────────────
                                               ▮ ▮
  Arrêté                                       ▮ ▮
@@ -98,7 +99,7 @@ parallele de l'encodeur, et s'eteignent avec le device.
 ### Page des reglages
 
 ```text
-[ Direct | Réglages ]
+[ Direct | Réglages | Journal ]
 ──────────────────────────────────────────────────
 Relais   [wss://live.vassi.click/publisher       ]
 Token    [                                       ]
@@ -115,6 +116,92 @@ token, et l'inverse. Le champ du token se vide des que l'enregistrement reussit.
 **Tester le relais** interroge la route publique `/health`, jamais le chemin publisher. Aucun token
 ne circule pour cette verification : une adresse mal collee se voit sans qu'un secret parte sur le
 reseau.
+
+### Page du journal
+
+```text
+[ Direct | Réglages | Journal ]
+──────────────────────────────────────────────────
+21:14:32 sante     1180 trames, 0 jetees, 192 kbit/s sur 256…
+21:14:22 debit     192 kbit/s sur 256 kbit/s de plafond
+21:14:20 perte     6 trames jetees, retard 480 ms
+21:14:02 direct    LIVE : en direct
+21:14:01 encodeur  ready : encodeur connecte
+ [ Copier ]      [ Exporter ]     [ Vider ]
+──────────────────────────────────────────────────
+wss://live.vassi.click/publisher - token ...4f2a
+```
+
+Cette page repond a la question qu'on se pose quand un direct s'est mal passe : **qu'est-ce qui a
+lache, et a quelle heure**. Jusqu'ici la reponse n'existait que dans la fenetre Max, qui n'est pas
+ouverte pendant un direct, ne survit pas a la fermeture de Live, et demande de savoir qu'elle
+existe.
+
+La ligne la plus recente est en haut. Cinq lignes tiennent a l'ecran ; le journal en garde quatre
+cents en memoire, soit plus d'une heure de direct sain, et ce sont ces quatre cents qui partent par
+les deux premiers boutons.
+
+| Bouton | Ce qu'il fait |
+|---|---|
+| **Copier** | met le journal complet dans le presse-papiers, pret a coller dans un message |
+| **Exporter** | ecrit `%APPDATA%\Vassi Stream\journaux\journal-<date>.log` et ouvre le dossier |
+| **Vider** | repart d'une page blanche, avant un essai |
+
+Le resultat d'un clic devient lui-meme la premiere ligne du journal : « 128 lignes copiees dans le
+presse-papiers », ou le chemin du fichier ecrit. C'est la reponse au meme endroit que le reste,
+plutot qu'un libelle d'etat de plus sur une page qui n'a pas de place a perdre.
+
+Rien ne s'ecrit sur le disque tant que personne ne clique. Un device qui journaliserait en continu
+laisserait grossir un dossier que personne ne surveille, pour des lignes qu'on ne lit qu'apres un
+incident.
+
+#### Ce que le journal note
+
+| Categorie | Quand | Ce qu'elle donne |
+|---|---|---|
+| `demarrage` | ouverture du device | version installee et port du pont loopback |
+| `encodeur` | connexion et deconnexion de `vassi.encoder~`, ordres `start`/`stop` | distingue un encodeur absent d'un relais injoignable |
+| `bouton` | clic sur Lancer ou Arreter | sous quelle qualite et quelle latence le direct est parti |
+| `reglage` | changement de Qualité ou Latence | |
+| `saisie` | clic sur Enregistrer | l'adresse tapee, et **la longueur** du token — jamais sa valeur |
+| `config` | lecture et ecriture de la configuration | la phrase deja affichee en bas du device |
+| `relais` | clic sur Tester le relais | |
+| `direct` | chaque changement d'etat du publisher | la suite qui distingue un token refuse d'une coupure reseau |
+| `debit` | palier de 8 kbit/s du regulateur | le debit produit et son plafond |
+| `perte` | rafale de trames jetees, au plus une ligne toutes les 2 s | **le moment exact ou des auditeurs ont entendu un trou** |
+| `sante` | toutes les 10 s pendant un direct | trames, jetees, debit sur plafond, retard, trous |
+| `bilan` | fin de direct | duree, trames, jetees, reconnexions, trous |
+| `journal` | clic sur un des trois boutons | |
+
+**Rien de ce qui arrive trame par trame n'ecrit une ligne.** Une ligne par trame ferait cinquante
+lignes par seconde, effacerait le journal en huit secondes et chargerait Max pour rien. Un battement
+de seconde lit les compteurs deja tenus par le publisher et le pont, et les resume ; le chemin de
+l'audio ne traverse aucune ligne de ce code.
+
+Une ligne identique a la precedente n'en cree pas une nouvelle : elle incremente un compteur, affiche
+en `(x12)`. Sans cela, une reconnexion qui echoue toujours pour la meme raison chasserait du journal
+tout ce qui explique pourquoi elle echoue.
+
+Les cinq chiffres d'une ligne `sante` suffisent a nommer un probleme sans rien ouvrir d'autre. Un
+debit colle au plafond avec un retard nul est un lien sain. Un debit qui descend seul est un lien qui
+retrecit, et le regulateur fait son travail. Un retard qui monte pendant que des trames sont jetees
+est un lien depasse. Des trous cote encodeur sans rien de tout cela designent la machine, pas le
+reseau.
+
+#### Le journal est en ASCII, sans accents
+
+Une ligne traverse trois passages qui n'aiment pas les accents : un symbole Max, le presse-papiers de
+Windows — `clip` lit son entree dans la page de codes de la console, pas en UTF-8 — et un fichier
+ouvert dans le Bloc-notes. Chaque ligne est donc ramenee a de l'ASCII imprimable sur une seule ligne :
+« Arrêté » devient « Arrete ». Les messages internes du projet sont deja ecrits ainsi.
+
+#### Le token n'entre jamais dans le journal
+
+C'est la meme frontiere que partout ailleurs. Le journal ne recoit que ce que le device affiche
+deja : l'adresse du relais, l'indice de quatre caracteres du token, des compteurs. Au clic sur
+Enregistrer, ce qui est note du champ du token est **sa longueur**, et rien d'autre — c'est deja la
+reponse a la question qui se pose devant un token refuse, « est-ce que le collage a fonctionne ».
+C'est ce qui rend un journal collable dans un message sans avoir a le relire.
 
 ## Ressembler a un device d'Ableton
 
@@ -215,7 +302,8 @@ et `tests/device-patcher.test.ts` echoue si l'une d'elles est enfreinte.
 | Qualité, Latence | oui | Vassi retrouve ses reglages en rouvrant le projet |
 | Bouton Lancer | non | rouvrir un projet ne doit jamais relancer un direct tout seul |
 | Onglet ouvert | non | le device s'ouvre sur le direct, c'est ce qu'on vient y voir |
-| Enregistrer, Tester le relais | non | un clic est une action, pas un reglage |
+| Enregistrer, Tester le relais, Copier, Exporter, Vider | non | un clic est une action, pas un reglage |
+| Lignes du journal | non | elles vivent dans le script Node, et repartent a zero avec lui |
 | Adresse du relais | non | elle vit dans le fichier de configuration de la machine |
 | Token | **jamais** | un projet se partage et se sauvegarde en ligne |
 
@@ -244,8 +332,10 @@ module du device en dehors du stockage et du message d'authentification ne touch
 **A l'ouverture du device**, `live.thisdevice` annonce que tout est charge. La page du direct
 s'affiche aussitot : les deux pages occupent la meme surface, et celle des reglages resterait sinon
 visible par-dessus. Le device attend ensuite une seconde et demie — Node for Max met environ ce
-temps a demarrer — puis demande le port du pont, renvoie les deux reglages et demande l'etat de la
-configuration. Rien ne se connecte au relais : ouvrir un projet ne lance pas de direct.
+temps a demarrer — puis demande le port du pont, renvoie les deux reglages, demande l'etat de la
+configuration et enfin les lignes du journal. Cet ordre compte : `trigger` sort de droite a gauche,
+donc le journal est demande en dernier et contient deja les lignes que les questions precedentes ont
+fait ecrire. Rien ne se connecte au relais : ouvrir un projet ne lance pas de direct.
 
 **Au clic sur Lancer**, l'ordre est celui du bloc 6, tenu par `publisher.js` : connexion,
 authentification, `stream_start`, puis seulement l'encodeur. Le relais refuse toute frame audio
@@ -269,11 +359,32 @@ Elle pose les trois morceaux du device a deux endroits :
 
 | Morceau | Ou | Pourquoi la |
 |---|---|---|
-| `Vassi Stream.amxd` | `Documents\Ableton\User Library\Presets\Audio Effects\Max Audio Effect\Vassi Stream\` | c'est ce dossier qu'Ableton montre dans son navigateur |
-| `node/` et son `node_modules` | `Documents\Max 8\Library\Vassi Stream\node\` | c'est un dossier que **Max** indexe |
-| `vassi.encoder~.mxe64` | `Documents\Max 8\Library\Vassi Stream\externals\` | idem, et c'est deja par la qu'il etait trouve |
+| `Vassi Stream.amxd` | `<Documents>\Ableton\User Library\Presets\Audio Effects\Max Audio Effect\Vassi Stream\` | c'est ce dossier qu'Ableton montre dans son navigateur |
+| `node/` et son `node_modules` | `<Documents>\Max <N>\Library\Vassi Stream\node\` | c'est un dossier que **Max** indexe |
+| `vassi.encoder~.mxe64` | `<Documents>\Max <N>\Library\Vassi Stream\externals\` | idem, et c'est deja par la qu'il etait trouve |
 
-Elle refuse d'installer un device plus ancien que le patcher, et dit quoi relancer.
+Si le patcher est plus recent que le device, elle refait le `.amxd` a partir du patcher avant
+d'installer. C'est bien le patcher qui sert de source, et non `make-device.js` : ce dernier regenere
+le patcher depuis le code, donc il effacerait la retouche faite dans Max.
+
+**`<Documents>` et `<N>` ne sont pas des raccourcis d'ecriture : aucun des deux ne peut etre ecrit en
+dur**, et les avoir devines est ce qui a rendu la premiere version de l'installateur inoperante.
+
+- `<Documents>` n'est pas toujours `%USERPROFILE%\Documents`. Quand OneDrive reprend le dossier — le
+  cas de la machine de Vassi — le vrai `Documents` devient `%USERPROFILE%\OneDrive\Documents`, et
+  `%USERPROFILE%\Documents` reste un dossier que rien ne lit. Seul le registre dit lequel des deux
+  compte : `HKCU\...\Explorer\Shell Folders`, valeur `Personal`.
+- `<N>` est la version du Max livre avec Ableton, pas celle du dernier Max sorti ni celle d'un dossier
+  deja present. Live 12.4 embarque **Max 9**, qui indexe `Max 9\Library` et ignore `Max 8`. La version
+  est donc lue dans `Resources\Max\Max.exe` de chaque Live installe.
+
+`npm.cmd run device:where` montre ce que ces deux inconnues valent sur la machine, les Ableton
+trouves avec leur version de Max, et les depots laisses par une installation precedente mal placee.
+C'est le premier geste d'un depannage. La deduction elle-meme vit dans `scripts/install-paths.js`.
+
+Quand deux Ableton sont installes — une Suite et une beta, par exemple — chaque version de Max
+utilisee recoit sa copie : la copie ne coute rien, et le device ne disparait pas selon l'Ableton
+ouvert.
 
 **Les deux dossiers ne sont pas interchangeables.** Le device demande son script par un nom de
 fichier seul, `vassi-stream-device.js`, et c'est Max qui doit le retrouver. Or Max n'indexe pas la
@@ -325,6 +436,13 @@ Ces points ne se verifient pas sans Max. Ils sont classes du plus probable au mo
 6. **Les deux boutons de la page de reglages.** Ils sont en mode bouton, et un clic doit envoyer un
    seul message. Deux clics de suite sur **Enregistrer** sont sans consequence : la seconde ecriture
    pose les memes valeurs.
+7. **La largeur des lignes du journal.** Elles sont en 9 points sur 304 pixels, et le texte est forme
+   par le script Node, donc invisible pour la maquette. La plus longue est la ligne `sante` : si elle
+   se coupe dans Live, c'est son texte qu'il faut raccourcir dans `vassi-stream-device.js`, pas la
+   police qu'il faut baisser.
+8. **Le presse-papiers.** **Copier** passe par `clip` sous Windows. Un clic doit ecrire une ligne
+   « N lignes copiees » dans le journal, et le contenu doit se coller tel quel dans un editeur. Si la
+   ligne dit « copie impossible », **Exporter** reste la voie sure.
 
 ## Les deux defauts trouves a la premiere ouverture
 
@@ -385,6 +503,10 @@ Deux corrections, pour les deux moities du probleme :
 - **Le script est installe dans la bibliotheque de Max**, `Documents\Max 8\Library\Vassi Stream\`,
   a cote de l'external. C'est un dossier indexe, et c'est deja par la que `vassi.encoder~` est
   trouve depuis le bloc 5 — le mecanisme etait donc deja prouve sur cette machine.
+  Les chemins de ce recit datent du bloc 10, ou la machine portait Max 8 et un `Documents` sous
+  `%USERPROFILE%`. Le mecanisme n'a pas change, mais les deux valeurs, si : Live 12.4 embarque Max 9,
+  et `Documents` est passe sous OneDrive. C'est pourquoi elles sont desormais deduites de la machine
+  et non ecrites — voir « Installer sur un nouvel ordinateur » plus haut.
 - **Le point d'entree s'appelle `vassi-stream-device.js`**, plus `index.js`. Un nom unique dans la
   base ne peut pas designer le fichier d'un autre : l'exemple de Node for Max porte deja ce nom, et
   il a d'ailleurs ete ecrase par accident pendant le bloc 5.
@@ -406,9 +528,18 @@ marges et les tailles sont celles d'Ableton, chaque libelle a la hauteur de boit
 toute couleur figee vient de la palette unique du device, chaque commande est un parametre Live avec
 un nom long qui lui est propre, les deux boutons de reglages sont des boutons sans etat qui
 atteignent le script Node, le device demande son script par un nom de fichier seul qui existe dans
-le depot, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint
-les deux pages, le bouton du direct ne peut pas se rallumer a l'ouverture d'un projet, et le fichier
-depose contient bien le patcher livre.
+le depot, le verrou des reglages suit bien l'etat du publisher, l'onglet atteint toutes les pages et
+chacune cache exactement ce que les autres montrent, le bouton du direct ne peut pas se rallumer a
+l'ouverture d'un projet, et le fichier depose contient bien le patcher livre.
+
+Aucun de ces tests ne compte les pages : le nombre est lu sur l'onglet, et le patcher doit porter
+autant de messages de bascule qu'il annonce de positions. C'est ce qui a permis d'ajouter le journal
+sans les reecrire.
 
 Ces tests portent sur le fichier, pas sur le code qui l'a produit : ils restent valables apres une
 retouche faite dans Max, ce qui est le moment ou ils servent le plus.
+
+`tests/journal.test.ts` couvre le journal lui-meme : la date et l'alignement d'une ligne, le
+regroupement d'une ligne repetee, l'oubli des plus anciennes une fois la capacite atteinte, l'ordre
+inverse des lignes montrees par le device, la reduction a de l'ASCII sur une seule ligne, le plafond
+de longueur, et le contenu de ce qui part dans le presse-papiers et dans le fichier.

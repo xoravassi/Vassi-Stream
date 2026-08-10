@@ -144,7 +144,9 @@ function escape(value) {
 }
 
 const pages = readPages();
-const names = ["Direct", "Réglages"];
+// Les noms des pages sont ceux des onglets, lus dans le patcher : une page ajoutee apparait donc
+// dans la maquette sans qu'on ait a la nommer ici une seconde fois.
+const names = boxes.find((box) => box.maxclass === "live.tab").saved_attribute_attributes.valueof.parameter_enum;
 
 const panels = pages
 	.map((page, index) => {
@@ -186,7 +188,7 @@ const page = `<!doctype html>
 </head>
 <body>
 <h1>Vassi Stream — maquette du device Max for Live</h1>
-<p>Les deux pages du device, à l'échelle 2, avec les couleurs réellement écrites dans
+<p>Les pages du device, à l'échelle 2, avec les couleurs réellement écrites dans
 <code>patchers/vassi-stream.maxpat</code> : cette page ne peut pas mentir sur la mise en page ni
 sur les couleurs. Max dessine les vrais objets ; ce qui se vérifie ici, ce sont les alignements,
 les débordements de texte, le contraste et l'équilibre général.</p>

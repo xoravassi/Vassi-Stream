@@ -3,7 +3,7 @@
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { writeConfig, configPath, describeConfig } = require("../device/node/publisher-config.js");
+const { writeConfig, updateConfig, configPath, describeConfig } = require("../device/node/publisher-config.js");
 
 // Cette fonction lit les options `--nom valeur` de la ligne de commande.
 function readOptions(argv) {
@@ -28,6 +28,9 @@ function printUsage() {
 	console.log("Sans --token, le script lit la variable d'environnement VASSI_PUBLISHER_TOKEN.");
 	console.log("Cette seconde forme est preferable : le token n'apparait pas dans l'historique du terminal.");
 	console.log("");
+	console.log("Sans token d'aucune des deux sources, celui deja enregistre est conserve : corriger");
+	console.log("l'adresse du relais n'oblige pas a recoller le token, et ne le change pas par surprise.");
+	console.log("");
 	console.log(`Fichier ecrit : ${configPath()}`);
 }
 
@@ -41,12 +44,15 @@ if (options.help !== undefined || options.url === undefined) {
 const token = options.token ?? process.env.VASSI_PUBLISHER_TOKEN ?? "";
 
 try {
-	const file = writeConfig({ relayUrl: options.url, publisherToken: token });
+	// Sans token fourni, celui deja enregistre est conserve. Le regenerer serait pire qu'inutile :
+	// le relais n'accepte que le token qu'il connait, donc changer celui du device par surprise
+	// couperait la diffusion, et le nouveau devrait etre repose sur le relais pour rien.
+	const file = token === "" ? updateConfig({ relayUrl: options.url }) : writeConfig({ relayUrl: options.url, publisherToken: token });
 	const description = describeConfig();
 	// Le token n'est jamais reaffiche : seule sa presence est confirmee.
 	console.log(`OK   configuration ecrite dans ${file}`);
 	console.log(`OK   relais : ${description.relayUrl}`);
-	console.log("OK   token enregistre");
+	console.log(token === "" ? "OK   token deja enregistre conserve" : "OK   token enregistre");
 } catch (error) {
 	console.error(`STOP ${error.message}`);
 	printUsage();

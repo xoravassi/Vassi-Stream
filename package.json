@@ -18,6 +18,7 @@
     "version:stamp": "node scripts/stamp-version.js",
     "predevice:install": "node scripts/stamp-version.js",
     "device:install": "node scripts/install-device.js",
+    "device:where": "node scripts/install-paths.js",
     "config:publisher": "node scripts/set-publisher-config.js",
     "relay": "node relay/main.ts",
     "token:new": "node scripts/new-token.js",
