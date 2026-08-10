@@ -21,10 +21,19 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ICI = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(ICI, "..");
 
-// Le depot du site est le voisin de celui-ci. Les deux vivent cote a cote dans le meme dossier
-// parent, et cette hypothese est verifiee avant chaque copie : une absence est annoncee clairement
-// plutot que de produire un dossier au mauvais endroit.
-const SITE = resolve(REPO, "..", "vassi.click");
+// Emplacement du depot du site.
+//
+// Le defaut suppose les deux depots cote a cote dans le meme dossier parent. Cette hypothese est
+// commode mais elle ne tient pas toujours : le depot du site peut etre clone ailleurs, et sous un
+// autre nom de dossier que celui de son adresse GitHub. `VASSI_SITE` permet alors de le designer
+// sans toucher a ce script.
+//
+// L'emplacement reel est verifie avant chaque copie : une absence est annoncee clairement, avec le
+// chemin cherche, plutot que de produire un dossier au mauvais endroit.
+const SITE =
+  typeof process.env.VASSI_SITE === "string" && process.env.VASSI_SITE !== ""
+    ? resolve(process.env.VASSI_SITE)
+    : resolve(REPO, "..", "vassi.click");
 const DESTINATION = join(SITE, "frontend", "src", "lib", "vassi-stream");
 
 // Ces deux dossiers sont recopies en entier, en gardant leurs noms. Le decodeur importe
