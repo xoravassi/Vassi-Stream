@@ -53,29 +53,57 @@ function textBox(fontsize) {
 // Ces valeurs sont les positions des deux menus, dans l'ordre attendu par le script Node : c'est
 // le numero de la position qui part, jamais son texte.
 export const QUALITY_VALUES = ["Stable 128", "Haute 192", "Studio 256"];
-export const LATENCY_VALUES = ["Faible 200 ms", "Équilibrée 400 ms", "Stable 800 ms"];
+// L'ordre de ces positions est fige. Live enregistre avec le morceau le numero de la position
+// choisie, pas son texte : une valeur glissee entre deux autres decalerait toutes les suivantes et
+// changerait le reglage des projets deja enregistres. Une position nouvelle se pose donc a la fin.
+export const LATENCY_VALUES = ["Faible 200 ms", "Équilibrée 400 ms", "Stable 800 ms", "Longue 1500 ms"];
 // Studio et Equilibree sont les valeurs par defaut fixees par la roadmap.
 const QUALITY_INITIAL = 2;
 const LATENCY_INITIAL = 1;
 
-// Les deux pages du device, dans l'ordre ou elles s'affichent dans les onglets.
-export const PAGE_VALUES = ["Direct", "Réglages"];
+// Les trois pages du device, dans l'ordre ou elles s'affichent dans les onglets.
+export const PAGE_VALUES = ["Direct", "Réglages", "Journal"];
+
+// Le journal montre ses cinq dernieres lignes, la plus recente en haut.
+//
+// Cinq est ce que la page peut afficher entre le trait du haut et la rangee de boutons, sans serrer
+// les lignes au point de les rendre illisibles. C'est peu, et c'est assume : la page repond a « que
+// vient-il de se passer », pas a « qu'est-il arrive pendant les deux heures du direct ». Cette
+// seconde question se lit dans le journal copie ou exporte, qui garde quatre cents lignes.
+const JOURNAL_ROWS = 5;
+// Les lignes du journal sont en 9 points, la seule taille du device a ne pas etre en 10.
+//
+// C'est la seconde taille de Live — 122 des libelles des devices livres avec Live 11 l'emploient — et
+// c'est ici la taille qui fait tenir la page. Cinq lignes en 10 points demanderaient 90 pixels de
+// haut, et il n'en reste que 85 entre le trait du haut et la rangee de boutons. Elle gagne au
+// passage une dizaine de caracteres par ligne, ce dont un journal a plus besoin que d'un point de
+// police : une ligne de sante complete tient alors sans etre coupee.
+const JOURNAL_SIZE = 9;
+// Pas vertical d'une ligne. C'est la hauteur exacte d'une boite de 9 points, donc des lignes qui se
+// suivent sans se chevaucher ni laisser de blanc.
+const JOURNAL_PITCH = textBox(JOURNAL_SIZE);
+// Les lignes commencent contre le trait du bandeau du haut : la page n'a pas de place a perdre.
+const JOURNAL_TOP = 34;
 
 // Cette fonction cree tous les objets visibles du device.
 // Elle rend aussi la liste des noms de chaque page : la bascule s'en sert pour cacher et montrer.
 export function buildInterface() {
 	const boxes = [
-		// --- Bandeau du haut, visible sur les deux pages ------------------------------------
+		// --- Bandeau du haut, visible sur les trois pages -----------------------------------
 		//
 		// Les onglets remplacent le bouton unique de la premiere version. Un bouton qui change
-		// de texte demande de deviner ou il mene ; deux onglets montrent les deux pages et celle
+		// de texte demande de deviner ou il mene ; les onglets montrent toutes les pages et celle
 		// qui est ouverte. C'est aussi la facon dont Live presente ses propres sections.
+		//
+		// La barre est passee de 120 a 180 pixels avec l'arrivee du troisieme onglet : `live.tab`
+		// partage sa largeur a parts egales, et soixante pixels par onglet tiennent « Réglages »,
+		// le libelle le plus long, avec la meme marge que les deux autres.
 		//
 		// `livemode` cale les marges internes sur celles de Live : sans lui, les onglets sont
 		// legerement plus larges que ceux des devices d'Ableton poses juste a cote.
 		control("page-tabs", "live.tab", {
-			at: [40, 20, 120, 17],
-			shows: [MARGIN, 4, 120, 17],
+			at: [40, 20, 180, 17],
+			shows: [MARGIN, 4, 180, 17],
 			outlets: 3,
 			outletTypes: ["", "", "float"],
 			attributes: {
@@ -98,6 +126,23 @@ export function buildInterface() {
 			}
 		}),
 		rule("head-rule", [40, 50, 160, 8], [MARGIN, 26, CONTENT_WIDTH, 8]),
+
+		// --- Defilement du journal, dans la place libre a droite des onglets --------------------
+		//
+		// Ces trois objets appartiennent a la page du journal et n'apparaissent qu'avec elle. Ils
+		// sont poses dans le bandeau du haut parce que c'est le seul endroit ou il reste de la
+		// place : la page elle-meme est pleine, du trait du haut jusqu'a sa rangee de boutons.
+		//
+		// Le journal ne defile pas au sens d'une barre de defilement : Max n'a pas d'objet de texte
+		// defilant qui suive le theme de Live, et en fabriquer un demanderait de faire passer des
+		// retours a la ligne dans un symbole Max. Deux boutons qui font glisser la fenetre de cinq
+		// lignes donnent la meme chose — atteindre n'importe laquelle des quatre cents lignes
+		// gardees — sans rien inventer, et la position affichee dit toujours ou l'on se trouve.
+		button("journal-up", "Haut", [940, 220, 60, 15], [190, 5, 30, 15], "JournalHaut"),
+		button("journal-down", "Bas", [1010, 220, 60, 15], [222, 5, 30, 15], "JournalBas"),
+		// Ce compteur est aligne a droite : il change de largeur a chaque pression, et un texte
+		// cale a gauche danserait sous le curseur.
+		rightLabel("journal-position", "", [1080, 220, 90, 18], [254, 5, 58, textBox(LABEL_SIZE)]),
 
 		// --- Page du direct : la bande d'affichage --------------------------------------------
 		//
@@ -205,14 +250,37 @@ export function buildInterface() {
 		// change : est-ce bien la derniere installation qui tourne. Alignee a droite, elle se lit
 		// apres les deux lignes d'etat qui la precedent — c'est une reference qu'on va chercher, pas
 		// une information qu'on suit.
-		versionLabel("version-line", [620, 195, 250, 18], [
+		rightLabel("version-line", "version inconnue", [620, 195, 250, 18], [
 			MARGIN + CONTENT_WIDTH - VERSION_WIDTH,
 			121,
 			VERSION_WIDTH,
 			textBox(LABEL_SIZE)
 		]),
 
-		// --- Bandeau du bas, visible sur les deux pages ------------------------------------
+		// --- Page du journal --------------------------------------------------------------------
+		//
+		// Cette page repond a la question qu'on se pose quand le direct s'est mal passe : qu'est-ce
+		// qui a lache, et a quelle heure. Jusqu'ici la reponse n'existait que dans la fenetre Max,
+		// qui n'est pas ouverte pendant un direct et ne survit pas a la fermeture de Live.
+		//
+		// Les lignes sont des libelles ordinaires, un par ligne, et non un champ de texte a plusieurs
+		// lignes : Max n'a pas d'objet de texte defilant qui suive le theme de Live, et un `textedit`
+		// demanderait de faire passer des retours a la ligne dans un symbole Max. Cinq libelles poses
+		// les uns sous les autres ne peuvent pas se tromper, et le journal complet — quatre cents
+		// lignes — part de toute facon par les boutons du bas.
+		...journalRows(),
+
+		// Les trois boutons sont a la place des commandes des deux autres pages, a la meme hauteur :
+		// les trois pages posent leurs reperes aux memes endroits.
+		//
+		// Copier est le premier parce que c'est le geste attendu : le journal part dans un message.
+		// Exporter est la pour ce que le presse-papiers ne sait pas faire — garder une trace, et
+		// comparer un incident a celui d'avant. Vider sert avant un essai.
+		button("journal-copy", "Copier", [940, 180, 120, 15], [MARGIN, 122, 98, 15], "Copier"),
+		button("journal-export", "Exporter", [1080, 180, 120, 15], [111, 122, 98, 15], "Exporter"),
+		button("journal-clear", "Vider", [1220, 180, 120, 15], [214, 122, 98, 15], "Vider"),
+
+		// --- Bandeau du bas, visible sur les trois pages ------------------------------------
 		//
 		// L'adresse du relais reste sous les yeux pendant un direct : c'est la seule ligne qui
 		// dit vers ou part le son, et elle repond sans changer de page.
@@ -223,7 +291,7 @@ export function buildInterface() {
 	return {
 		boxes,
 		// Ces listes ne contiennent ni les onglets, ni les deux bandeaux : ils appartiennent aux
-		// deux pages.
+		// trois pages.
 		livePage: [
 			"state-label",
 			"state-detail",
@@ -247,21 +315,53 @@ export function buildInterface() {
 			"relay-line",
 			"bridge-line",
 			"version-line"
-		]
+		],
+		journalPage: journalRowNames().concat([
+			"journal-copy",
+			"journal-export",
+			"journal-clear",
+			"journal-up",
+			"journal-down",
+			"journal-position"
+		])
 	};
 }
 
-// Cette fonction cree le libelle de version : un libelle ordinaire, aligne a droite.
+// Cette fonction cree les cinq libelles du journal, du plus recent au plus ancien.
 //
-// `justification: 2` range le texte contre le bord droit du device. Sans lui, une version courte
-// flotterait au milieu de sa boite et paraitrait mal posee a cote de l'etat qui la precede.
-function versionLabel(id, at, shows) {
+// La premiere ligne est en couleur de texte principale, les suivantes en couleur secondaire. C'est
+// la meme hierarchie que sur la page du direct : ce qu'on lit d'abord se distingue de son contexte,
+// et ici la ligne du haut est toujours ce qui vient d'arriver.
+function journalRows() {
+	return journalRowNames().map((name, index) =>
+		label(
+			name,
+			index === 0 ? "journal vide" : " ",
+			[940, 20 + index * 30, 250, 18],
+			[MARGIN, JOURNAL_TOP + index * JOURNAL_PITCH, CONTENT_WIDTH, JOURNAL_PITCH],
+			JOURNAL_SIZE,
+			index > 0
+		)
+	);
+}
+
+function journalRowNames() {
+	return Array.from({ length: JOURNAL_ROWS }, (_, index) => `journal-line-${index}`);
+}
+
+// Cette fonction cree un libelle aligne a droite.
+//
+// `justification: 2` range le texte contre le bord droit de sa boite. Sans lui, un texte plus court
+// que sa boite flotterait au milieu et paraitrait mal pose a cote de ce qui le precede. Deux
+// libelles s'en servent : la version, qui se lit apres les deux lignes d'etat de la page de
+// reglages, et la position dans le journal, dont la largeur change a chaque pression.
+function rightLabel(id, text, at, shows) {
   return control(id, "live.comment", {
     at,
     shows,
     outlets: 0,
     attributes: {
-      text: "version inconnue",
+      text,
       fontsize: LABEL_SIZE,
       textcolor: PALETTE.textDim,
       justification: 2

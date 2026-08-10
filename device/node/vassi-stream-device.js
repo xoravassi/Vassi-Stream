@@ -1,10 +1,12 @@
 "use strict";
 
+const os = require("os");
 const Max = require("max-api");
 const { FrameBridge } = require("./frame-bridge.js");
 const { Publisher } = require("./publisher.js");
 const { ConfigEditor } = require("./config-editor.js");
 const { checkRelay } = require("./relay-health.js");
+const { Journal, reveal } = require("./journal.js");
 const protocol = require("./publisher-protocol.js");
 
 // Cette fonction rend la version gravee par `scripts/stamp-version.js` a l'installation.
@@ -64,12 +66,124 @@ function send(...values) {
 	Promise.resolve(Max.outlet(...values)).catch(() => {});
 }
 
+// --- Le journal ------------------------------------------------------------------------------
+//
+// Tout ce qui suit alimente l'onglet Journal du device. Le principe est celui du reste du projet :
+// le texte est forme ici, pres des valeurs, et le patcher ne fait que l'afficher.
+//
+// Une regle tient tout le reste : **rien de ce qui arrive frame par frame n'ecrit dans le journal**.
+// Une ligne par trame ferait cinquante lignes par seconde, effacerait le journal en huit secondes et
+// chargerait Max pour rien. Ce qui se compte est donc lu par un battement de seconde, et resume.
+
+// Nombre de lignes montrees par l'onglet Journal, et pas d'un coup de defilement.
+const JOURNAL_ROWS = 5;
+
+// Largeur d'une ligne affichee, en caracteres.
+//
+// Un `live.comment` ne coupe pas une ligne trop longue : il la replie sur une seconde ligne, qu'il
+// dessine par-dessus le libelle du dessous. Deux lignes du journal sont alors illisibles a la fois.
+// Cette largeur garde chaque ligne sur une seule ligne de libelle.
+//
+// Cinquante-huit est un plafond prudent pour 304 pixels en 9 points : la place tient une soixantaine
+// de caracteres, et couper un peu tot vaut mieux que laisser une ligne se replier. La coupe ne
+// concerne que l'affichage — le texte copie et le fichier exporte gardent la ligne entiere.
+const JOURNAL_WIDTH = 58;
+// Delai de regroupement des envois vers Max. Plusieurs lignes ecrites dans la meme milliseconde ne
+// provoquent qu'un seul rafraichissement.
+const JOURNAL_REFRESH_MS = 200;
+// Battement du suivi de direct. Une seconde est assez fin pour dater une rafale d'abandons, et assez
+// large pour ne rien couter.
+const WATCH_TICK_MS = 1000;
+// Periode du bilan de sante pendant un direct.
+const WATCH_REPORT_MS = 10000;
+// Delai minimal entre deux lignes d'abandon : une rafale devient une ligne, pas cinquante.
+const WATCH_DROP_MS = 2000;
+// Ecart de debit a partir duquel un changement merite une ligne. Le regulateur avance par pas
+// minuscules ; seuls les paliers de huit kilobits racontent quelque chose.
+const BITRATE_LOG_STEP = 8000;
+
+const journal = new Journal({
+	// Ces lignes coiffent le fichier exporte. Elles repondent aux trois questions posees devant un
+	// journal recu par message : quelle version, quelle machine, et vers quel relais.
+	context: () => [readVersion(), `${process.platform}, node ${process.version}`, editor.deviceStatus().text],
+	onChange: () => scheduleJournalRefresh()
+});
+
+let journalTimer = null;
+
+// Position de la fenetre affichee dans le journal, en nombre de lignes depuis la plus recente.
+//
+// Zero est le present : l'onglet montre ce qui vient d'arriver, et il y revient tout seul des qu'une
+// nouvelle ligne le pousse hors de la fenetre. Une valeur non nulle est un choix de Vassi, qui a
+// remonte le journal, et rien ne la ramene a zero sans un clic : une ligne de sante ecrite pendant
+// la lecture ne doit pas faire sauter la page sous les yeux.
+let journalOffset = 0;
+
+// Cette fonction programme un rafraichissement de l'onglet Journal, une fois pour toutes les lignes
+// ecrites dans le meme instant.
+function scheduleJournalRefresh() {
+	if (journalTimer !== null) {
+		return;
+	}
+
+	journalTimer = setTimeout(() => {
+		journalTimer = null;
+		sendJournal();
+	}, JOURNAL_REFRESH_MS);
+
+	// Ce minuteur ne doit jamais retenir le processus a l'arret du device.
+	if (typeof journalTimer.unref === "function") {
+		journalTimer.unref();
+	}
+}
+
+// Cette fonction envoie la fenetre courante vers les cinq libelles de l'onglet, la plus recente en
+// premier. Le numero de ligne part avec le texte : le patcher n'a qu'a l'aiguiller.
+//
+// La position part avec les lignes, et elle est calculee ici comme tout le reste : le patcher ne
+// compte rien, il affiche une phrase deja formee.
+function sendJournal() {
+	journalOffset = boundedOffset(journalOffset);
+	const rows = journal.recent(JOURNAL_ROWS, journalOffset, JOURNAL_WIDTH);
+
+	for (let index = 0; index < JOURNAL_ROWS; index += 1) {
+		send("journal", index, rows[index]);
+	}
+
+	send("journalpos", journalPosition());
+}
+
+// Cette fonction ramene une position dans les bornes du journal.
+//
+// La fenetre ne peut pas remonter au-dela de la plus vieille ligne gardee. Sans cette borne, les
+// lignes chassees par la capacite laisseraient l'onglet sur cinq espaces, sans rien pour comprendre
+// pourquoi.
+function boundedOffset(offset) {
+	return Math.max(0, Math.min(offset, journal.count - JOURNAL_ROWS));
+}
+
+// Cette fonction ecrit la position atteinte dans le journal.
+//
+// Les numeros comptent a partir de la ligne la plus recente, comme l'affichage : la ligne 1 est
+// celle du haut. C'est le seul comptage qui se verifie a l'oeil sans reflechir.
+function journalPosition() {
+	if (journal.count === 0) {
+		return "vide";
+	}
+
+	const first = journalOffset + 1;
+	const last = Math.min(journalOffset + JOURNAL_ROWS, journal.count);
+
+	return `${first}-${last} / ${journal.count}`;
+}
+
 // Cette fonction publie l'etat du pont loopback, lu par le device depuis le bloc 5.
 // Chaque changement d'etat ouvre ou ferme une connexion, et l'encodeur repart alors de la
 // sequence zero : le suivi de continuite repart de zero lui aussi pour ne pas compter un faux trou.
 function publishBridgeStatus(state, detail) {
 	counters.lastSequence = -1;
 	send("status", state, detail);
+	journal.record("encodeur", `${state} : ${detail}`);
 }
 
 // Cet editeur tient les deux champs du panneau de reglages : adresse du relais et token.
@@ -84,6 +198,9 @@ const editor = new ConfigEditor();
 function publishConfig() {
 	const status = editor.deviceStatus();
 	send("config", status.text);
+	// La phrase publiee ne contient jamais le token, seulement ses quatre derniers caracteres : elle
+	// peut donc entrer telle quelle dans un journal destine a etre colle ailleurs.
+	journal.record("config", status.text);
 
 	if (status.relayUrl !== "") {
 		send("urlfield", status.relayUrl);
@@ -93,12 +210,51 @@ function publishConfig() {
 const publisher = new Publisher({
 	// L'etat du relais sort sur un mot different de celui du pont : les deux restent lisibles
 	// separement dans le device, et le patch du bloc 5 continue de fonctionner sans modification.
-	onState: (state, detail) => send("publisher", state, detail),
+	onState: (state, detail) => {
+		send("publisher", state, detail);
+		// Ces cinq etats sont le squelette du journal : c'est cette suite qui distingue un relais
+		// injoignable d'un token refuse, et une coupure unique d'une reconnexion qui boucle. Le
+		// detail porte la raison de la coupure et le delai avant la tentative suivante.
+		journal.record("direct", `${state} : ${detail}`);
+	},
 	// L'encodeur ne tourne que pendant une session acceptee par le relais. Il recoit deux sortes
 	// d'ordres : `start` et `stop`, sans valeur, et `bitrate` suivi du debit a appliquer, que le
 	// regulateur revoit pendant tout le direct.
-	onEncoder: (action, value) => (value === undefined ? send("encoder", action) : send("encoder", action, value))
+	onEncoder: (action, value) => {
+		if (value === undefined) {
+			send("encoder", action);
+			journal.record("encodeur", `ordre ${action}`);
+			return;
+		}
+
+		send("encoder", action, value);
+		logBitrate(action, value);
+	}
 });
+
+// Dernier debit ecrit dans le journal. Le regulateur en annonce plusieurs par seconde pendant une
+// rampe ; seuls les paliers assez ecartes racontent quelque chose de lisible.
+let loggedBitrate = 0;
+
+// Cette fonction note un changement de debit quand il vaut la peine d'etre note.
+function logBitrate(action, value) {
+	if (action !== "bitrate") {
+		return;
+	}
+
+	if (Math.abs(value - loggedBitrate) < BITRATE_LOG_STEP) {
+		return;
+	}
+
+	loggedBitrate = value;
+	const ceiling = publisher.bitrateController === null ? publisher.bitrate : publisher.bitrateController.report().ceiling;
+	journal.record("debit", `${kbits(value)} sur ${kbits(ceiling)} de plafond`);
+}
+
+// Cette fonction ecrit un debit en kilobits par seconde, l'unite dans laquelle il se lit.
+function kbits(value) {
+	return `${Math.round(value / 1000)} kbit/s`;
+}
 
 const bridge = new FrameBridge({
 	onFrame: (frame) => {
@@ -111,10 +267,14 @@ const bridge = new FrameBridge({
 // Ce handler lance ou arrete le live. Une valeur nulle arrete, toute autre valeur lance.
 Max.addHandler("live", (value) => {
 	if (Number(value) === 0) {
+		journal.record("bouton", "arret demande");
 		publisher.stop("user_stop");
 		return;
 	}
 
+	// Le reglage choisi est note avec la demande : c'est le seul endroit ou l'on peut relire, apres
+	// coup, sous quelle qualite un direct a ete lance.
+	journal.record("bouton", `direct demande a ${kbits(selection.bitrate)}, latence ${selection.latencyProfile}`);
 	publisher.start(selection);
 });
 
@@ -124,6 +284,7 @@ Max.addHandler("quality", (value) => {
 	if (bitrate !== undefined) {
 		selection.bitrate = bitrate;
 	}
+	journal.record("reglage", `qualite ${kbits(selection.bitrate)}`);
 	send("selection", selection.bitrate, selection.latencyProfile);
 });
 
@@ -133,6 +294,7 @@ Max.addHandler("latency", (value) => {
 	if (profile !== undefined) {
 		selection.latencyProfile = profile;
 	}
+	journal.record("reglage", `latence ${selection.latencyProfile}`);
 	send("selection", selection.bitrate, selection.latencyProfile);
 });
 
@@ -152,14 +314,26 @@ Max.addHandler("relaytoken", (...parts) => {
 	editor.setToken(...parts);
 });
 
+// Ce handler note ce qui vient d'etre tape dans les deux champs, au moment de l'enregistrement.
+//
+// L'adresse est notee en entier — c'est elle qu'on relit pour trouver une faute de frappe. Le token
+// n'est jamais note, pas meme partiellement : seule sa longueur l'est, et c'est deja la reponse a la
+// question qui se pose vraiment devant un token refuse, « est-ce que le collage a fonctionne ».
+function logDraft() {
+	const draft = editor.draft;
+	journal.record("saisie", `adresse "${draft.relayUrl}", token de ${draft.token.length} caracteres`);
+}
+
 // Ce handler enregistre les champs tapes puis reannonce l'etat de la configuration.
 // Un champ laisse vide garde sa valeur precedente : corriger l'adresse ne demande pas le token.
 //
 // L'etat part avant le resultat : le device affiche les deux au meme endroit, et c'est le
 // resultat de l'enregistrement qui doit rester visible.
 Max.addHandler("saveconfig", () => {
+	logDraft();
 	const result = editor.apply();
 	publishConfig();
+	journal.record("config", result.ok ? result.text : `echec : ${result.text}`);
 	send("saved", result.ok ? 1 : 0, result.text);
 });
 
@@ -171,13 +345,20 @@ Max.addHandler("checkrelay", () => {
 
 	if (!status.ready) {
 		send("relay", status.text);
+		journal.record("relais", status.text);
 		return;
 	}
 
 	send("relay", "verification en cours");
 	checkRelay(status.relayUrl).then(
-		(result) => send("relay", result.detail),
-		() => send("relay", "verification impossible")
+		(result) => {
+			send("relay", result.detail);
+			journal.record("relais", result.detail);
+		},
+		() => {
+			send("relay", "verification impossible");
+			journal.record("relais", "verification impossible");
+		}
 	);
 });
 
@@ -222,6 +403,237 @@ Max.addHandler("getport", () => {
 	}
 });
 
+// --- Les quatre ordres de l'onglet Journal -----------------------------------------------------
+
+// Ce handler renvoie les lignes affichees. Il sert a l'ouverture du device, et rattrape le cas ou
+// l'onglet est ouvert alors que rien n'a bouge depuis longtemps.
+Max.addHandler("journal", () => {
+	sendJournal();
+});
+
+// Ce handler met le journal dans le presse-papiers.
+//
+// Le resultat devient lui-meme une ligne de journal, donc la premiere ligne affichee : c'est la
+// reponse au clic, au meme endroit que le reste, sans un libelle de plus sur la page. Le journal
+// copie est celui d'avant le clic — la ligne du succes n'y est pas, et c'est sans importance.
+Max.addHandler("journalcopy", () => {
+	const count = journal.lines().length;
+
+	journal.copy().then(
+		() => journal.record("journal", `${count} lignes copiees dans le presse-papiers`),
+		(error) => journal.record("journal", `copie impossible (${error.message}), passez par Exporter`)
+	);
+});
+
+// Ce handler ecrit le journal dans un fichier et ouvre son dossier.
+Max.addHandler("journalsave", () => {
+	let file = "";
+
+	try {
+		file = journal.save();
+	} catch (error) {
+		journal.record("journal", `ecriture impossible : ${error.message}`);
+		return;
+	}
+
+	journal.record("journal", `ecrit dans ${file}`);
+	reveal(file);
+});
+
+// Ce handler vide le journal. Il sert avant un essai : repartir d'une page blanche vaut mieux que
+// chercher ou commence la mesure en cours.
+Max.addHandler("journalclear", () => {
+	journalOffset = 0;
+	journal.clear();
+	journal.record("journal", "journal vide");
+});
+
+// Ces deux handlers font glisser la fenetre affichee, d'une page de cinq lignes a chaque pression.
+//
+// « Bas » descend dans le journal, donc vers les lignes plus anciennes : c'est le sens d'une barre
+// de defilement posee sur le fichier, ou les plus recentes sont en haut. « Haut » remonte vers le
+// present, et s'arrete a zero.
+//
+// Le defilement ne passe pas par le minuteur de regroupement : une pression doit repondre tout de
+// suite, alors qu'une ligne ecrite peut attendre deux dixiemes de seconde.
+Max.addHandler("journaldown", () => {
+	journalOffset = boundedOffset(journalOffset + JOURNAL_ROWS);
+	sendJournal();
+});
+
+Max.addHandler("journalup", () => {
+	journalOffset = boundedOffset(journalOffset - JOURNAL_ROWS);
+	sendJournal();
+});
+
+// --- Le suivi du direct -------------------------------------------------------------------------
+//
+// Ce battement est la seule source des lignes qui comptent des trames. Il lit des compteurs deja
+// tenus ailleurs et n'ajoute rien au chemin de l'audio : une trame qui part ne traverse pas une
+// ligne de ce bloc.
+
+// Ces valeurs sont celles relevees au debut du direct en cours : tous les chiffres du journal sont
+// des ecarts a ce point de depart. Les compteurs du publisher, eux, ne repartent jamais de zero, et
+// un total cumule sur toute une session Ableton ne dirait pas ce qui s'est passe ce soir.
+const watch = { since: 0, frames: 0, dropped: 0, gaps: 0, reconnects: 0, reported: 0, seenDrops: 0, lastDrop: 0 };
+
+// Cette fonction releve le point de depart au debut de chaque direct.
+function startWatch(at) {
+	watch.since = at;
+	watch.frames = publisher.stats.framesSent;
+	watch.dropped = publisher.stats.framesDropped;
+	watch.gaps = counters.gaps;
+	watch.reconnects = publisher.stats.reconnects;
+	watch.reported = at;
+	watch.seenDrops = publisher.stats.framesDropped;
+	watch.lastDrop = 0;
+}
+
+// Cette fonction ecrit le bilan de fin de direct : ce qu'on relit en premier apres coup.
+//
+// Le bilan tient en deux lignes. Les chiffres reunis en une seule depasseraient les cinquante-huit
+// caracteres d'une ligne du device, et la coupe tomberait au milieu de ce qu'on vient lire.
+function endWatch(at) {
+	const seconds = Math.round((at - watch.since) / 1000);
+
+	watch.since = 0;
+	journal.record("bilan", `${duration(seconds)} de direct, ${publisher.stats.framesSent - watch.frames} trames`);
+	journal.record(
+		"bilan",
+		`${publisher.stats.framesDropped - watch.dropped} jetees, ` +
+			`${publisher.stats.reconnects - watch.reconnects} reconnexion(s), ` +
+			`${counters.gaps - watch.gaps} trou(s)`
+	);
+}
+
+// Cette fonction ecrit le bilan periodique d'un direct en cours.
+//
+// Ces cinq chiffres ensemble suffisent a nommer un probleme sans rien ouvrir d'autre. Un debit colle
+// au plafond avec un retard nul est un lien sain. Un debit qui descend seul est un lien qui retrecit,
+// et le regulateur fait son travail. Un retard qui monte pendant que des trames sont jetees est un
+// lien depasse. Des trous cote encodeur sans rien de tout cela designent la machine, pas le reseau.
+function reportWatch(at) {
+	const controller = publisher.bitrateController;
+	const applied = controller === null ? 0 : controller.report().applied;
+	const ceiling = controller === null ? publisher.bitrate : controller.report().ceiling;
+
+	journal.record(
+		"sante",
+		`${publisher.stats.framesSent - watch.frames} trames, ` +
+			`${publisher.stats.framesDropped - watch.dropped} jetees, ` +
+			`${counters.gaps - watch.gaps} trou(s)`
+	);
+	journal.record(
+		"lien",
+		`${Math.round(applied / 1000)} sur ${kbits(ceiling)}, retard ${Math.round(publisher.oldestPendingMs())} ms`
+	);
+	journal.record("systeme", machineLine(at));
+}
+
+// --- La charge de la machine ---------------------------------------------------------------------
+//
+// Ces mesures repondent a la question que les compteurs de trames ne savent pas trancher : quand le
+// son se degrade, est-ce le lien qui retrecit ou la machine qui n'arrive plus a suivre. Un debit qui
+// tient pendant que des trous apparaissent cote encodeur designe la machine, et c'est la qu'on veut
+// un chiffre plutot qu'une impression.
+//
+// Deux parts sont mesurees, et elles ne disent pas la meme chose. Celle du processus Node est la part
+// prise par le device lui-meme ; elle doit rester basse, puisqu'il ne fait que pousser des paquets
+// deja encodes. Celle de la machine entiere porte Ableton, l'encodeur et tout le reste : c'est elle
+// qui monte quand un projet devient trop lourd, et c'est elle qui explique un trou.
+//
+// Aucune de ces mesures n'est celle d'Ableton seul. Max n'expose pas la charge de son hote a un
+// script, et l'inventer serait pire que de ne rien dire.
+
+// Ce repere garde le point de la mesure precedente : une charge est un ecart entre deux releves, pas
+// une valeur qui se lit. Il part du demarrage du device, donc le premier releve couvre l'attente.
+let cpuMark = { at: Date.now(), process: process.cpuUsage(), system: systemCpu() };
+
+// Cette fonction additionne les temps de tous les coeurs depuis le demarrage du systeme.
+function systemCpu() {
+	return os.cpus().reduce(
+		(total, cpu) => {
+			const busy = cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.irq;
+			return { busy: total.busy + busy, total: total.total + busy + cpu.times.idle };
+		},
+		{ busy: 0, total: 0 }
+	);
+}
+
+// Cette fonction ecrit la charge depuis le releve precedent, et repose le repere.
+//
+// La part du processus est rapportee a un seul coeur : c'est la convention de tous les moniteurs
+// systeme, et elle laisse voir un device qui saturerait son propre fil d'execution. La part de la
+// machine, elle, est rapportee a tous les coeurs — c'est le chiffre que montre le gestionnaire des
+// taches, donc celui qu'on peut comparer a ce qu'on a sous les yeux.
+function machineLine(at) {
+	const spent = process.cpuUsage(cpuMark.process);
+	const system = systemCpu();
+	const elapsedUs = (at - cpuMark.at) * 1000;
+	const busy = system.busy - cpuMark.system.busy;
+	const ticks = system.total - cpuMark.system.total;
+
+	cpuMark = { at, process: process.cpuUsage(), system };
+
+	const own = elapsedUs > 0 ? ((spent.user + spent.system) / elapsedUs) * 100 : 0;
+	const whole = ticks > 0 ? (busy / ticks) * 100 : 0;
+	const memory = Math.round(process.memoryUsage().rss / (1024 * 1024));
+
+	return `cpu ${Math.round(own)}% device, ${Math.round(whole)}% machine, ${memory} Mo`;
+}
+
+// Cette fonction ecrit une duree en minutes et secondes plutot qu'en secondes seules : « 4 min 12 s »
+// se lit, « 252 s » se calcule.
+function duration(seconds) {
+	if (seconds < 60) {
+		return `${seconds} s`;
+	}
+
+	return `${Math.floor(seconds / 60)} min ${pad(seconds % 60)} s`;
+}
+
+function pad(value) {
+	return String(value).padStart(2, "0");
+}
+
+// Ce battement suit un direct sans jamais toucher au chemin de l'audio.
+const watcher = setInterval(() => {
+	const at = Date.now();
+	const live = publisher.state === "LIVE";
+
+	if (!live) {
+		if (watch.since !== 0) {
+			endWatch(at);
+		}
+		return;
+	}
+
+	if (watch.since === 0) {
+		startWatch(at);
+		return;
+	}
+
+	// Une rafale d'abandons est le signal le plus utile du journal : c'est le moment exact ou des
+	// auditeurs ont entendu un trou. Elle est datee a la seconde, et regroupee pour ne pas noyer le
+	// reste.
+	const dropped = publisher.stats.framesDropped - watch.seenDrops;
+	if (dropped > 0 && at - watch.lastDrop >= WATCH_DROP_MS) {
+		watch.seenDrops = publisher.stats.framesDropped;
+		watch.lastDrop = at;
+		journal.record("perte", `${dropped} trames jetees, retard ${Math.round(publisher.oldestPendingMs())} ms`);
+	}
+
+	if (at - watch.reported >= WATCH_REPORT_MS) {
+		watch.reported = at;
+		reportWatch(at);
+	}
+}, WATCH_TICK_MS);
+
+// Ce minuteur ne doit pas retenir le processus quand Max ferme le device.
+if (typeof watcher.unref === "function") {
+	watcher.unref();
+}
+
 // Ce delai laisse partir `stream_stop` et la trame de fermeture WebSocket avant de rendre la main.
 const SHUTDOWN_FLUSH_MS = 250;
 let shuttingDown = false;
@@ -256,6 +668,9 @@ bridge
 		// La version part une seule fois, a l'ouverture du device : elle ne change pas tant que le
 		// script tourne, et l'onglet Reglages la garde affichee.
 		send("version", readVersion());
+		// Cette premiere ligne date l'ouverture du device et nomme ce qui tourne : sans elle, un
+		// journal colle ne dirait pas de quelle version ni de quel demarrage il parle.
+		journal.record("demarrage", `${readVersion()}, pont sur le port ${port}`);
 		publishBridgeStatus("stopped", "aucun encodeur connecte");
 		// L'etat de la configuration part sans attendre de question : le device montre des
 		// l'ouverture s'il manque une adresse ou un token, avant tout clic sur Lancer.
@@ -263,4 +678,5 @@ bridge
 	})
 	.catch((error) => {
 		publishBridgeStatus("error", error.message);
+		journal.record("erreur", `pont loopback impossible : ${error.message}`);
 	});

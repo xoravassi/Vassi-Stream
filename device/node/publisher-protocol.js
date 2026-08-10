@@ -18,7 +18,7 @@ const MAGIC = Buffer.from("VSA1", "ascii");
 
 // Ces valeurs sont les seules acceptees par le relais pour un `stream_start`.
 const ALLOWED_BITRATES = [128000, 192000, 256000];
-const ALLOWED_LATENCY_PROFILES = ["low", "balanced", "stable"];
+const ALLOWED_LATENCY_PROFILES = ["low", "balanced", "stable", "long"];
 
 // Ces valeurs sont les defauts de la roadmap : Studio pour la qualite, Equilibree pour la latence.
 const DEFAULT_BITRATE = 256000;

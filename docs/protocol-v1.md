@@ -161,7 +161,7 @@ Valeurs autorisees :
 - `sampleRate` : `48000` ;
 - `channels` : `2` ;
 - `frameDurationMs` : `40` ;
-- `latencyProfile` : `low`, `balanced` ou `stable`.
+- `latencyProfile` : `low`, `balanced`, `stable` ou `long`.
 
 Le profil de latence fixe le niveau de PCM que le player attend avant de lancer ou relancer la lecture :
 
@@ -170,6 +170,9 @@ Le profil de latence fixe le niveau de PCM que le player attend avant de lancer 
 | `low` | 200 ms |
 | `balanced` | 400 ms |
 | `stable` | 800 ms |
+| `long` | 1500 ms |
+
+Un relais qui ne connaît pas un nom de profil refuse le `stream_start` avec `invalid_latency_profile`, et le direct ne s'ouvre pas. Le relais reconnaît donc toujours un profil avant que le device ne l'envoie : il se met à jour en premier.
 
 Le nom du profil transporte donc une valeur normative. Le player ne choisit pas un autre seuil pour un meme nom. Ce buffer cible n'est pas une garantie de latence totale : le temps d'encodage, le reseau et la sortie audio du navigateur s'y ajoutent.
 

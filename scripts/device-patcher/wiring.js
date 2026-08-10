@@ -8,7 +8,7 @@
 //
 // Le texte affiche arrive tout fait depuis Node. Le patcher ne fabrique aucune phrase : il route
 // des messages vers des libelles. C'est ce qui garde ce fichier court.
-import { connect, message, object } from "./parts.js";
+import { colorMessage, connect, message, object, PALETTE } from "./parts.js";
 
 // Le script Node est designe par son seul nom de fichier, sans dossier.
 //
@@ -25,7 +25,27 @@ import { connect, message, object } from "./parts.js";
 const NODE_SCRIPT = "node.script vassi-stream-device.js @autostart 1";
 
 // Ces mots sont ceux que le script Node place devant ses messages, dans cet ordre.
-const NODE_MESSAGES = ["port", "publisher", "encoder", "config", "saved", "relay", "status", "urlfield", "version"];
+const NODE_MESSAGES = [
+	"port",
+	"publisher",
+	"encoder",
+	"config",
+	"saved",
+	"relay",
+	"status",
+	"urlfield",
+	"version",
+	"journal",
+	"journalpos"
+];
+
+// Nombre de lignes affichees par l'onglet Journal. C'est la meme valeur que dans `interface.js`, et
+// c'est aussi celle qu'attend le script Node : il envoie `journal <ligne> <texte>` pour chacune.
+const JOURNAL_ROWS = 5;
+
+// Le seul etat pendant lequel du son part vraiment vers le relais. C'est celui que le device
+// signale en rouge.
+const LIVE_STATE = "LIVE";
 
 // Ces cinq etats viennent de `publisher.js`. Chacun recoit un mot francais affichable.
 const STATES = [
@@ -42,6 +62,10 @@ const NODE_STARTUP_MS = 1500;
 
 // Cette fonction cree les objets caches et les cables du device.
 export function buildWiring(pages) {
+	// Les pages, dans l'ordre des onglets. Cet ordre est le seul endroit ou il est ecrit : les
+	// messages de bascule, les cables et le numero sorti par l'onglet en decoulent tous.
+	const pageList = [pages.livePage, pages.settingsPage, pages.journalPage];
+
 	const boxes = [
 		// --- Commandes envoyees a Node -------------------------------------------------------
 		object("live-prepend", "prepend live", { at: [40, 260, 90, 22], inlets: 2 }),
@@ -61,6 +85,22 @@ export function buildWiring(pages) {
 		message("save-message", "saveconfig", { at: [560, 420, 80, 22] }),
 		object("check-fan", "t b", { at: [700, 380, 40, 22], outletTypes: ["bang"] }),
 		message("check-message", "checkrelay", { at: [700, 420, 80, 22] }),
+
+		// Les trois boutons du journal. Chacun suit le chemin de « Tester le relais » : un `t b` qui
+		// ramene le clic a un bang, puis un message que Node reconnait.
+		object("journal-copy-fan", "t b", { at: [820, 660, 40, 22], outletTypes: ["bang"] }),
+		message("journal-copy-message", "journalcopy", { at: [820, 700, 90, 22] }),
+		object("journal-export-fan", "t b", { at: [940, 660, 40, 22], outletTypes: ["bang"] }),
+		message("journal-export-message", "journalsave", { at: [940, 700, 90, 22] }),
+		object("journal-clear-fan", "t b", { at: [1060, 660, 40, 22], outletTypes: ["bang"] }),
+		message("journal-clear-message", "journalclear", { at: [1060, 700, 90, 22] }),
+
+		// Les deux boutons de defilement suivent le meme chemin. C'est Node qui tient la position :
+		// le patcher ne compte rien, il transmet une pression et affiche ce qu'on lui renvoie.
+		object("journal-up-fan", "t b", { at: [1180, 660, 40, 22], outletTypes: ["bang"] }),
+		message("journal-up-message", "journalup", { at: [1180, 700, 80, 22] }),
+		object("journal-down-fan", "t b", { at: [1290, 660, 40, 22], outletTypes: ["bang"] }),
+		message("journal-down-message", "journaldown", { at: [1290, 700, 90, 22] }),
 
 		// --- Script Node ------------------------------------------------------------------
 		object("node", NODE_SCRIPT, { at: [420, 300, 300, 22], outlets: 2, outletTypes: ["", ""] }),
@@ -95,6 +135,15 @@ export function buildWiring(pages) {
 		object("state-set", "prepend set", { at: [460, 600, 80, 22], inlets: 2 }),
 		object("detail-set", "prepend set", { at: [560, 600, 80, 22], inlets: 2 }),
 
+		// Le mot d'etat passe au rouge d'enregistrement d'Ableton pendant un direct, et revient a la
+		// couleur de texte ordinaire dans les quatre autres etats.
+		//
+		// La couleur suit l'etat annonce par le publisher, jamais le bouton : c'est la meme regle que
+		// pour le verrou des deux reglages. Un bouton enfonce dit ce que Vassi a demande ; seul l'etat
+		// dit ce qui part reellement vers le relais, et c'est cela que le rouge doit promettre.
+		message("state-color-live", colorMessage("textcolor", PALETTE.record), { at: [660, 560, 180, 22] }),
+		message("state-color-idle", colorMessage("textcolor", PALETTE.text), { at: [660, 600, 180, 22] }),
+
 		// --- Reglages affiches --------------------------------------------------------------
 		object("config-set", "prepend set", { at: [880, 480, 80, 22], inlets: 2 }),
 		object("relay-set", "prepend set", { at: [980, 480, 80, 22], inlets: 2 }),
@@ -104,15 +153,36 @@ export function buildWiring(pages) {
 		// La version arrive de Node sous forme de texte et va telle quelle dans son libelle :
 		// `prepend set` est ce qu'attend un `live.comment` pour changer ce qu'il affiche.
 		object("version-set", "prepend set", { at: [1320, 480, 80, 22], inlets: 2 }),
+		// --- Les lignes du journal -------------------------------------------------------------
+		//
+		// Node envoie `journal <ligne> <texte>`. Le numero de ligne est retire par ce second
+		// aiguillage, et le texte va au libelle correspondant. Compter les lignes du cote de Node
+		// evite au patcher de tenir un etat : il n'a jamais a savoir laquelle est la plus recente ni
+		// a faire glisser les autres.
+		object("journal-route", `route ${rowNumbers().join(" ")}`, {
+			at: [1420, 480, 200, 22],
+			outlets: JOURNAL_ROWS + 1,
+			outletTypes: rowNumbers().map(() => "")
+		}),
+		...rowNumbers().map((row) =>
+			object(`journal-set-${row}`, "prepend set", { at: [1420 + row * 90, 520, 80, 22], inlets: 2 })
+		),
+		object("journal-position-set", "prepend set", { at: [1420, 560, 80, 22], inlets: 2 }),
+
 		object("saved-split", "zl slice 1", { at: [880, 540, 80, 22], inlets: 2, outlets: 2, outletTypes: ["", ""] }),
 		object("saved-ok", "sel 1", { at: [880, 580, 60, 22], inlets: 2, outlets: 2, outletTypes: ["bang", ""] }),
 		message("token-clear", "clear", { at: [880, 620, 50, 22] }),
 
-		// --- Bascule entre les deux pages ----------------------------------------------------
-		object("page-select", "sel 0 1", { at: [880, 260, 70, 22], outlets: 3, outletTypes: ["bang", "bang", ""] }),
-		message("show-live", pageScript(pages.settingsPage, pages.livePage), { at: [880, 300, 300, 22] }),
-		message("show-settings", pageScript(pages.livePage, pages.settingsPage), { at: [880, 340, 300, 22] }),
-		object("pages", "thispatcher", { at: [880, 380, 90, 22], outlets: 2, outletTypes: ["", ""] }),
+		// --- Bascule entre les pages -----------------------------------------------------------
+		object("page-select", `sel ${pageList.map((_, index) => index).join(" ")}`, {
+			at: [880, 260, 90, 22],
+			outlets: pageList.length + 1,
+			outletTypes: pageList.map(() => "bang").concat([""])
+		}),
+		...pageList.map((page, index) =>
+			message(`show-page-${index}`, pageScript(pageList, index), { at: [880, 300 + index * 40, 400, 22] })
+		),
+		object("pages", "thispatcher", { at: [880, 420, 90, 22], outlets: 2, outletTypes: ["", ""] }),
 
 		// --- Ouverture du device --------------------------------------------------------------
 		object("device-ready", "live.thisdevice", {
@@ -121,23 +191,40 @@ export function buildWiring(pages) {
 			outletTypes: ["bang", "int", "int"]
 		}),
 		object("ready-delay", `delay ${NODE_STARTUP_MS}`, { at: [1180, 300, 90, 22], inlets: 2, outletTypes: ["bang"] }),
-		object("ready-fan", "t b b b b", { at: [1180, 340, 90, 22], outlets: 4, outletTypes: ["bang", "bang", "bang", "bang"] }),
+		object("ready-fan", "t b b b b b", {
+			at: [1180, 340, 100, 22],
+			outlets: 5,
+			outletTypes: ["bang", "bang", "bang", "bang", "bang"]
+		}),
 		message("ask-port", "getport", { at: [1180, 400, 60, 22] }),
-		message("ask-config", "config", { at: [1260, 400, 60, 22] })
+		message("ask-config", "config", { at: [1260, 400, 60, 22] }),
+		message("ask-journal", "journal", { at: [1340, 400, 70, 22] })
 	];
 
-	return { boxes, lines: buildLines() };
+	return { boxes, lines: buildLines(pageList) };
 }
 
-// Cette fonction ecrit le message qui cache une page et montre l'autre.
+// Cette fonction ecrit le message qui cache toutes les pages sauf une.
 // Une virgule separe deux messages : `thispatcher` les execute l'un apres l'autre.
-function pageScript(hidden, shown) {
-	const orders = hidden.map((name) => `script hide ${name}`).concat(shown.map((name) => `script show ${name}`));
+//
+// Les ordres de masquage passent tous avant les ordres d'affichage. Avec deux pages l'ordre etait
+// sans importance ; avec trois, un objet montre puis cache par la page suivante disparaitrait.
+function pageScript(pages, shown) {
+	const hidden = pages.filter((_, index) => index !== shown).flat();
+	const orders = hidden
+		.map((name) => `script hide ${name}`)
+		.concat(pages[shown].map((name) => `script show ${name}`));
+
 	return orders.join(", ");
 }
 
+// Cette fonction rend les numeros de ligne du journal, de la plus recente a la plus ancienne.
+function rowNumbers() {
+	return Array.from({ length: JOURNAL_ROWS }, (_, index) => index);
+}
+
 // Cette fonction cree tous les cables du device.
-function buildLines() {
+function buildLines(pageList) {
 	return [
 		// Le son traverse sans detour ; l'encodeur et les vumetres ne font qu'ecouter.
 		connect("audio-in", 0, "audio-out", 0),
@@ -158,6 +245,9 @@ function buildLines() {
 		connect("node-route", 6, "bridge-name", 0),
 		connect("node-route", 7, "url-set", 0),
 		connect("node-route", 8, "version-set", 0),
+		connect("node-route", 9, "journal-route", 0),
+		connect("node-route", 10, "journal-position-set", 0),
+		connect("journal-position-set", 0, "journal-position", 0),
 
 		// L'etat se separe en un mot et un detail : le mot est traduit, le detail est affiche tel quel.
 		connect("state-split", 0, "state-select", 0),
@@ -167,6 +257,15 @@ function buildLines() {
 		...STATES.map((_, index) => connect(`state-word-${index}`, 0, "state-set", 0)),
 		connect("state-set", 0, "state-label", 0),
 
+		// La couleur du mot d'etat. `LIVE` est le seul etat rouge ; les quatre autres reposent la
+		// couleur ordinaire, y compris `ERROR` — un direct qui s'est arrete n'est plus un direct, et
+		// c'est le detail affiche juste dessous qui dit pourquoi.
+		...STATES.map(([code], index) =>
+			connect("state-select", index, code === LIVE_STATE ? "state-color-live" : "state-color-idle", 0)
+		),
+		connect("state-color-live", 0, "state-label", 0),
+		connect("state-color-idle", 0, "state-label", 0),
+
 		// Les trois lignes de la page de reglages.
 		connect("config-set", 0, "config-line", 0),
 		connect("relay-set", 0, "relay-line", 0),
@@ -174,6 +273,29 @@ function buildLines() {
 		connect("bridge-set", 0, "bridge-line", 0),
 		connect("url-set", 0, "url-field", 0),
 		connect("version-set", 0, "version-line", 0),
+
+		// Chaque ligne du journal va a son libelle.
+		...rowNumbers().map((row) => connect("journal-route", row, `journal-set-${row}`, 0)),
+		...rowNumbers().map((row) => connect(`journal-set-${row}`, 0, `journal-line-${row}`, 0)),
+
+		// Les trois boutons du journal.
+		connect("journal-copy", 0, "journal-copy-fan", 0),
+		connect("journal-copy-fan", 0, "journal-copy-message", 0),
+		connect("journal-copy-message", 0, "node", 0),
+		connect("journal-export", 0, "journal-export-fan", 0),
+		connect("journal-export-fan", 0, "journal-export-message", 0),
+		connect("journal-export-message", 0, "node", 0),
+		connect("journal-clear", 0, "journal-clear-fan", 0),
+		connect("journal-clear-fan", 0, "journal-clear-message", 0),
+		connect("journal-clear-message", 0, "node", 0),
+
+		// Les deux boutons de defilement.
+		connect("journal-up", 0, "journal-up-fan", 0),
+		connect("journal-up-fan", 0, "journal-up-message", 0),
+		connect("journal-up-message", 0, "node", 0),
+		connect("journal-down", 0, "journal-down-fan", 0),
+		connect("journal-down-fan", 0, "journal-down-message", 0),
+		connect("journal-down-message", 0, "node", 0),
 
 		// Un enregistrement reussi efface le champ du token et affiche son resultat.
 		connect("saved-split", 0, "saved-ok", 0),
@@ -243,15 +365,13 @@ function buildLines() {
 		// retenir sa position : le meme 1 repartait a chaque clic et la page des reglages ne se
 		// refermait jamais.
 		connect("page-tabs", 0, "page-select", 0),
-		connect("page-select", 0, "show-live", 0),
-		connect("page-select", 1, "show-settings", 0),
-		connect("show-live", 0, "pages", 0),
-		connect("show-settings", 0, "pages", 0),
+		...pageList.map((_, index) => connect("page-select", index, `show-page-${index}`, 0)),
+		...pageList.map((_, index) => connect(`show-page-${index}`, 0, "pages", 0)),
 
 		// La page du direct s'affiche des le chargement, sans attendre Node : les deux pages sont
 		// dessinees au meme endroit, et celle des reglages resterait sinon visible par-dessus
 		// pendant toute l'attente.
-		connect("device-ready", 0, "show-live", 0),
+		connect("device-ready", 0, "show-page-0", 0),
 
 		// Un device rouvert repart arrete, sur la page du direct. Les deux `set` reposent les
 		// commandes sans rien emettre : aucun direct ne peut donc se lancer a l'ouverture d'un
@@ -265,14 +385,20 @@ function buildLines() {
 		connect("meter-active", 0, "meter-left", 0),
 		connect("meter-active", 0, "meter-right", 0),
 
-		// Le reste attend que le script Node reponde : le port, les deux reglages, la configuration.
+		// Le reste attend que le script Node reponde : le port, les deux reglages, la configuration,
+		// et les lignes du journal deja ecrites pendant le demarrage.
+		//
+		// `trigger` sort de droite a gauche : le port part en premier, le journal en dernier, et il
+		// contient donc deja les lignes que les questions precedentes ont fait ecrire.
 		connect("device-ready", 0, "ready-delay", 0),
 		connect("ready-delay", 0, "ready-fan", 0),
-		connect("ready-fan", 3, "ask-port", 0),
-		connect("ready-fan", 2, "quality-menu", 0),
-		connect("ready-fan", 1, "latency-menu", 0),
-		connect("ready-fan", 0, "ask-config", 0),
+		connect("ready-fan", 4, "ask-port", 0),
+		connect("ready-fan", 3, "quality-menu", 0),
+		connect("ready-fan", 2, "latency-menu", 0),
+		connect("ready-fan", 1, "ask-config", 0),
+		connect("ready-fan", 0, "ask-journal", 0),
 		connect("ask-port", 0, "node", 0),
-		connect("ask-config", 0, "node", 0)
+		connect("ask-config", 0, "node", 0),
+		connect("ask-journal", 0, "node", 0)
 	];
 }

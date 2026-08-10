@@ -5,7 +5,10 @@ export const PROTOCOL_VERSION = 1;
 
 // Ces valeurs sont les seules acceptees par la version 1.1. Toute autre valeur est refusee.
 export const ALLOWED_BITRATES = [128000, 192000, 256000];
-export const ALLOWED_LATENCY_PROFILES = ["low", "balanced", "stable"];
+// Cette liste est celle que le relais reconnait. Un profil absent d'ici fait refuser le
+// `stream_start` avec `invalid_latency_profile`, et le direct ne s'ouvre pas : le relais accepte
+// donc toujours un profil avant que le device ne l'emploie.
+export const ALLOWED_LATENCY_PROFILES = ["low", "balanced", "stable", "long"];
 export const ALLOWED_STOP_REASONS = ["user_stop", "error"];
 export const OUTPUT_SAMPLE_RATE = 48000;
 export const CHANNEL_COUNT = 2;

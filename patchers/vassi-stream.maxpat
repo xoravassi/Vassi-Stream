@@ -61,14 +61,14 @@
 					"patching_rect": [
 						40,
 						20,
-						120,
+						180,
 						17
 					],
 					"presentation": 1,
 					"presentation_rect": [
 						8,
 						4,
-						120,
+						180,
 						17
 					],
 					"outlettype": [
@@ -113,12 +113,13 @@
 						"valueof": {
 							"parameter_enum": [
 								"Direct",
-								"Réglages"
+								"Réglages",
+								"Journal"
 							],
 							"parameter_type": 2,
 							"parameter_unitstyle": 10,
 							"parameter_mmin": 0,
-							"parameter_mmax": 1,
+							"parameter_mmax": 2,
 							"parameter_initial": [
 								0
 							],
@@ -168,6 +169,197 @@
 						0.258824,
 						1
 					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-up",
+					"maxclass": "live.text",
+					"varname": "journal-up",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						940,
+						220,
+						60,
+						15
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						190,
+						5,
+						30,
+						15
+					],
+					"outlettype": [
+						"",
+						""
+					],
+					"mode": 0,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"fontsize": 10,
+					"text": "Haut",
+					"texton": "Haut",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "JournalHaut",
+							"parameter_longname": "JournalHaut",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "journal-down",
+					"maxclass": "live.text",
+					"varname": "journal-down",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						1010,
+						220,
+						60,
+						15
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						222,
+						5,
+						30,
+						15
+					],
+					"outlettype": [
+						"",
+						""
+					],
+					"mode": 0,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"fontsize": 10,
+					"text": "Bas",
+					"texton": "Bas",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "JournalBas",
+							"parameter_longname": "JournalBas",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "journal-position",
+					"maxclass": "live.comment",
+					"varname": "journal-position",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						1080,
+						220,
+						90,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						254,
+						5,
+						58,
+						18
+					],
+					"text": "",
+					"fontsize": 10,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					],
+					"justification": 2
 				}
 			},
 			{
@@ -632,12 +824,13 @@
 							"parameter_enum": [
 								"Faible 200 ms",
 								"Équilibrée 400 ms",
-								"Stable 800 ms"
+								"Stable 800 ms",
+								"Longue 1500 ms"
 							],
 							"parameter_type": 2,
 							"parameter_unitstyle": 10,
 							"parameter_mmin": 0,
-							"parameter_mmax": 2,
+							"parameter_mmax": 3,
 							"parameter_initial": [
 								1
 							],
@@ -1067,6 +1260,396 @@
 			},
 			{
 				"box": {
+					"id": "journal-line-0",
+					"maxclass": "live.comment",
+					"varname": "journal-line-0",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						940,
+						20,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						34,
+						304,
+						17
+					],
+					"text": "journal vide",
+					"fontsize": 9,
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-line-1",
+					"maxclass": "live.comment",
+					"varname": "journal-line-1",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						940,
+						50,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						51,
+						304,
+						17
+					],
+					"text": " ",
+					"fontsize": 9,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-line-2",
+					"maxclass": "live.comment",
+					"varname": "journal-line-2",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						940,
+						80,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						68,
+						304,
+						17
+					],
+					"text": " ",
+					"fontsize": 9,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-line-3",
+					"maxclass": "live.comment",
+					"varname": "journal-line-3",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						940,
+						110,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						85,
+						304,
+						17
+					],
+					"text": " ",
+					"fontsize": 9,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-line-4",
+					"maxclass": "live.comment",
+					"varname": "journal-line-4",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						940,
+						140,
+						250,
+						18
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						102,
+						304,
+						17
+					],
+					"text": " ",
+					"fontsize": 9,
+					"textcolor": [
+						0.501961,
+						0.501961,
+						0.501961,
+						1
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-copy",
+					"maxclass": "live.text",
+					"varname": "journal-copy",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						940,
+						180,
+						120,
+						15
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						8,
+						122,
+						98,
+						15
+					],
+					"outlettype": [
+						"",
+						""
+					],
+					"mode": 0,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"fontsize": 10,
+					"text": "Copier",
+					"texton": "Copier",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "Copier",
+							"parameter_longname": "Copier",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "journal-export",
+					"maxclass": "live.text",
+					"varname": "journal-export",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						1080,
+						180,
+						120,
+						15
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						111,
+						122,
+						98,
+						15
+					],
+					"outlettype": [
+						"",
+						""
+					],
+					"mode": 0,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"fontsize": 10,
+					"text": "Exporter",
+					"texton": "Exporter",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "Exporter",
+							"parameter_longname": "Exporter",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "journal-clear",
+					"maxclass": "live.text",
+					"varname": "journal-clear",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						1220,
+						180,
+						120,
+						15
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						214,
+						122,
+						98,
+						15
+					],
+					"outlettype": [
+						"",
+						""
+					],
+					"mode": 0,
+					"appearance": 2,
+					"lcdbgcolor": [
+						0.019608,
+						0.019608,
+						0.019608,
+						1
+					],
+					"lcdcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"textcolor": [
+						0.627451,
+						0.627451,
+						0.627451,
+						1
+					],
+					"fontsize": 10,
+					"text": "Vider",
+					"texton": "Vider",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_enum": [
+								"Repos",
+								"Clic"
+							],
+							"parameter_type": 2,
+							"parameter_unitstyle": 10,
+							"parameter_mmin": 0,
+							"parameter_mmax": 1,
+							"parameter_initial": [
+								0
+							],
+							"parameter_initial_enable": 1,
+							"parameter_shortname": "Vider",
+							"parameter_longname": "Vider",
+							"parameter_invisible": 2,
+							"parameter_modmode": 0,
+							"parameter_modmin": 0,
+							"parameter_modmax": 127,
+							"parameter_linknames": 0,
+							"parameter_order": 0,
+							"parameter_speedlim": 0,
+							"parameter_steps": 0,
+							"parameter_exponent": 1,
+							"parameter_annotation_name": "",
+							"parameter_info": "",
+							"parameter_units": ""
+						}
+					}
+				}
+			},
+			{
+				"box": {
 					"id": "foot-rule",
 					"maxclass": "live.line",
 					"varname": "foot-rule",
@@ -1435,6 +2018,186 @@
 			},
 			{
 				"box": {
+					"id": "journal-copy-fan",
+					"maxclass": "newobj",
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"patching_rect": [
+						820,
+						660,
+						40,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-copy-message",
+					"maxclass": "message",
+					"text": "journalcopy",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						820,
+						700,
+						90,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-export-fan",
+					"maxclass": "newobj",
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"patching_rect": [
+						940,
+						660,
+						40,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-export-message",
+					"maxclass": "message",
+					"text": "journalsave",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						940,
+						700,
+						90,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-clear-fan",
+					"maxclass": "newobj",
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"patching_rect": [
+						1060,
+						660,
+						40,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-clear-message",
+					"maxclass": "message",
+					"text": "journalclear",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1060,
+						700,
+						90,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-up-fan",
+					"maxclass": "newobj",
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"patching_rect": [
+						1180,
+						660,
+						40,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-up-message",
+					"maxclass": "message",
+					"text": "journalup",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1180,
+						700,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-down-fan",
+					"maxclass": "newobj",
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"patching_rect": [
+						1290,
+						660,
+						40,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-down-message",
+					"maxclass": "message",
+					"text": "journaldown",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1290,
+						700,
+						90,
+						22
+					]
+				}
+			},
+			{
+				"box": {
 					"id": "node",
 					"maxclass": "newobj",
 					"text": "node.script vassi-stream-device.js @autostart 1",
@@ -1456,10 +2219,12 @@
 				"box": {
 					"id": "node-route",
 					"maxclass": "newobj",
-					"text": "route port publisher encoder config saved relay status urlfield version",
+					"text": "route port publisher encoder config saved relay status urlfield version journal journalpos",
 					"numinlets": 1,
-					"numoutlets": 10,
+					"numoutlets": 12,
 					"outlettype": [
+						"",
+						"",
 						"",
 						"",
 						"",
@@ -1740,6 +2505,42 @@
 			},
 			{
 				"box": {
+					"id": "state-color-live",
+					"maxclass": "message",
+					"text": "textcolor 1 0.25098 0.196078 1",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						660,
+						560,
+						180,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "state-color-idle",
+					"maxclass": "message",
+					"text": "textcolor 0.627451 0.627451 0.627451 1",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						660,
+						600,
+						180,
+						22
+					]
+				}
+			},
+			{
+				"box": {
 					"id": "config-set",
 					"maxclass": "newobj",
 					"text": "prepend set",
@@ -1848,6 +2649,136 @@
 			},
 			{
 				"box": {
+					"id": "journal-route",
+					"maxclass": "newobj",
+					"text": "route 0 1 2 3 4",
+					"numinlets": 1,
+					"numoutlets": 6,
+					"outlettype": [
+						"",
+						"",
+						"",
+						"",
+						""
+					],
+					"patching_rect": [
+						1420,
+						480,
+						200,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-set-0",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1420,
+						520,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-set-1",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1510,
+						520,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-set-2",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1600,
+						520,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-set-3",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1690,
+						520,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-set-4",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1780,
+						520,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "journal-position-set",
+					"maxclass": "newobj",
+					"text": "prepend set",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1420,
+						560,
+						80,
+						22
+					]
+				}
+			},
+			{
+				"box": {
 					"id": "saved-split",
 					"maxclass": "newobj",
 					"text": "zl slice 1",
@@ -1906,10 +2837,11 @@
 				"box": {
 					"id": "page-select",
 					"maxclass": "newobj",
-					"text": "sel 0 1",
+					"text": "sel 0 1 2",
 					"numinlets": 1,
-					"numoutlets": 3,
+					"numoutlets": 4,
 					"outlettype": [
+						"bang",
 						"bang",
 						"bang",
 						""
@@ -1917,16 +2849,16 @@
 					"patching_rect": [
 						880,
 						260,
-						70,
+						90,
 						22
 					]
 				}
 			},
 			{
 				"box": {
-					"id": "show-live",
+					"id": "show-page-0",
 					"maxclass": "message",
-					"text": "script hide url-label, script hide url-field, script hide token-label, script hide token-field, script hide save-button, script hide check-button, script hide relay-line, script hide bridge-line, script hide version-line, script show state-label, script show state-detail, script show meter-left, script show meter-right, script show band-rule, script show live-title, script show start-toggle, script show quality-label, script show quality-menu, script show latency-label, script show latency-menu",
+					"text": "script hide url-label, script hide url-field, script hide token-label, script hide token-field, script hide save-button, script hide check-button, script hide relay-line, script hide bridge-line, script hide version-line, script hide journal-line-0, script hide journal-line-1, script hide journal-line-2, script hide journal-line-3, script hide journal-line-4, script hide journal-copy, script hide journal-export, script hide journal-clear, script hide journal-up, script hide journal-down, script hide journal-position, script show state-label, script show state-detail, script show meter-left, script show meter-right, script show band-rule, script show live-title, script show start-toggle, script show quality-label, script show quality-menu, script show latency-label, script show latency-menu",
 					"numinlets": 2,
 					"numoutlets": 1,
 					"outlettype": [
@@ -1935,16 +2867,16 @@
 					"patching_rect": [
 						880,
 						300,
-						300,
+						400,
 						22
 					]
 				}
 			},
 			{
 				"box": {
-					"id": "show-settings",
+					"id": "show-page-1",
 					"maxclass": "message",
-					"text": "script hide state-label, script hide state-detail, script hide meter-left, script hide meter-right, script hide band-rule, script hide live-title, script hide start-toggle, script hide quality-label, script hide quality-menu, script hide latency-label, script hide latency-menu, script show url-label, script show url-field, script show token-label, script show token-field, script show save-button, script show check-button, script show relay-line, script show bridge-line, script show version-line",
+					"text": "script hide state-label, script hide state-detail, script hide meter-left, script hide meter-right, script hide band-rule, script hide live-title, script hide start-toggle, script hide quality-label, script hide quality-menu, script hide latency-label, script hide latency-menu, script hide journal-line-0, script hide journal-line-1, script hide journal-line-2, script hide journal-line-3, script hide journal-line-4, script hide journal-copy, script hide journal-export, script hide journal-clear, script hide journal-up, script hide journal-down, script hide journal-position, script show url-label, script show url-field, script show token-label, script show token-field, script show save-button, script show check-button, script show relay-line, script show bridge-line, script show version-line",
 					"numinlets": 2,
 					"numoutlets": 1,
 					"outlettype": [
@@ -1953,7 +2885,25 @@
 					"patching_rect": [
 						880,
 						340,
-						300,
+						400,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "show-page-2",
+					"maxclass": "message",
+					"text": "script hide state-label, script hide state-detail, script hide meter-left, script hide meter-right, script hide band-rule, script hide live-title, script hide start-toggle, script hide quality-label, script hide quality-menu, script hide latency-label, script hide latency-menu, script hide url-label, script hide url-field, script hide token-label, script hide token-field, script hide save-button, script hide check-button, script hide relay-line, script hide bridge-line, script hide version-line, script show journal-line-0, script show journal-line-1, script show journal-line-2, script show journal-line-3, script show journal-line-4, script show journal-copy, script show journal-export, script show journal-clear, script show journal-up, script show journal-down, script show journal-position",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						880,
+						380,
+						400,
 						22
 					]
 				}
@@ -1971,7 +2921,7 @@
 					],
 					"patching_rect": [
 						880,
-						380,
+						420,
 						90,
 						22
 					]
@@ -2019,10 +2969,11 @@
 				"box": {
 					"id": "ready-fan",
 					"maxclass": "newobj",
-					"text": "t b b b b",
+					"text": "t b b b b b",
 					"numinlets": 1,
-					"numoutlets": 4,
+					"numoutlets": 5,
 					"outlettype": [
+						"bang",
 						"bang",
 						"bang",
 						"bang",
@@ -2031,7 +2982,7 @@
 					"patching_rect": [
 						1180,
 						340,
-						90,
+						100,
 						22
 					]
 				}
@@ -2068,6 +3019,24 @@
 						1260,
 						400,
 						60,
+						22
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "ask-journal",
+					"maxclass": "message",
+					"text": "journal",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					],
+					"patching_rect": [
+						1340,
+						400,
+						70,
 						22
 					]
 				}
@@ -2269,6 +3238,42 @@
 			{
 				"patchline": {
 					"source": [
+						"node-route",
+						9
+					],
+					"destination": [
+						"journal-route",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"node-route",
+						10
+					],
+					"destination": [
+						"journal-position-set",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-position-set",
+						0
+					],
+					"destination": [
+						"journal-position",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
 						"state-split",
 						0
 					],
@@ -2437,6 +3442,90 @@
 			{
 				"patchline": {
 					"source": [
+						"state-select",
+						0
+					],
+					"destination": [
+						"state-color-idle",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-select",
+						1
+					],
+					"destination": [
+						"state-color-idle",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-select",
+						2
+					],
+					"destination": [
+						"state-color-live",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-select",
+						3
+					],
+					"destination": [
+						"state-color-idle",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-select",
+						4
+					],
+					"destination": [
+						"state-color-idle",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-color-live",
+						0
+					],
+					"destination": [
+						"state-label",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"state-color-idle",
+						0
+					],
+					"destination": [
+						"state-label",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
 						"config-set",
 						0
 					],
@@ -2502,6 +3591,306 @@
 					],
 					"destination": [
 						"version-line",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-route",
+						0
+					],
+					"destination": [
+						"journal-set-0",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-route",
+						1
+					],
+					"destination": [
+						"journal-set-1",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-route",
+						2
+					],
+					"destination": [
+						"journal-set-2",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-route",
+						3
+					],
+					"destination": [
+						"journal-set-3",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-route",
+						4
+					],
+					"destination": [
+						"journal-set-4",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-set-0",
+						0
+					],
+					"destination": [
+						"journal-line-0",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-set-1",
+						0
+					],
+					"destination": [
+						"journal-line-1",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-set-2",
+						0
+					],
+					"destination": [
+						"journal-line-2",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-set-3",
+						0
+					],
+					"destination": [
+						"journal-line-3",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-set-4",
+						0
+					],
+					"destination": [
+						"journal-line-4",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-copy",
+						0
+					],
+					"destination": [
+						"journal-copy-fan",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-copy-fan",
+						0
+					],
+					"destination": [
+						"journal-copy-message",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-copy-message",
+						0
+					],
+					"destination": [
+						"node",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-export",
+						0
+					],
+					"destination": [
+						"journal-export-fan",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-export-fan",
+						0
+					],
+					"destination": [
+						"journal-export-message",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-export-message",
+						0
+					],
+					"destination": [
+						"node",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-clear",
+						0
+					],
+					"destination": [
+						"journal-clear-fan",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-clear-fan",
+						0
+					],
+					"destination": [
+						"journal-clear-message",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-clear-message",
+						0
+					],
+					"destination": [
+						"node",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-up",
+						0
+					],
+					"destination": [
+						"journal-up-fan",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-up-fan",
+						0
+					],
+					"destination": [
+						"journal-up-message",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-up-message",
+						0
+					],
+					"destination": [
+						"node",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-down",
+						0
+					],
+					"destination": [
+						"journal-down-fan",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-down-fan",
+						0
+					],
+					"destination": [
+						"journal-down-message",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"journal-down-message",
+						0
+					],
+					"destination": [
+						"node",
 						0
 					]
 				}
@@ -2993,7 +4382,7 @@
 						0
 					],
 					"destination": [
-						"show-live",
+						"show-page-0",
 						0
 					]
 				}
@@ -3005,7 +4394,7 @@
 						1
 					],
 					"destination": [
-						"show-settings",
+						"show-page-1",
 						0
 					]
 				}
@@ -3013,7 +4402,19 @@
 			{
 				"patchline": {
 					"source": [
-						"show-live",
+						"page-select",
+						2
+					],
+					"destination": [
+						"show-page-2",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"show-page-0",
 						0
 					],
 					"destination": [
@@ -3025,7 +4426,19 @@
 			{
 				"patchline": {
 					"source": [
-						"show-settings",
+						"show-page-1",
+						0
+					],
+					"destination": [
+						"pages",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"show-page-2",
 						0
 					],
 					"destination": [
@@ -3041,7 +4454,7 @@
 						0
 					],
 					"destination": [
-						"show-live",
+						"show-page-0",
 						0
 					]
 				}
@@ -3146,7 +4559,7 @@
 				"patchline": {
 					"source": [
 						"ready-fan",
-						3
+						4
 					],
 					"destination": [
 						"ask-port",
@@ -3158,7 +4571,7 @@
 				"patchline": {
 					"source": [
 						"ready-fan",
-						2
+						3
 					],
 					"destination": [
 						"quality-menu",
@@ -3170,7 +4583,7 @@
 				"patchline": {
 					"source": [
 						"ready-fan",
-						1
+						2
 					],
 					"destination": [
 						"latency-menu",
@@ -3182,10 +4595,22 @@
 				"patchline": {
 					"source": [
 						"ready-fan",
-						0
+						1
 					],
 					"destination": [
 						"ask-config",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"ready-fan",
+						0
+					],
+					"destination": [
+						"ask-journal",
 						0
 					]
 				}
@@ -3206,6 +4631,18 @@
 				"patchline": {
 					"source": [
 						"ask-config",
+						0
+					],
+					"destination": [
+						"node",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"ask-journal",
 						0
 					],
 					"destination": [

@@ -256,12 +256,16 @@ test("le device tient dans la surface accordee par Live", () => {
   }
 });
 
-// Ce test verifie les deux reglages enregistres avec le morceau : trois positions nommees chacun,
-// Studio et Equilibree par defaut, et des noms longs figes.
+// Ce test verifie les deux reglages enregistres avec le morceau : Studio et Equilibree par defaut,
+// et des noms longs figes.
 //
 // Le nom long identifie le parametre dans le fichier `.als`. Le changer ferait perdre le reglage
 // de tous les projets deja enregistres.
-test("les deux reglages ont trois positions et les bons defauts", () => {
+//
+// Les deux menus n'ont pas le meme nombre de positions : la qualite en compte trois, la latence
+// quatre. La borne haute du parametre suit ce nombre, et c'est elle qui est verifiee — un menu dont
+// le `parameter_mmax` ne suit pas rend sa derniere position inatteignable depuis Live.
+test("les deux reglages ont les bons defauts et les bonnes bornes", () => {
   const quality = byId.get("quality-menu");
   const latency = byId.get("latency-menu");
 
@@ -271,7 +275,9 @@ test("les deux reglages ont trois positions et les bons defauts", () => {
     assert.equal(menu.parameter_enable, 1, `${menu.id} doit etre un parametre enregistre`);
 
     const values = parameterOf(menu);
-    assert.equal((values.parameter_enum as string[]).length, 3);
+    const choices = values.parameter_enum as string[];
+    assert.ok(choices.length >= 3, `${menu.id} doit garder au moins ses trois positions`);
+    assert.equal(values.parameter_mmax, choices.length - 1, `${menu.id} : la borne haute suit les positions`);
     assert.equal(values.parameter_type, 2, "un choix nomme est un parametre de type Enum");
     assert.equal(values.parameter_initial_enable, 1);
     assert.equal(values.parameter_invisible, 1, "les deux reglages se gardent avec le morceau");
@@ -285,10 +291,16 @@ test("les deux reglages ont trois positions et les bons defauts", () => {
   const qualityStart = (qualityValues.parameter_initial as number[])[0] ?? -1;
   const latencyStart = (latencyValues.parameter_initial as number[])[0] ?? -1;
 
+  assert.equal(qualityChoices.length, 3);
+  assert.equal(latencyChoices.length, 4);
   assert.equal(qualityChoices[qualityStart], "Studio 256");
   assert.match(String(latencyChoices[latencyStart]), /quilibr/);
   assert.equal(qualityValues.parameter_longname, "Qualite");
   assert.equal(latencyValues.parameter_longname, "Latence");
+
+  // Les trois premieres positions occupent des places fixes. Live enregistre un numero de position :
+  // une valeur glissee avant les autres changerait le reglage des projets deja enregistres.
+  assert.deepEqual(latencyChoices.slice(0, 3), ["Faible 200 ms", "Équilibrée 400 ms", "Stable 800 ms"]);
 });
 
 // Ce test verifie qu'un projet rouvert ne relance jamais un direct tout seul.
@@ -325,7 +337,7 @@ test("le bouton Lancer ne peut pas se rallumer a l'ouverture d'un projet", () =>
 // parametre attache, donc sans valeur ou retenir sa position. Le meme 1 repartait a chaque clic,
 // et la page des reglages ne se refermait plus jamais. Un `live.tab` sort le numero de l'onglet
 // choisi, ce qui ne peut pas se bloquer.
-test("les deux pages se choisissent par un onglet qui retient sa position", () => {
+test("les pages se choisissent par un onglet qui retient sa position", () => {
   const tabs = byId.get("page-tabs");
 
   assert.ok(tabs, "le device doit porter des onglets");
@@ -333,14 +345,17 @@ test("les deux pages se choisissent par un onglet qui retient sa position", () =
   assert.equal(tabs.parameter_enable, 1, "sans parametre, l'onglet ne retient pas sa position");
 
   const parameter = parameterOf(tabs);
-  assert.equal((parameter.parameter_enum as string[]).length, 2, "il y a deux pages");
   assert.equal(parameter.parameter_invisible, 2, "la page ouverte ne regarde pas le morceau");
 
-  // Le numero de l'onglet doit atteindre les deux pages : la bascule marche dans les deux sens.
+  // Le numero de l'onglet doit atteindre chaque page : la bascule marche dans tous les sens.
+  //
+  // Le nombre de pages n'est pas ecrit ici. C'est l'onglet qui le dit, et le patcher doit porter
+  // exactement autant de messages de bascule qu'il annonce de positions : un onglet de plus sans son
+  // message ouvrirait une page vide, et un message sans onglet serait du code mort.
   const reached = reachedFrom("page-tabs", 0);
   const scripts = boxes.filter((box) => box.maxclass === "message" && textOf(box).includes("script "));
 
-  assert.equal(scripts.length, 2, "il faut un message par page");
+  assert.equal(scripts.length, (parameter.parameter_enum as string[]).length, "il faut un message par page");
   for (const script of scripts) {
     assert.ok(reached.includes(script.id), `l'onglet n'atteint pas ${script.id}`);
   }
@@ -430,8 +445,8 @@ test("chaque mot attendu par le patcher est envoye par Node", () => {
 // deux traits qui les separent du reste. Tout le reste doit appartenir a une page et une seule.
 const ALWAYS_SHOWN = ["page-tabs", "head-rule", "foot-rule", "config-line"];
 
-// Ce test verifie la bascule entre les deux pages : chaque objet visible appartient a une page et
-// une seule, sauf les objets des deux bandeaux qui restent toujours a l'ecran.
+// Ce test verifie la bascule entre les pages : chaque objet visible appartient a une page et une
+// seule, sauf les objets des deux bandeaux qui restent toujours a l'ecran.
 test("chaque objet visible appartient a une page", () => {
   const shown = boxes
     .filter((box) => box.presentation === 1)
@@ -441,7 +456,7 @@ test("chaque objet visible appartient a une page", () => {
     .filter((box) => box.maxclass === "message" && textOf(box).includes("script "))
     .map((box) => textOf(box));
 
-  assert.equal(scripts.length, 2, "il faut un message par page");
+  assert.ok(scripts.length >= 2, "le device doit avoir au moins deux pages");
 
   const named = new Set<string>();
   for (const script of scripts) {
@@ -460,19 +475,42 @@ test("chaque objet visible appartient a une page", () => {
   assert.deepEqual(missing, [], "ces objets visibles ne sont sur aucune page");
 
   const hiddenTwice = ALWAYS_SHOWN.filter((name) => named.has(name));
-  assert.deepEqual(hiddenTwice, [], "ces objets doivent rester visibles sur les deux pages");
+  assert.deepEqual(hiddenTwice, [], "ces objets doivent rester visibles sur toutes les pages");
 
-  // Chaque page cache exactement ce que l'autre montre.
-  const [first, second] = scripts.map((script) =>
-    script
-      .split(",")
-      .map((order) => order.trim().split(/\s+/))
-      .filter((parts) => parts[1] === "show")
-      .map((parts) => parts[2])
-      .sort(),
-  );
-  assert.notDeepEqual(first, second, "les deux pages montrent la meme chose");
+  // Chaque page montre ce qu'elle seule montre, et cache tout ce que les autres montrent.
+  //
+  // C'est la propriete qui compte vraiment : avec deux pages elle allait de soi, avec trois un objet
+  // oublie dans un seul message resterait affiche par-dessus la page suivante, et la seule trace
+  // serait un chevauchement a l'ecran d'Ableton.
+  const displayed = scripts.map((script) => ordersOf(script, "show"));
+  const concealed = scripts.map((script) => ordersOf(script, "hide"));
+
+  for (const [index, page] of displayed.entries()) {
+    assert.ok(page.length > 0, `la page ${index} ne montre rien`);
+
+    const others = displayed.filter((_, other) => other !== index).flat();
+
+    assert.deepEqual(
+      page.filter((name) => others.includes(name)),
+      [],
+      `la page ${index} partage des objets avec une autre`,
+    );
+    assert.deepEqual(
+      others.filter((name) => !concealed[index].includes(name)).sort(),
+      [],
+      `la page ${index} ne cache pas tout ce que les autres montrent`,
+    );
+  }
 });
+
+// Cette fonction rend les objets qu'un message de bascule montre, ou ceux qu'il cache.
+function ordersOf(script: string, action: string): string[] {
+  return script
+    .split(",")
+    .map((order) => order.trim().split(/\s+/))
+    .filter((parts) => parts[1] === action)
+    .map((parts) => String(parts[2]));
+}
 
 // Ce test verifie que rien ne se chevauche sur une meme page.
 //

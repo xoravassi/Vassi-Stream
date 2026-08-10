@@ -9,6 +9,10 @@ export const LATENCY_TARGET_MS: Record<string, number> = {
   low: 200,
   balanced: 400,
   stable: 800,
+  // `long` sert aux liens montants qui bloquent longtemps — une 4G en mouvement, un partage de
+  // connexion. Il reste sous `MAX_TARGET_MS`, le plafond du regulateur : un plancher qui depasserait
+  // ce plafond serait aussitot rabote, et le reglage ne voudrait plus rien dire.
+  long: 1500,
 };
 
 // Un profil inconnu prend ce seuil. Refuser la session serait pire : mieux vaut un direct un peu

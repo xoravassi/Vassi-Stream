@@ -61,6 +61,11 @@ export function message(id, text, options = {}) {
 // | RetroDisplayForegroundDisabled   | texte secondaire / inactif              | #808080   |
 // | RetroDisplayForeground           | accent (onglet actif, LCD allume)       | #f39420   |
 // | ControlOnForeground               | texte pose sur un fond accent           | #000000   |
+// | ChosenRecord                     | le mot « Live » pendant un direct       | #ff4032   |
+//
+// `ChosenRecord` est la couleur du bouton d'enregistrement d'Ableton, celle qui dit « ca part
+// vraiment » partout ailleurs dans Live. Elle est reprise ici pour la meme chose : rien d'autre
+// dans le device n'est rouge, donc ce rouge ne veut dire qu'une chose.
 //
 // C'est la seule source de couleurs en dur du device : toute couleur ecrite ailleurs dans le code
 // doit venir d'ici, jamais d'une valeur recopiee a la main.
@@ -70,8 +75,19 @@ export const PALETTE = {
 	text: [0.627451, 0.627451, 0.627451, 1],
 	textDim: [0.501961, 0.501961, 0.501961, 1],
 	accent: [0.952941, 0.580392, 0.12549, 1],
-	onAccent: [0, 0, 0, 1]
+	onAccent: [0, 0, 0, 1],
+	record: [1, 0.25098, 0.196078, 1]
 };
+
+// Cette fonction ecrit une couleur de la palette dans un message Max.
+//
+// Une boite message ne porte que du texte : une couleur y entre sous la forme `textcolor r v b a`,
+// avec quatre nombres separes par des espaces. Passer par cette fonction evite de recopier a la
+// main les decimales d'une couleur, ce qui est la seule facon de faire diverger deux teintes qui
+// devraient etre la meme.
+export function colorMessage(attribute, color) {
+	return `${attribute} ${color.join(" ")}`;
+}
 
 // Cette fonction cree un objet d'interface visible dans le device.
 export function control(id, maxclass, options = {}) {
