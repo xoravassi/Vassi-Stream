@@ -4,6 +4,7 @@ const { WebSocket } = require("ws");
 const { readConfig } = require("./publisher-config.js");
 const { backoffDelayMs } = require("./publisher-backoff.js");
 const { BitrateController } = require("./publisher-bitrate.js");
+const { SourceClock } = require("./source-clock.js");
 const protocol = require("./publisher-protocol.js");
 
 // Ces etats sont ceux affiches par le device. Ils ne decrivent que le lien avec le relais.
@@ -115,6 +116,11 @@ class Publisher {
 		// C'est la seule file du systeme dont le publisher decide du contenu : celle du noyau ne se
 		// regle pas depuis Node, et celle de `ws` se remplit sans qu'on puisse choisir quoi y laisser.
 		this.queue = [];
+		// Cette horloge compare le son produit par l'external au temps reel. Elle ne sert pas a
+		// surveiller la machine : elle corrige les timestamps sortants pour que le trou laisse par un
+		// decrochage d'Ableton soit annonce a l'auditeur au lieu d'user sa file en silence. Voir
+		// `source-clock.js`.
+		this.sourceClock = new SourceClock();
 		this.stats = { framesSent: 0, framesDropped: 0, bytesSent: 0, sessions: 0, reconnects: 0 };
 	}
 
@@ -266,6 +272,8 @@ class Publisher {
 	startSession(startEncoder = true) {
 		this.previousSessionId = protocol.createSessionId(this.previousSessionId);
 		this.session = { sessionId: this.previousSessionId, firstSequence: -1, firstTimestamp: 0n };
+		// L'horloge de source decrit une chronologie de session : elle repart avec elle.
+		this.sourceClock.reset();
 		this.stats.sessions += 1;
 		// Le compte de stabilite mesure la connexion, pas la session : un renouvellement de session
 		// au milieu d'un live ne doit pas faire croire a une connexion toute neuve.
@@ -299,6 +307,12 @@ class Publisher {
 			return false;
 		}
 
+		// Le decalage est mesure ici, a l'arrivee, et non au moment de transmettre : c'est l'arrivee qui
+		// dit quand l'external a produit cette trame. Le temps passe ensuite dans la file d'envoi
+		// appartient au lien montant, pas a la source, et le compter ici ferait passer un lien lent
+		// pour un decrochage d'Ableton.
+		const shiftMicros = this.sourceClock.note(frame.timestampMicros, this.now());
+
 		// Le debit est revu a chaque trame, avant tout abandon. C'est l'ordre qui compte : jeter est
 		// l'aveu que le lien ne suit plus, et produire moins evite d'en arriver la.
 		this.reviewBitrate();
@@ -311,7 +325,7 @@ class Publisher {
 			return false;
 		}
 
-		this.enqueue(frame);
+		this.enqueue(frame, shiftMicros);
 		this.drain();
 		return true;
 	}
@@ -321,8 +335,10 @@ class Publisher {
 	// L'ordre est celui-la et pas l'inverse : la frame qui arrive est toujours acceptee, et c'est le
 	// vieux fond de file qui part. Une trame d'il y a une demi-seconde n'a plus aucune valeur dans un
 	// direct, alors que celle qui vient d'etre encodee en a toute.
-	enqueue(frame) {
-		this.queue.push({ frame, at: this.now() });
+	// Le decalage de l'horloge de source voyage avec la trame plutot que d'etre relu a la sortie de
+	// file : relu plus tard, il attribuerait a cette trame un trou apparu apres son arrivee.
+	enqueue(frame, shiftMicros) {
+		this.queue.push({ frame, shiftMicros, at: this.now() });
 
 		const limit = Math.max(1, Math.floor(MAX_QUEUE_MS / protocol.FRAME_DURATION_MS));
 
@@ -340,14 +356,14 @@ class Publisher {
 		while (this.queue.length > 0 && this.pendingSends.length < MAX_INFLIGHT_FRAMES) {
 			const entry = this.queue.shift();
 
-			if (!this.transmit(entry.frame)) {
+			if (!this.transmit(entry.frame, entry.shiftMicros)) {
 				return;
 			}
 		}
 	}
 
 	// Cette methode place une frame sur la chronologie, l'encode et la confie a la socket.
-	transmit(frame) {
+	transmit(frame, shiftMicros = 0n) {
 		if (this.state !== LIVE || this.socket === null || this.session === null) {
 			this.stats.framesDropped += 1;
 			this.discontinuityPending = true;
@@ -358,7 +374,7 @@ class Publisher {
 		// exception y deviendrait une erreur non capturee et arreterait tout le processus Node.
 		let packet = null;
 		try {
-			const placed = this.placeInSession(frame);
+			const placed = this.placeInSession(frame, shiftMicros);
 			packet = protocol.encodeAudioPacket({
 				sessionId: this.session.sessionId,
 				sequenceNumber: placed.sequenceNumber,
@@ -450,7 +466,16 @@ class Publisher {
 	// Cette methode place une frame du pont sur la chronologie de la session courante.
 	// Les numeros du pont continuent d'avancer d'une session a l'autre : ils sont ramenes a zero
 	// sur la premiere frame recue, ce qui conserve les trous et l'avance des timestamps.
-	placeInSession(frame) {
+	// `shiftMicros` est la duree que l'external a perdue sans le savoir depuis le debut de la session,
+	// mesuree par `source-clock.js`. L'ajouter ici est tout ce qui separe un trou annonce d'un trou
+	// invisible : le timestamp avance alors de plus d'une trame, le player comble la duree exacte en
+	// silence, et sa file garde son niveau. Sans lui, la meme perte se paie une minute plus tard en
+	// coupure de deux secondes.
+	//
+	// Le bit de discontinuite n'est volontairement pas pose. Il dit au player que l'encodeur s'est
+	// remis a zero, ce qui n'est pas le cas ici : les samples de part et d'autre du trou sont
+	// contigus pour Opus, et reinitialiser le decodeur allongerait l'artefact au lieu de l'ecourter.
+	placeInSession(frame, shiftMicros = 0n) {
 		const session = this.session;
 
 		if (session.firstSequence < 0) {
@@ -459,13 +484,15 @@ class Publisher {
 		}
 
 		const sequenceNumber = frame.sequence - session.firstSequence;
-		const timestampMicros = frame.timestampMicros - session.firstTimestamp;
+		const timestampMicros = frame.timestampMicros - session.firstTimestamp + shiftMicros;
 
 		// L'encodeur est reparti de zero, ou le compteur de 32 bits arrive au bout. Les deux cas
 		// demandent une nouvelle session : un listener ne doit jamais voir un numero reculer.
 		if (sequenceNumber < 0 || timestampMicros < 0n || sequenceNumber > SEQUENCE_LIMIT) {
 			this.renewSession();
-			return this.placeInSession(frame);
+			// La session neuve a remis l'horloge de source a zero : reprendre le decalage de l'ancienne
+			// ferait commencer la nouvelle chronologie ailleurs qu'a zero.
+			return this.placeInSession(frame, this.sourceClock.shiftMicros);
 		}
 
 		return { sequenceNumber, timestampMicros };

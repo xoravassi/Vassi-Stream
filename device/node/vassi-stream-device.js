@@ -475,7 +475,21 @@ Max.addHandler("journalup", () => {
 // Ces valeurs sont celles relevees au debut du direct en cours : tous les chiffres du journal sont
 // des ecarts a ce point de depart. Les compteurs du publisher, eux, ne repartent jamais de zero, et
 // un total cumule sur toute une session Ableton ne dirait pas ce qui s'est passe ce soir.
-const watch = { since: 0, frames: 0, dropped: 0, gaps: 0, reconnects: 0, reported: 0, seenDrops: 0, lastDrop: 0 };
+const watch = {
+	since: 0,
+	frames: 0,
+	dropped: 0,
+	gaps: 0,
+	reconnects: 0,
+	reported: 0,
+	seenDrops: 0,
+	lastDrop: 0,
+	// Ces trois valeurs suivent l'horloge de source. Le taux est rendu sur l'intervalle et non depuis
+	// le debut : un decrochage de trois minutes disparaitrait dans une moyenne de quarante.
+	sourceAudio: 0n,
+	sourceElapsed: 0n,
+	sourceDeclared: 0
+};
 
 // Cette fonction releve le point de depart au debut de chaque direct.
 function startWatch(at) {
@@ -487,6 +501,11 @@ function startWatch(at) {
 	watch.reported = at;
 	watch.seenDrops = publisher.stats.framesDropped;
 	watch.lastDrop = 0;
+
+	const source = publisher.sourceClock.report();
+	watch.sourceAudio = source.audioMicros;
+	watch.sourceElapsed = source.elapsedMicros;
+	watch.sourceDeclared = source.declaredMs;
 }
 
 // Cette fonction ecrit le bilan de fin de direct : ce qu'on relit en premier apres coup.
@@ -508,10 +527,13 @@ function endWatch(at) {
 
 // Cette fonction ecrit le bilan periodique d'un direct en cours.
 //
-// Ces cinq chiffres ensemble suffisent a nommer un probleme sans rien ouvrir d'autre. Un debit colle
-// au plafond avec un retard nul est un lien sain. Un debit qui descend seul est un lien qui retrecit,
+// Ces chiffres ensemble suffisent a nommer un probleme sans rien ouvrir d'autre. Un debit colle au
+// plafond avec un retard nul est un lien sain. Un debit qui descend seul est un lien qui retrecit,
 // et le regulateur fait son travail. Un retard qui monte pendant que des trames sont jetees est un
 // lien depasse. Des trous cote encodeur sans rien de tout cela designent la machine, pas le reseau.
+//
+// La ligne `source` est la derniere arrivee et elle repond a un cas que toutes les autres declaraient
+// sain : la machine qui ne calcule plus assez de son. Voir `sourceLine`.
 function reportWatch(at) {
 	const controller = publisher.bitrateController;
 	const applied = controller === null ? 0 : controller.report().applied;
@@ -527,7 +549,44 @@ function reportWatch(at) {
 		"lien",
 		`${Math.round(applied / 1000)} sur ${kbits(ceiling)}, retard ${Math.round(publisher.oldestPendingMs())} ms`
 	);
+	journal.record("source", sourceLine());
 	journal.record("systeme", machineLine(at));
+}
+
+// Cette fonction dit si l'external a produit autant de son que le temps qui a passe.
+//
+// C'est la mesure qui manquait le 11 aout 2026. Ce soir-la, tous les compteurs affichaient zero
+// probleme — zero trou, zero jetee, retard nul, debit colle au plafond — pendant que l'external
+// rendait 24,08 trames par seconde au lieu de 25. Les 91 s d'audio jamais calculees par Ableton ne
+// laissaient aucune trace ici, et ressortaient chez l'auditeur en coupures de deux secondes.
+//
+// Le rapport est rendu sur l'intervalle, comme les autres lignes, et le seuil est bas a dessein :
+// un pour cent de deficit vaut deja 36 ms de tampon perdues par seconde chez l'auditeur.
+function sourceLine() {
+	const source = publisher.sourceClock.report();
+	const audio = Number(source.audioMicros - watch.sourceAudio);
+	const elapsed = Number(source.elapsedMicros - watch.sourceElapsed);
+	const declared = source.declaredMs - watch.sourceDeclared;
+
+	watch.sourceAudio = source.audioMicros;
+	watch.sourceElapsed = source.elapsedMicros;
+	watch.sourceDeclared = source.declaredMs;
+
+	if (elapsed <= 0) {
+		return "en attente de trames";
+	}
+
+	const ratio = audio / elapsed;
+	const rate = (ratio * 25).toFixed(1);
+
+	if (ratio >= 0.99) {
+		return `${rate} trames/s, le moteur audio suit`;
+	}
+
+	return (
+		`${rate} trames/s au lieu de 25 : le moteur audio ne fournit que ${Math.round(ratio * 100)} % ` +
+		`du temps reel, ${(declared / 1000).toFixed(1)} s annoncees comme trou`
+	);
 }
 
 // --- La charge de la machine ---------------------------------------------------------------------

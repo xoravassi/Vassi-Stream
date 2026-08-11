@@ -52,14 +52,26 @@ export const CONTROL_SKIPS = 4;
 // le symptome dans le journal.
 export const CONTROL_TRIMS = 5;
 
-// Ecart relatif au seuil en dessous duquel la vitesse de lecture ne bouge pas.
+// Ecart au seuil, en millisecondes, en dessous duquel la vitesse de lecture ne bouge pas.
 //
 // Le niveau de la file oscille naturellement de quelques dizaines de millisecondes au rythme des
 // paquets. Corriger ce bruit ferait travailler le regulateur en permanence sans rien gagner.
-export const RATE_DEADBAND = 0.15;
+//
+// Cette valeur est une duree et non une part du seuil, et le changement vient du 11 aout 2026. En
+// proportion — 15 % — la zone morte suivait le seuil : 60 ms a 400 ms de seuil, mais **300 ms a
+// 2000 ms**. Le regulateur ne corrigeait alors plus rien tant que la file restait au-dessus de
+// 1700 ms, et n'atteignait sa correction maximale qu'a 700 ms. Il devenait donc d'autant plus
+// paresseux que la situation etait mauvaise, alors que c'est l'inverse qu'on attend de lui.
+//
+// Le bruit qu'elle doit ignorer, lui, ne depend pas du seuil : il vaut quelques trames de 40 ms quel
+// que soit le tampon vise. Une duree fixe est donc la forme juste.
+export const RATE_DEADBAND_MS = 150;
 
-// Ecart relatif, au-dela de la zone morte, qui demande la correction maximale.
-export const RATE_SPAN = 0.5;
+// Ecart au-dela de la zone morte, en millisecondes, qui demande la correction maximale.
+//
+// Fixe pour la meme raison que la zone morte : la pente du regulateur decrit sa reactivite, pas la
+// taille du tampon.
+export const RATE_SPAN_MS = 500;
 
 // Correction maximale de la vitesse de lecture, en part de la vitesse nominale.
 //
@@ -500,7 +512,7 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       }
 
       const error = this.ring.available - this.keepFrames;
-      const deadband = this.keepFrames * RATE_DEADBAND;
+      const deadband = (RATE_DEADBAND_MS * PCM_SAMPLE_RATE) / 1000;
 
       if (error > -deadband && error < deadband) {
         return 1;
@@ -509,7 +521,7 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       // L'ecart est compte a partir du bord de la zone morte, pas du seuil : la correction part donc
       // de zero au bord au lieu de sauter, et rien ne s'entend au passage.
       const excess = error > 0 ? error - deadband : error + deadband;
-      const correction = Math.max(-1, Math.min(1, excess / (this.keepFrames * RATE_SPAN)));
+      const correction = Math.max(-1, Math.min(1, excess / ((RATE_SPAN_MS * PCM_SAMPLE_RATE) / 1000)));
 
       return 1 + RATE_MAX * correction;
     }

@@ -35,6 +35,20 @@ export type PlayerCommands = {
 // resterait en retard sur le direct jusqu'a la fin, sans que rien ne le signale.
 export const LATE_MARGIN_MS = 1000;
 
+// Part du seuil qu'une rebufferisation doit reconstituer avant de rendre le son.
+//
+// Une rebufferisation attendait le seuil **complet**, et c'est ce qui la rendait chere. Le 11 aout
+// 2026, seuil colle a son plafond de 2000 ms, chacune des quarante coupures a dure 2,3 s en moyenne :
+// la file se remplit a environ 0,8 fois le temps reel, donc reconstituer deux secondes en coute plus
+// de deux. Sur 41 minutes cela faisait 93 s de silence — 3,8 % du cours.
+//
+// Attendre la moitie divise l'attente par deux sans rouvrir la porte au va-et-vient que le seuil
+// complet fermait : a la moitie de deux secondes, la file reste plus fournie que le seuil entier
+// d'un profil court, et le regulateur de vitesse finit de la remonter pendant la lecture. Le
+// plancher du profil borne le tout par le bas, parce que descendre sous la latence que l'auditeur a
+// choisie n'aurait aucun sens.
+export const RESUME_RATIO = 0.5;
+
 // Un rattrapage apres un vrai decrochage arrive parfois par rafale, sur plusieurs rapports au lieu
 // d'un seul bloc : un rapport correct peut se glisser entre deux rapports encore au-dessus de la
 // marge. Repartir en lecture sur ce seul rapport la ferait aussitot rebufferiser au rapport suivant,
@@ -269,10 +283,10 @@ export class PlayerStateMachine {
     }
 
     if (this.state !== "PLAYING") {
-      // La reprise depuis REBUFFERING demande un retour net au seuil de lecture, pas un simple
+      // La reprise depuis REBUFFERING demande un retour net a un niveau de lecture, pas un simple
       // rebond autour du seuil. Sinon un blocage bref suffit a faire osciller le player entre
-      // REBUFFERING et PLAYING.
-      if (availableMs >= targetBufferMs) {
+      // REBUFFERING et PLAYING. Ce niveau n'est plus le seuil entier : voir `RESUME_RATIO`.
+      if (availableMs >= this.resumeBufferMs()) {
         if (!this.recoveringFromDrift && !this.recoveringFromGap) {
           this.moveTo("PLAYING");
           return;
@@ -424,6 +438,17 @@ export class PlayerStateMachine {
     }
 
     return this.session === null ? 400 : this.session.targetBufferMs;
+  }
+
+  // Cette methode rend le niveau de file qu'une rebufferisation doit atteindre pour rendre le son.
+  //
+  // Elle est bornee par le plancher du profil : la latence choisie par l'auditeur reste le minimum,
+  // et un seuil adaptatif deja au plancher se comporte donc exactement comme avant.
+  resumeBufferMs(): number {
+    const target = this.targetBufferMs();
+    const floorMs = this.session === null ? 400 : this.session.targetBufferMs;
+
+    return Math.min(target, Math.max(floorMs, Math.round(target * RESUME_RATIO)));
   }
 
   // Cette methode installe le seuil decide par le regulateur (`buffer-target.ts`).

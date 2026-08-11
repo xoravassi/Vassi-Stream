@@ -15,8 +15,8 @@ export declare const CONTROL_UNDERRUNS: number;
 export declare const CONTROL_OVERFLOWS: number;
 export declare const CONTROL_SKIPS: number;
 export declare const CONTROL_TRIMS: number;
-export declare const RATE_DEADBAND: number;
-export declare const RATE_SPAN: number;
+export declare const RATE_DEADBAND_MS: number;
+export declare const RATE_SPAN_MS: number;
 export declare const RATE_MAX: number;
 
 // Cette fonction cree la memoire d'une file PCM, partagee entre threads ou non.

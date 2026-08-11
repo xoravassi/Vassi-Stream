@@ -35,7 +35,14 @@ function makeFrame(sequence: number, flags = 0): {
 
 // Cette fonction cree un publisher branche sur un faux relais, avec des delais courts.
 // `timings` remplace les durees du protocole, trop longues pour un test.
-function makePublisher(relayUrl: string, token: string, timings?: Record<string, number>) {
+// `now` remplace l'horloge de la machine : c'est elle que l'horloge de source compare au temps audio
+// produit, donc c'est par elle qu'un test peut simuler un moteur audio qui ne suit plus.
+function makePublisher(
+  relayUrl: string,
+  token: string,
+  timings?: Record<string, number>,
+  now?: () => number,
+) {
   const states: StateRecord[] = [];
   const encoderActions: string[] = [];
   const attempts: number[] = [];
@@ -50,6 +57,7 @@ function makePublisher(relayUrl: string, token: string, timings?: Record<string,
       return 20;
     },
     timings,
+    now,
   });
 
   return { publisher, states, encoderActions, attempts };
@@ -560,4 +568,74 @@ test("un second Lancer ne cree pas de seconde session", async (t) => {
   assert.deepEqual(encoderActions, ["start"]);
   assert.deepEqual(states.map((entry) => entry.state), ["CONNECTING", "LIVE"]);
   assert.equal(publisher.stats.sessions, 1);
+});
+
+// Ce test est celui de l'essai du 11 aout 2026, ramene a seize secondes.
+//
+// Ce soir-la, Ableton n'a calcule que 96,3 % du son pendant que le partage d'ecran du cours occupait
+// le processeur. L'external avance son horloge d'une trame par trame *produite*, donc il recollait
+// les deux bords du trou : aucun compteur du device n'a rien vu, et l'auditeur a paye 93 s de
+// silence en quarante coupures de deux secondes, jusqu'a une minute apres le decrochage.
+//
+// Le publisher doit maintenant annoncer ce que la source n'a pas produit, en avancant le timestamp
+// de la duree manquante. Le player sait alors combler exactement ce trou sans interrompre la lecture,
+// et sa file garde son niveau au lieu de s'user jusqu'a la coupure.
+test("annonce le son qu'un moteur audio sature n'a jamais produit", async (t) => {
+  const relay = new FakeRelay(GOOD_TOKEN);
+  const url = await relay.listen();
+  // 41,5 ms de temps reel pour 40 ms d'audio : le deficit de 3,6 % mesure ce soir-la.
+  let maintenant = 1_000_000;
+  const { publisher } = makePublisher(url, GOOD_TOKEN, undefined, () => maintenant);
+  t.after(async () => {
+    publisher.stop();
+    await relay.close();
+  });
+
+  publisher.start({ bitrate: 256000, latencyProfile: "balanced" });
+  await waitFor(() => publisher.state === LIVE, "publisher en direct");
+
+  const trames = 400;
+  const depart = maintenant;
+
+  for (let sequence = 1; sequence <= trames; sequence += 1) {
+    maintenant = depart + Math.round(sequence * 41.5);
+    publisher.sendFrame(makeFrame(sequence));
+
+    // La fenetre d'envoi du publisher est bornee et ne se rouvre qu'au retour de la socket. Sans
+    // cette pause, la boucle remplirait la file plus vite qu'elle ne se vide et le test mesurerait
+    // les abandons du lien montant au lieu du deficit de la source.
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  await waitFor(() => relay.received.binaryMessages.length === trames, "toutes les trames recues");
+
+  const entetes = relay.received.binaryMessages.map((bytes) => decodeAudioPacket(bytes).header);
+
+  // Les numeros de sequence restent contigus : le trou est porte par le seul champ qui compte le
+  // temps audio, jamais par un numero saute. C'est ce qui le distingue d'une perte reseau.
+  entetes.forEach((entete, index) => assert.equal(entete.sequenceNumber, index));
+
+  // Le bit de discontinuite reste a zero. Il dit au player que l'encodeur s'est remis a zero, ce qui
+  // n'est pas le cas ici : les samples de part et d'autre du trou sont contigus pour Opus, et
+  // reinitialiser le decodeur allongerait l'artefact au lieu de l'ecourter.
+  assert.ok(entetes.every((entete) => entete.flags === 0), "aucun bit de discontinuite");
+
+  // Au moins un timestamp avance de plus d'une trame : c'est la forme meme du trou annonce.
+  const sauts = entetes.filter(
+    (entete, index) =>
+      index > 0 && entete.timestampMicros - entetes[index - 1]!.timestampMicros > 40000n,
+  );
+  assert.ok(sauts.length > 0, "le trou doit apparaitre dans les timestamps");
+
+  // Et surtout : la chronologie rejoint le temps reel. Sans correction, le dernier timestamp vaudrait
+  // 16,00 s pour 16,60 s ecoulees, et ces 600 ms seraient exactement ce que la file de l'auditeur
+  // perdrait sans jamais le recuperer.
+  const dernier = Number(entetes[entetes.length - 1]!.timestampMicros);
+  const ecoule = (maintenant - depart) * 1000;
+
+  assert.ok(
+    dernier > ecoule - 250_000,
+    `chronologie a ${dernier / 1000} ms pour ${ecoule / 1000} ms ecoulees`,
+  );
+  assert.ok(dernier <= ecoule, "la chronologie ne doit jamais depasser le temps reel");
 });

@@ -6,7 +6,7 @@ import {
   DECAY_MS_PER_SECOND,
   MAX_TARGET_MS,
   TARGET_SAFETY,
-  UNDERRUN_GROWTH,
+  UNDERRUN_STEP_MS,
 } from "../src/player/buffer-target.ts";
 
 // Ce fichier verifie le regulateur de seuil de bufferisation. Il est pur : il recoit des dates et
@@ -93,8 +93,25 @@ test("remonte le seuil sur un manque de donnees, meme sans blocage mesure", () =
 
   regulateur.noteUnderrun(at);
 
-  // 400 x 1,25 de blocage retenu, puis x 1,5 de marge : 750, deja au pas de 50.
-  assert.equal(regulateur.targetMs(at), Math.round((400 * UNDERRUN_GROWTH * TARGET_SAFETY) / 50) * 50);
+  // Le seuil monte d'un pas fixe, pas d'un facteur : 400 + 150 = 550, deja au pas de 50.
+  assert.equal(regulateur.targetMs(at), 400 + UNDERRUN_STEP_MS);
+});
+
+// Ce test verifie que des manques repetes montent en ligne droite, et il existe a cause du 11 aout
+// 2026. La croissance etait alors multiplicative et se composait avec la marge de securite : chaque
+// manque multipliait le souvenir par 1,875, donc le seuil passait de 400 a son plafond de 2000 ms en
+// cinq manques et trois minutes, puis n'en redescendait plus. L'auditeur payait deux secondes de
+// latence a cause d'une multiplication, pas d'une mesure du lien.
+test("monte d'un pas constant, sans jamais se composer avec lui-meme", () => {
+  const regulateur = new BufferTarget(400);
+
+  let at = fluxRegulier(regulateur, 1000, 10);
+
+  for (const attendu of [550, 700, 850, 1000, 1150]) {
+    regulateur.noteUnderrun(at);
+    assert.equal(regulateur.targetMs(at), attendu);
+    at += 1;
+  }
 });
 
 // Ce test verifie que des manques repetes font monter le seuil sans jamais l'emballer. Sans plafond,

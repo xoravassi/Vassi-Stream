@@ -12,7 +12,7 @@
 // celle deja faite cote device, ou la qualite choisie est devenue un plafond de debit plutot qu'une
 // valeur figee. Dans les deux cas le reglage humain borne le regulateur au lieu de le remplacer.
 
-import { RATE_DEADBAND } from "./pcm-worklet.js";
+import { RATE_DEADBAND_MS } from "./pcm-worklet.js";
 
 // Duree nominale entre deux paquets, en millisecondes : la duree d'une trame du protocole v1.1.
 const FRAME_MS = 40;
@@ -60,7 +60,7 @@ export const DECAY_MS_PER_SECOND = 5;
 // La porte n'est fermee que par le haut. Une file plus maigre que le seuil ne bloque rien : le seuil
 // et elle se rapprochent alors, ce qui est exactement ce qu'on veut, et tout nouveau blocage le
 // releve de toute facon aussitot.
-export const DECAY_GATE = RATE_DEADBAND;
+export const DECAY_GATE_MS = RATE_DEADBAND_MS;
 
 // Pas de quantification du seuil rendu.
 //
@@ -68,11 +68,24 @@ export const DECAY_GATE = RATE_DEADBAND;
 // ferait travailler le regulateur de vitesse du processeur audio pour un gain nul.
 export const TARGET_STEP_MS = 50;
 
-// Part dont le seuil augmente quand un manque de donnees survient malgre lui.
+// Duree dont le seuil monte quand un manque de donnees survient malgre lui.
 //
 // Un manque de donnees est la preuve directe que le seuil courant etait trop court : la mesure des
 // blocages ne l'avait pas vu venir, donc c'est ce constat-la qui doit decider, et non elle.
-export const UNDERRUN_GROWTH = 1.25;
+//
+// Cette croissance est **additive**, et elle l'est parce que la version multiplicative se mordait la
+// queue. Elle valait `observedMs = boundedTarget() x 1.25`, or `boundedTarget()` vaut deja
+// `observedMs x TARGET_SAFETY` : chaque manque multipliait donc le souvenir par 1,875, et le suivant
+// repartait du resultat. Le journal du 11 aout 2026 le montre pas a pas — a 09:48:51 le besoin vaut
+// 382 ms, douze secondes d'oubli le ramenent a 322, et le manque de 09:49:03 rend exactement
+// `322 x 1,5 x 1,25 = 604`, la valeur que le journal affiche. En cinq manques et trois minutes le
+// seuil passait de 400 a 2000 ms, son plafond, ou il est reste 89 % de la session. Redescendre de
+// 2000 aurait demande 133 s de calme ; les manques arrivaient toutes les 62 s.
+//
+// L'auditeur payait donc deux secondes de latence a cause d'une multiplication, et non d'une mesure
+// du lien. Un pas fixe repond au meme constat — le seuil etait trop court — sans que la reponse
+// depende de ce que les manques precedents ont deja fait monter.
+export const UNDERRUN_STEP_MS = 150;
 
 // Cette classe suit l'arrivee des paquets et rend le seuil de bufferisation a tenir.
 export class BufferTarget {
@@ -132,13 +145,17 @@ export class BufferTarget {
   }
 
   // Cette methode enregistre un manque de donnees, qui prouve que le seuil courant etait trop court.
+  // Le pas est ajoute au *seuil* et non au souvenir brut, puis converti dans l'unite de ce dernier.
+  // Ajoute au souvenir, il resterait sans effet tant que le plancher du profil domine : un premier
+  // manque a 400 ms de plancher ne bougerait rien, alors qu'il vient justement de prouver que
+  // 400 ms ne suffisaient pas.
   noteUnderrun(at: number): void {
     this.decayTo(at);
 
-    const grown = this.boundedTarget() * UNDERRUN_GROWTH;
+    const wanted = (this.boundedTarget() + UNDERRUN_STEP_MS) / TARGET_SAFETY;
 
-    if (grown > this.observedMs) {
-      this.observedMs = Math.min(grown, MAX_TARGET_MS);
+    if (wanted > this.observedMs) {
+      this.observedMs = Math.min(wanted, MAX_TARGET_MS);
     }
   }
 
@@ -189,6 +206,6 @@ export class BufferTarget {
       return false;
     }
 
-    return this.levelMs > this.boundedTarget() * (1 + DECAY_GATE);
+    return this.levelMs > this.boundedTarget() + DECAY_GATE_MS;
   }
 }

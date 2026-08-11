@@ -41,7 +41,18 @@ globales.registerProcessor = (_nom: string, classe: unknown): void => {
 
 // L'import est dynamique parce qu'il doit venir apres les deux globales : un import statique serait
 // evalue avant elles, et le module ne s'enregistrerait pas.
-const { createPcmBuffer, PcmRing } = await import("../src/player/pcm-worklet.js");
+const { createPcmBuffer, PcmRing, PCM_SAMPLE_RATE } = await import("../src/player/pcm-worklet.js");
+
+// Cette fonction convertit une duree en echantillons.
+//
+// Le filet, lui, se juge sur des rapports de tailles et se contente d'une file minuscule. Le
+// regulateur de vitesse non : depuis le 11 aout 2026 sa zone morte et sa pente sont des durees fixes
+// — 150 et 500 ms — et non plus des parts du seuil, parce qu'en proportion elles enflaient avec lui
+// et le rendaient d'autant plus paresseux que la situation etait mauvaise. Les tests du regulateur
+// travaillent donc a l'echelle reelle, seule ou ces durees veulent dire quelque chose.
+function echantillons(ms: number): number {
+  return Math.round((ms * PCM_SAMPLE_RATE) / 1000);
+}
 
 assert.ok(ProcesseurEnregistre !== null, "le module doit enregistrer son processeur au chargement");
 
@@ -249,18 +260,23 @@ test("ne corrige pas la vitesse quand le niveau tient le seuil", () => {
 // bornes. C'est ce qui remplace le vidage : cinq pour mille valent 8,6 cents de desaccord, la ou
 // jeter une seconde de son s'entend comme une coupure.
 test("accelere la lecture quand la file depasse le seuil, sans depasser sa borne", () => {
-  const { processeur, file } = monter(4000);
+  const { processeur, file } = monter(echantillons(1600));
 
-  processeur.port.deliver({ type: "limit", ceilingFrames: 3000, keepFrames: 1000 });
-  remplir(file, 1000);
+  processeur.port.deliver({
+    type: "limit",
+    ceilingFrames: echantillons(1400),
+    keepFrames: echantillons(400),
+  });
+  remplir(file, echantillons(400));
   processeur.port.deliver({ type: "play" });
   // Ce premier bloc consomme l'ebarbage de la reprise. Sans lui, l'ebarbage ramenerait la file au
   // seuil et le test mesurerait une correction nulle : c'est bien ce qu'on veut a la reprise, mais
   // ce n'est pas ce que ce test-ci pose comme question.
   processeur.process([], blocDeSortie().sorties);
 
-  // Le double du seuil : bien au-dela de la zone morte et de la pente, donc la correction maximale.
-  remplir(file, 1128);
+  // Un excedent de 700 ms : au-dela de la zone morte de 150 ms **et** de la pente de 500 ms, donc la
+  // correction maximale.
+  remplir(file, echantillons(700));
 
   const ratio = dernierReleve(processeur, file).ratio as number;
 
@@ -268,13 +284,38 @@ test("accelere la lecture quand la file depasse le seuil, sans depasser sa borne
   assert.ok(ratio <= 1.005, `la correction doit rester inaudible, recu ${ratio}`);
 });
 
+// Ce test fixe la consequence directe du passage a une zone morte en millisecondes : elle ne doit
+// plus enfler avec le seuil. A 2000 ms de seuil, la version proportionnelle a 15 % laissait le
+// regulateur muet jusqu'a 1700 ms de file — c'est ce silence qui a laisse la file du 11 aout 2026
+// descendre a 982 ms de mediane sans qu'aucune correction ne parte.
+test("corrige aussi vite a seuil eleve qu'a seuil bas", () => {
+  const { processeur, file } = monter(echantillons(4000));
+
+  processeur.port.deliver({
+    type: "limit",
+    ceilingFrames: echantillons(3500),
+    keepFrames: echantillons(2000),
+  });
+  // 1750 ms pour un seuil de 2000 : la version proportionnelle rendait exactement 1 ici.
+  remplir(file, echantillons(1750));
+  processeur.port.deliver({ type: "play" });
+
+  const ratio = dernierReleve(processeur, file).ratio as number;
+
+  assert.ok(ratio < 1, `le regulateur doit corriger a seuil eleve, recu ${ratio}`);
+});
+
 // Ce test verifie l'autre sens : une file trop maigre se consomme plus lentement, ce qui laisse au
 // reseau le temps de la regarnir au lieu de la vider jusqu'au manque de donnees.
 test("ralentit la lecture quand la file passe sous le seuil", () => {
-  const { processeur, file } = monter(4000);
+  const { processeur, file } = monter(echantillons(1600));
 
-  processeur.port.deliver({ type: "limit", ceilingFrames: 3000, keepFrames: 1000 });
-  remplir(file, 300);
+  processeur.port.deliver({
+    type: "limit",
+    ceilingFrames: echantillons(1400),
+    keepFrames: echantillons(400),
+  });
+  remplir(file, echantillons(100));
   processeur.port.deliver({ type: "play" });
 
   const ratio = dernierReleve(processeur, file).ratio as number;
