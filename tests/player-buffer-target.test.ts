@@ -144,8 +144,8 @@ test("ne rend que des seuils au pas de cinquante millisecondes", () => {
   }
 });
 
-// Ce test couvre le defaut que le journal du 6 aout 2026 a 23h18 a revele, et qui rendait le seuil
-// menteur.
+// Ce test couvre la regle qui empeche le seuil de mentir, mesuree sur le journal du 6 aout 2026 a
+// 23h18.
 //
 // Le seuil descend de 7,5 ms par seconde ; le processeur audio ne sait resorber un exces qu'a 5 ms
 // par seconde au mieux. Un seuil qui descend pendant que la file est encore au-dessus creuse donc un
@@ -168,7 +168,7 @@ test("ne baisse pas le seuil tant que la file est restee au-dessus", () => {
 });
 
 // Ce test verifie que la porte se rouvre : le seuil reprend sa descente des que la file l'a rejoint.
-// Sans cela le correctif precedent gelerait la latence pour toujours.
+// Sans cette descente, le seuil resterait gele en haut pour toujours.
 test("reprend la descente des que la file a rejoint le seuil", () => {
   const regulateur = new BufferTarget(400);
 

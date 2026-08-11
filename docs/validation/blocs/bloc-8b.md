@@ -535,7 +535,7 @@ est casse.
 ## Verification a l'oreille, a faire avec Vassi
 
 Ableton n'intervient pas. La marche a suivre et la raison de ce choix sont dans
-`docs/validation/phase-8.md`.
+`docs/validation/blocs/bloc-8.md`.
 
 **Les pannes decrites plus haut ne sont pas a provoquer a la main.** Un worker qui meurt, un
 decodeur qui refuse de compiler, un contexte suspendu par le systeme, une page fermee pendant le
@@ -562,7 +562,7 @@ Le verdict doit revenir a **rien a signaler** apres chaque coupure.
 ### L'essai long
 
 Le scenario complet, phase par phase, avec ce qui compte comme defaut, est dans
-`docs/validation/phase-8b-essai-long.md`. La marche a suivre minimale reste celle-ci :
+`docs/validation/procedures/essai-long-moteur-audio.md`. La marche a suivre minimale reste celle-ci :
 
 1. Cliquer sur **Play**, puis sur **Coupures automatiques**.
 2. Laisser tourner quinze a trente minutes, en cliquant de temps en temps sur **Pause** puis sur
@@ -583,7 +583,7 @@ Ce qu'il faut regarder a la fin :
 ### Les trois passages
 
 Firefox en mode partage, Firefox sans isolation, puis Safari. Le detail de chacun, et la facon
-d'atteindre Safari depuis une autre machine, sont dans `docs/validation/phase-8.md`.
+d'atteindre Safari depuis une autre machine, sont dans `docs/validation/blocs/bloc-8.md`.
 
 Le mode sans `SharedArrayBuffer` se juge sur un seul compteur : **Blocs abandonnes**. C'est la
 mesure directe de la stabilite du transport par `MessagePort` — un port qui n'arrive plus a suivre

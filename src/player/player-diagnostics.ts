@@ -22,8 +22,8 @@ export type PlayerDiagnostics = {
   // Debit annonce par la session, en bits par seconde, ou `null` hors direct. C'est un plafond : le
   // device produit en dessous des qu'il juge que le lien ne suit plus.
   sessionBitrate: number | null;
-  // Seuil de bufferisation en vigueur. Il n'est plus fixe par le profil : celui-ci en est le
-  // plancher, et le regulateur le remonte quand les blocages d'arrivee le demandent.
+  // Seuil de bufferisation en vigueur. Le profil de la session n'en donne que le plancher : le
+  // regulateur le remonte au-dessus quand les blocages d'arrivee le demandent.
   targetBufferMs: number;
   // Plus long blocage d'arrivee encore en memoire, en millisecondes. C'est ce que le regulateur de
   // seuil a mesure, donc la raison chiffree du seuil ci-dessus.

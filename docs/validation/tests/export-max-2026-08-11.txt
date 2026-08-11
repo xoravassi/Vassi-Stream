@@ -1,0 +1,407 @@
+Vassi Stream - journal du device
+exporte le 2026-08-11 10:41:31
+v0.1.0 ? build 16+
+win32, node v22.18.0
+wss://live.vassi.click/publisher - token ...3033
+Export limité à 400 ligne(s), toutes les lignes depuis le lancement du stream (09:47:55) ont été perdues 
+
+10:07:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:07:44 systeme   cpu 1% device, 73% machine, 56 Mo
+10:07:54 sante     28912 trames, 0 jetees, 0 trou(s)
+10:07:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:07:54 systeme   cpu 1% device, 59% machine, 56 Mo
+10:08:04 sante     29158 trames, 0 jetees, 0 trou(s)
+10:08:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:04 systeme   cpu 1% device, 67% machine, 56 Mo
+10:08:14 sante     29407 trames, 0 jetees, 0 trou(s)
+10:08:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:14 systeme   cpu 1% device, 66% machine, 57 Mo
+10:08:24 sante     29656 trames, 0 jetees, 0 trou(s)
+10:08:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:24 systeme   cpu 1% device, 65% machine, 57 Mo
+10:08:34 sante     29894 trames, 0 jetees, 0 trou(s)
+10:08:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:34 systeme   cpu 0% device, 79% machine, 57 Mo
+10:08:44 sante     30118 trames, 0 jetees, 0 trou(s)
+10:08:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:44 systeme   cpu 1% device, 82% machine, 57 Mo
+10:08:54 sante     30357 trames, 0 jetees, 0 trou(s)
+10:08:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:08:54 systeme   cpu 1% device, 74% machine, 57 Mo
+10:09:04 sante     30576 trames, 0 jetees, 0 trou(s)
+10:09:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:04 systeme   cpu 1% device, 80% machine, 57 Mo
+10:09:14 sante     30807 trames, 0 jetees, 0 trou(s)
+10:09:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:14 systeme   cpu 1% device, 76% machine, 57 Mo
+10:09:24 sante     31050 trames, 0 jetees, 0 trou(s)
+10:09:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:24 systeme   cpu 1% device, 69% machine, 56 Mo
+10:09:34 sante     31296 trames, 0 jetees, 0 trou(s)
+10:09:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:34 systeme   cpu 1% device, 62% machine, 56 Mo
+10:09:44 sante     31546 trames, 0 jetees, 0 trou(s)
+10:09:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:44 systeme   cpu 1% device, 43% machine, 57 Mo
+10:09:54 sante     31796 trames, 0 jetees, 0 trou(s)
+10:09:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:09:54 systeme   cpu 1% device, 43% machine, 57 Mo
+10:10:04 sante     32047 trames, 0 jetees, 0 trou(s)
+10:10:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:04 systeme   cpu 1% device, 45% machine, 57 Mo
+10:10:14 sante     32296 trames, 0 jetees, 0 trou(s)
+10:10:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:14 systeme   cpu 1% device, 46% machine, 57 Mo
+10:10:24 sante     32545 trames, 0 jetees, 0 trou(s)
+10:10:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:24 systeme   cpu 1% device, 57% machine, 56 Mo
+10:10:34 sante     32790 trames, 0 jetees, 0 trou(s)
+10:10:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:34 systeme   cpu 0% device, 67% machine, 56 Mo
+10:10:44 sante     33032 trames, 0 jetees, 0 trou(s)
+10:10:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:44 systeme   cpu 1% device, 73% machine, 53 Mo
+10:10:54 sante     33279 trames, 0 jetees, 0 trou(s)
+10:10:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:10:54 systeme   cpu 1% device, 58% machine, 53 Mo
+10:11:04 sante     33518 trames, 0 jetees, 0 trou(s)
+10:11:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:04 systeme   cpu 1% device, 70% machine, 53 Mo
+10:11:14 sante     33753 trames, 0 jetees, 0 trou(s)
+10:11:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:14 systeme   cpu 1% device, 75% machine, 53 Mo
+10:11:24 sante     33994 trames, 0 jetees, 0 trou(s)
+10:11:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:24 systeme   cpu 1% device, 67% machine, 53 Mo
+10:11:34 sante     34235 trames, 0 jetees, 0 trou(s)
+10:11:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:34 systeme   cpu 0% device, 67% machine, 54 Mo
+10:11:44 sante     34481 trames, 0 jetees, 0 trou(s)
+10:11:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:44 systeme   cpu 0% device, 69% machine, 54 Mo
+10:11:54 sante     34727 trames, 0 jetees, 0 trou(s)
+10:11:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:11:54 systeme   cpu 1% device, 69% machine, 53 Mo
+10:12:04 sante     34976 trames, 0 jetees, 0 trou(s)
+10:12:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:04 systeme   cpu 1% device, 68% machine, 53 Mo
+10:12:14 sante     35226 trames, 0 jetees, 0 trou(s)
+10:12:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:14 systeme   cpu 1% device, 57% machine, 53 Mo
+10:12:24 sante     35462 trames, 0 jetees, 0 trou(s)
+10:12:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:24 systeme   cpu 0% device, 72% machine, 53 Mo
+10:12:34 sante     35709 trames, 0 jetees, 0 trou(s)
+10:12:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:34 systeme   cpu 1% device, 67% machine, 53 Mo
+10:12:44 sante     35955 trames, 0 jetees, 0 trou(s)
+10:12:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:44 systeme   cpu 1% device, 68% machine, 54 Mo
+10:12:54 sante     36204 trames, 0 jetees, 0 trou(s)
+10:12:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:12:54 systeme   cpu 0% device, 63% machine, 54 Mo
+10:13:04 sante     36449 trames, 0 jetees, 0 trou(s)
+10:13:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:04 systeme   cpu 0% device, 72% machine, 54 Mo
+10:13:14 sante     36695 trames, 0 jetees, 0 trou(s)
+10:13:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:14 systeme   cpu 1% device, 68% machine, 53 Mo
+10:13:24 sante     36937 trames, 0 jetees, 0 trou(s)
+10:13:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:24 systeme   cpu 1% device, 69% machine, 53 Mo
+10:13:34 sante     37176 trames, 0 jetees, 0 trou(s)
+10:13:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:34 systeme   cpu 1% device, 72% machine, 53 Mo
+10:13:44 sante     37420 trames, 0 jetees, 0 trou(s)
+10:13:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:44 systeme   cpu 1% device, 73% machine, 53 Mo
+10:13:54 sante     37665 trames, 0 jetees, 0 trou(s)
+10:13:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:13:54 systeme   cpu 1% device, 69% machine, 53 Mo
+10:14:04 sante     37915 trames, 0 jetees, 0 trou(s)
+10:14:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:04 systeme   cpu 2% device, 64% machine, 53 Mo
+10:14:14 sante     38165 trames, 0 jetees, 0 trou(s)
+10:14:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:14 systeme   cpu 0% device, 54% machine, 53 Mo
+10:14:24 sante     38415 trames, 0 jetees, 0 trou(s)
+10:14:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:24 systeme   cpu 1% device, 51% machine, 54 Mo
+10:14:34 sante     38664 trames, 0 jetees, 0 trou(s)
+10:14:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:34 systeme   cpu 1% device, 52% machine, 54 Mo
+10:14:44 sante     38914 trames, 0 jetees, 0 trou(s)
+10:14:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:44 systeme   cpu 0% device, 60% machine, 53 Mo
+10:14:54 sante     39161 trames, 0 jetees, 0 trou(s)
+10:14:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:14:54 systeme   cpu 1% device, 57% machine, 53 Mo
+10:15:04 sante     39409 trames, 0 jetees, 0 trou(s)
+10:15:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:04 systeme   cpu 0% device, 60% machine, 53 Mo
+10:15:14 sante     39657 trames, 0 jetees, 0 trou(s)
+10:15:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:14 systeme   cpu 0% device, 57% machine, 53 Mo
+10:15:24 sante     39895 trames, 0 jetees, 0 trou(s)
+10:15:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:24 systeme   cpu 1% device, 72% machine, 53 Mo
+10:15:34 sante     40142 trames, 0 jetees, 0 trou(s)
+10:15:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:34 systeme   cpu 1% device, 63% machine, 53 Mo
+10:15:44 sante     40382 trames, 0 jetees, 0 trou(s)
+10:15:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:44 systeme   cpu 1% device, 68% machine, 42 Mo
+10:15:54 sante     40616 trames, 0 jetees, 0 trou(s)
+10:15:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:15:54 systeme   cpu 1% device, 74% machine, 42 Mo
+10:16:04 sante     40861 trames, 0 jetees, 0 trou(s)
+10:16:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:04 systeme   cpu 1% device, 73% machine, 42 Mo
+10:16:14 sante     41109 trames, 0 jetees, 0 trou(s)
+10:16:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:14 systeme   cpu 1% device, 69% machine, 42 Mo
+10:16:24 sante     41358 trames, 0 jetees, 0 trou(s)
+10:16:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:24 systeme   cpu 1% device, 63% machine, 42 Mo
+10:16:34 sante     41608 trames, 0 jetees, 0 trou(s)
+10:16:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:34 systeme   cpu 1% device, 62% machine, 42 Mo
+10:16:44 sante     41856 trames, 0 jetees, 0 trou(s)
+10:16:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:44 systeme   cpu 1% device, 67% machine, 42 Mo
+10:16:54 sante     42102 trames, 0 jetees, 0 trou(s)
+10:16:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:16:54 systeme   cpu 1% device, 65% machine, 42 Mo
+10:17:04 sante     42350 trames, 0 jetees, 0 trou(s)
+10:17:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:04 systeme   cpu 1% device, 70% machine, 42 Mo
+10:17:14 sante     42599 trames, 0 jetees, 0 trou(s)
+10:17:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:14 systeme   cpu 1% device, 63% machine, 42 Mo
+10:17:24 sante     42842 trames, 0 jetees, 0 trou(s)
+10:17:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:24 systeme   cpu 1% device, 74% machine, 42 Mo
+10:17:34 sante     43081 trames, 0 jetees, 0 trou(s)
+10:17:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:34 systeme   cpu 1% device, 74% machine, 42 Mo
+10:17:44 sante     43304 trames, 0 jetees, 0 trou(s)
+10:17:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:44 systeme   cpu 1% device, 80% machine, 42 Mo
+10:17:54 sante     43534 trames, 0 jetees, 0 trou(s)
+10:17:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:17:54 systeme   cpu 1% device, 78% machine, 42 Mo
+10:18:04 sante     43763 trames, 0 jetees, 0 trou(s)
+10:18:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:04 systeme   cpu 1% device, 82% machine, 42 Mo
+10:18:14 sante     44009 trames, 0 jetees, 0 trou(s)
+10:18:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:14 systeme   cpu 1% device, 70% machine, 42 Mo
+10:18:24 sante     44259 trames, 0 jetees, 0 trou(s)
+10:18:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:24 systeme   cpu 1% device, 54% machine, 42 Mo
+10:18:34 sante     44509 trames, 0 jetees, 0 trou(s)
+10:18:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:34 systeme   cpu 1% device, 51% machine, 42 Mo
+10:18:44 sante     44759 trames, 0 jetees, 0 trou(s)
+10:18:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:44 systeme   cpu 1% device, 56% machine, 42 Mo
+10:18:54 sante     45008 trames, 0 jetees, 0 trou(s)
+10:18:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:18:54 systeme   cpu 0% device, 61% machine, 42 Mo
+10:19:04 sante     45257 trames, 0 jetees, 0 trou(s)
+10:19:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:04 systeme   cpu 0% device, 66% machine, 42 Mo
+10:19:14 sante     45505 trames, 0 jetees, 0 trou(s)
+10:19:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:14 systeme   cpu 1% device, 62% machine, 42 Mo
+10:19:24 sante     45751 trames, 0 jetees, 0 trou(s)
+10:19:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:24 systeme   cpu 1% device, 68% machine, 42 Mo
+10:19:34 sante     46000 trames, 0 jetees, 0 trou(s)
+10:19:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:34 systeme   cpu 0% device, 55% machine, 42 Mo
+10:19:44 sante     46246 trames, 0 jetees, 0 trou(s)
+10:19:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:44 systeme   cpu 1% device, 67% machine, 42 Mo
+10:19:54 sante     46489 trames, 0 jetees, 0 trou(s)
+10:19:54 lien      256 sur 256 kbit/s, retard 0 ms
+10:19:54 systeme   cpu 0% device, 71% machine, 42 Mo
+10:20:04 sante     46728 trames, 0 jetees, 0 trou(s)
+10:20:04 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:04 systeme   cpu 1% device, 67% machine, 42 Mo
+10:20:14 sante     46972 trames, 0 jetees, 0 trou(s)
+10:20:14 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:14 systeme   cpu 1% device, 67% machine, 41 Mo
+10:20:24 sante     47222 trames, 0 jetees, 0 trou(s)
+10:20:24 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:24 systeme   cpu 1% device, 64% machine, 42 Mo
+10:20:34 sante     47471 trames, 0 jetees, 0 trou(s)
+10:20:34 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:34 systeme   cpu 0% device, 62% machine, 42 Mo
+10:20:44 sante     47721 trames, 0 jetees, 0 trou(s)
+10:20:44 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:44 systeme   cpu 2% device, 61% machine, 42 Mo
+10:20:55 sante     47970 trames, 0 jetees, 0 trou(s)
+10:20:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:20:55 systeme   cpu 1% device, 67% machine, 40 Mo
+10:21:05 sante     48220 trames, 0 jetees, 0 trou(s)
+10:21:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:05 systeme   cpu 1% device, 64% machine, 40 Mo
+10:21:15 sante     48469 trames, 0 jetees, 0 trou(s)
+10:21:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:15 systeme   cpu 1% device, 63% machine, 40 Mo
+10:21:25 sante     48719 trames, 0 jetees, 0 trou(s)
+10:21:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:25 systeme   cpu 1% device, 61% machine, 41 Mo
+10:21:35 sante     48965 trames, 0 jetees, 0 trou(s)
+10:21:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:35 systeme   cpu 1% device, 67% machine, 41 Mo
+10:21:45 sante     49199 trames, 0 jetees, 0 trou(s)
+10:21:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:45 systeme   cpu 1% device, 74% machine, 41 Mo
+10:21:55 sante     49432 trames, 0 jetees, 0 trou(s)
+10:21:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:21:55 systeme   cpu 1% device, 78% machine, 41 Mo
+10:22:05 sante     49656 trames, 0 jetees, 0 trou(s)
+10:22:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:05 systeme   cpu 0% device, 78% machine, 41 Mo
+10:22:15 sante     49820 trames, 0 jetees, 0 trou(s)
+10:22:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:15 systeme   cpu 0% device, 94% machine, 41 Mo
+10:22:25 sante     50034 trames, 0 jetees, 0 trou(s)
+10:22:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:25 systeme   cpu 0% device, 87% machine, 41 Mo
+10:22:35 sante     50278 trames, 0 jetees, 0 trou(s)
+10:22:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:35 systeme   cpu 1% device, 68% machine, 41 Mo
+10:22:45 sante     50529 trames, 0 jetees, 0 trou(s)
+10:22:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:45 systeme   cpu 1% device, 62% machine, 41 Mo
+10:22:55 sante     50775 trames, 0 jetees, 0 trou(s)
+10:22:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:22:55 systeme   cpu 0% device, 77% machine, 41 Mo
+10:23:05 sante     51025 trames, 0 jetees, 0 trou(s)
+10:23:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:05 systeme   cpu 1% device, 74% machine, 41 Mo
+10:23:15 sante     51270 trames, 0 jetees, 0 trou(s)
+10:23:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:15 systeme   cpu 1% device, 80% machine, 41 Mo
+10:23:25 sante     51477 trames, 0 jetees, 0 trou(s)
+10:23:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:25 systeme   cpu 1% device, 86% machine, 41 Mo
+10:23:35 sante     51666 trames, 0 jetees, 0 trou(s)
+10:23:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:35 systeme   cpu 1% device, 94% machine, 41 Mo
+10:23:45 sante     51853 trames, 0 jetees, 0 trou(s)
+10:23:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:45 systeme   cpu 1% device, 94% machine, 41 Mo
+10:23:55 sante     52090 trames, 0 jetees, 0 trou(s)
+10:23:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:23:55 systeme   cpu 1% device, 69% machine, 41 Mo
+10:24:05 sante     52335 trames, 0 jetees, 0 trou(s)
+10:24:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:05 systeme   cpu 1% device, 67% machine, 41 Mo
+10:24:15 sante     52555 trames, 0 jetees, 0 trou(s)
+10:24:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:15 systeme   cpu 1% device, 86% machine, 41 Mo
+10:24:25 sante     52743 trames, 0 jetees, 0 trou(s)
+10:24:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:25 systeme   cpu 0% device, 92% machine, 41 Mo
+10:24:35 sante     52974 trames, 0 jetees, 0 trou(s)
+10:24:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:35 systeme   cpu 0% device, 79% machine, 41 Mo
+10:24:45 sante     53202 trames, 0 jetees, 0 trou(s)
+10:24:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:45 systeme   cpu 1% device, 73% machine, 41 Mo
+10:24:55 sante     53437 trames, 0 jetees, 0 trou(s)
+10:24:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:24:55 systeme   cpu 1% device, 80% machine, 41 Mo
+10:25:05 sante     53667 trames, 0 jetees, 0 trou(s)
+10:25:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:05 systeme   cpu 2% device, 80% machine, 41 Mo
+10:25:15 sante     53916 trames, 0 jetees, 0 trou(s)
+10:25:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:15 systeme   cpu 0% device, 73% machine, 41 Mo
+10:25:25 sante     54166 trames, 0 jetees, 0 trou(s)
+10:25:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:25 systeme   cpu 1% device, 69% machine, 41 Mo
+10:25:35 sante     54410 trames, 0 jetees, 0 trou(s)
+10:25:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:35 systeme   cpu 1% device, 75% machine, 41 Mo
+10:25:45 sante     54659 trames, 0 jetees, 0 trou(s)
+10:25:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:45 systeme   cpu 2% device, 69% machine, 41 Mo
+10:25:55 sante     54906 trames, 0 jetees, 0 trou(s)
+10:25:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:25:55 systeme   cpu 0% device, 74% machine, 41 Mo
+10:26:05 sante     55155 trames, 0 jetees, 0 trou(s)
+10:26:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:05 systeme   cpu 1% device, 76% machine, 41 Mo
+10:26:15 sante     55388 trames, 0 jetees, 0 trou(s)
+10:26:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:15 systeme   cpu 1% device, 80% machine, 41 Mo
+10:26:25 sante     55622 trames, 0 jetees, 0 trou(s)
+10:26:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:25 systeme   cpu 1% device, 80% machine, 41 Mo
+10:26:35 sante     55855 trames, 0 jetees, 0 trou(s)
+10:26:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:35 systeme   cpu 0% device, 78% machine, 40 Mo
+10:26:45 sante     56074 trames, 0 jetees, 0 trou(s)
+10:26:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:45 systeme   cpu 1% device, 80% machine, 40 Mo
+10:26:55 sante     56321 trames, 0 jetees, 0 trou(s)
+10:26:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:26:55 systeme   cpu 0% device, 70% machine, 40 Mo
+10:27:05 sante     56558 trames, 0 jetees, 0 trou(s)
+10:27:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:05 systeme   cpu 1% device, 77% machine, 40 Mo
+10:27:15 sante     56807 trames, 0 jetees, 0 trou(s)
+10:27:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:15 systeme   cpu 0% device, 67% machine, 40 Mo
+10:27:25 sante     57057 trames, 0 jetees, 0 trou(s)
+10:27:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:25 systeme   cpu 2% device, 54% machine, 40 Mo
+10:27:35 sante     57307 trames, 0 jetees, 0 trou(s)
+10:27:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:35 systeme   cpu 2% device, 48% machine, 41 Mo
+10:27:45 sante     57557 trames, 0 jetees, 0 trou(s)
+10:27:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:45 systeme   cpu 1% device, 55% machine, 41 Mo
+10:27:55 sante     57801 trames, 0 jetees, 0 trou(s)
+10:27:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:27:55 systeme   cpu 1% device, 72% machine, 41 Mo
+10:28:05 sante     58048 trames, 0 jetees, 0 trou(s)
+10:28:05 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:05 systeme   cpu 1% device, 68% machine, 41 Mo
+10:28:15 sante     58294 trames, 0 jetees, 0 trou(s)
+10:28:15 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:15 systeme   cpu 1% device, 70% machine, 40 Mo
+10:28:25 sante     58543 trames, 0 jetees, 0 trou(s)
+10:28:25 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:25 systeme   cpu 1% device, 63% machine, 40 Mo
+10:28:35 sante     58777 trames, 0 jetees, 0 trou(s)
+10:28:35 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:35 systeme   cpu 1% device, 71% machine, 40 Mo
+10:28:45 sante     59022 trames, 0 jetees, 0 trou(s)
+10:28:45 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:45 systeme   cpu 1% device, 64% machine, 41 Mo
+10:28:55 sante     59269 trames, 0 jetees, 0 trou(s)
+10:28:55 lien      256 sur 256 kbit/s, retard 0 ms
+10:28:55 systeme   cpu 0% device, 65% machine, 41 Mo
+10:29:01 bouton    arret demande
+10:29:01 encodeur  ordre stop
+10:29:01 direct    STOPPED : arrete
+10:29:02 encodeur  stopped : encodeur deconnecte
+10:29:02 bilan     41 min 08 s de direct, 59420 trames
+10:29:02 bilan     5 jetees, 0 reconnexion(s), 0 trou(s)
+10:29:10 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102910.log
+10:29:16 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102916.log
+10:29:19 journal   400 lignes copiees dans le presse-papiers
+10:29:31 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102931.log
+10:29:32 journal   400 lignes copiees dans le presse-papiers
+10:29:34 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102934.log
+10:29:35 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102935.log
+10:29:40 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102940.log
+10:29:41 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-102941.log
+10:29:44 journal   400 lignes copiees dans le presse-papiers (x2)
+10:41:27 journal   ecrit dans C:\Users\vassi\AppData\Roaming\Vassi Stream\journaux\journal-20260811-104127.log

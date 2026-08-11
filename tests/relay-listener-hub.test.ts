@@ -49,8 +49,8 @@ test("envoie l'etat courant avant d'inscrire un auditeur", () => {
 });
 
 // Ce test verifie qu'un auditeur en retard perd des paquets au lieu d'accumuler de l'audio ancien.
-// Le retard se mesure desormais a l'age du paquet le plus vieux dont l'envoi n'est pas acquitte,
-// pas a un nombre d'octets : `socket.autoAck = false` simule un lien lent en retenant le rappel de
+// Le retard se mesure a l'age du paquet le plus vieux dont l'envoi n'est pas acquitte, pas a un
+// nombre d'octets : `socket.autoAck = false` simule un lien lent en retenant le rappel de
 // `send()`, exactement comme un vrai systeme qui n'a pas fini d'ecrire.
 test("abandonne les paquets d'un auditeur en retard", () => {
   const { hub, advance } = makeClockedHub();
@@ -99,8 +99,8 @@ test("coupe un auditeur dont la file d'envoi est bloquee", () => {
 });
 
 // Ce test verifie que le seuil de rejet suit le profil de latence de la session, pas une valeur
-// fixe : c'est le correctif du 6 aout 2026 (voir `docs/validation/incident-meet-2026-08-06.md`,
-// section 4). Un meme retard doit etre tolere plus longtemps en Stable qu'en Faible.
+// fixe. Un meme retard doit etre tolere plus longtemps en Stable qu'en Faible. La mesure qui fixe
+// cette regle est dans `docs/validation/incidents/2026-08-06-incident-meet.md`, section 4.
 test("le seuil de rejet suit le profil de latence de la session", () => {
   const { hub, advance } = makeClockedHub();
   const stable = new FakeSocket();

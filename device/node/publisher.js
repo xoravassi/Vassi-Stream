@@ -29,12 +29,11 @@ const STABLE_CONNECTION_MS = 30000;
 // Duree d'audio que la file d'envoi garde au plus, en millisecondes.
 //
 // Au-dela, le lien montant est en retard d'une demi-seconde et le rattrapera d'autant moins qu'on
-// continue d'empiler. La file jette alors sa trame **la plus ancienne**, et c'est tout l'objet de ce
-// module : jusqu'ici le publisher jetait la plus recente, celle qui venait d'etre encodee, en
-// gardant les vieilles. Dans un direct c'est l'inverse qu'il faut. Le journal du 6 aout 2026 en
-// montre le prix : un trou de 2920 ms d'un seul tenant, le pire evenement du direct sain.
+// continue d'empiler. La file jette alors sa trame **la plus ancienne**, jamais la plus recente :
+// dans un direct, l'audio qui vient d'etre encode est celui qui compte, et garder les vieilles au
+// prix des nouvelles produit un trou d'un seul tenant de la taille de la file.
 //
-// Une demi-seconde parce que le player la rattrape maintenant sans coupure — son seuil monte jusqu'a
+// Une demi-seconde parce que le player rattrape ce retard sans coupure — son seuil monte jusqu'a
 // deux secondes quand le lien le demande — alors qu'un abandon, lui, est definitif.
 const MAX_QUEUE_MS = 500;
 
@@ -290,7 +289,7 @@ class Publisher {
 
 	// Cette methode publie une frame du pont loopback sous la forme du paquet binaire v1.
 	//
-	// La frame n'est plus envoyee tout de suite : elle entre dans une file bornee en temps, que
+	// La frame n'est pas envoyee tout de suite : elle entre dans une file bornee en temps, que
 	// `drain` vide au rythme que le lien accepte. C'est cette indirection qui permet de choisir *quoi*
 	// jeter quand le lien ne suit plus, au lieu de subir ce que le systeme refuse.
 	sendFrame(frame) {
@@ -405,9 +404,9 @@ class Publisher {
 	// plus recentes. Il suffit donc de regarder la socket d'abord, et la file seulement si la socket
 	// n'a plus rien en vol.
 	//
-	// C'est cette duree que lit le regulateur de debit, et elle vaut maintenant beaucoup mieux
-	// qu'avant : elle commence a croitre des que la fenetre d'envoi se ferme, alors que le retard du
-	// noyau seul ne se voyait qu'une fois son tampon plein.
+	// C'est cette duree que lit le regulateur de debit. Elle commence a croitre des que la fenetre
+	// d'envoi se ferme, donc bien avant que le tampon du noyau soit plein : c'est ce qui la rend
+	// utilisable comme signal precoce de congestion.
 	oldestPendingMs() {
 		const oldestSend = this.pendingSends[0];
 

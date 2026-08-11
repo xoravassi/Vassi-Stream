@@ -12,8 +12,8 @@ import {
 } from "./browser-fakes.ts";
 import { audioPacket, startLive, startRelay, waitFor, type TestRelay } from "./relay-harness.ts";
 
-// Ce fichier verifie ce que le player fait quand quelque chose tourne mal. Le bloc 8 verifiait le
-// chemin normal ; celui-ci verifie les chemins que personne n'emprunte volontairement.
+// Ce fichier verifie ce que le player fait quand quelque chose tourne mal : les chemins que
+// personne n'emprunte volontairement. Le chemin normal est couvert ailleurs.
 //
 // Chaque panne testee ici est arrivee, ou peut arriver, dans un navigateur reel : une page fermee
 // pendant le chargement, un decodeur qui ne compile pas, un worker qui meurt en cours de direct, un
@@ -285,7 +285,7 @@ test("apprend la nouvelle session annoncee pendant une panne", async (t) => {
 // Un worker neuf compte a partir de zero et n'annonce ses compteurs qu'une fois par seconde. Garder
 // ceux du worker precedent pendant ce temps ne fait pas qu'afficher un chiffre faux : la regle
 // « des paquets acceptes mais rien de decode » ne pourrait plus jamais se declencher, puisque le
-// nombre de frames decodees resterait celui d'avant, donc non nul.
+// nombre de frames decodees resterait celui du worker precedent, donc non nul.
 test("oublie les compteurs du worker precedent quand un worker neuf demarre", async (t) => {
   const montage = await startPlayer();
   t.after(() => stopPlayer(montage));

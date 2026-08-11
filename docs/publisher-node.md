@@ -220,7 +220,7 @@ Entrees acceptees par `node.script` :
 |---|---|
 | `live 1` / `live 0` | lance ou arrete le live |
 | `quality 0..2` | Stable 128, Haute 192, Studio 256 pour le prochain live |
-| `latency 0..2` | Faible, Equilibree, Stable pour le prochain live |
+| `latency 0..3` | Faible, Equilibree, Stable, Longue pour le prochain live |
 | `config` | renvoie l'etat de la configuration, sans le token |
 | `stats` | renvoie les compteurs du pont et du publisher |
 | `reset` | remet les compteurs a zero |

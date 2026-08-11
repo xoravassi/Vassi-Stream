@@ -6,7 +6,7 @@ rediffuse aux auditeurs de la page `/session`. Le contrat public reste `docs/pro
 ## Chaine complete
 
 ```text
-device Max for Live  --WSS /publisher-->  relais Sliplane  --WSS /listener-->  page /live
+device Max for Live  --WSS /publisher-->  relais Sliplane  --WSS /listener-->  page /session
                                               |
                                               +--> GET /health
 ```
@@ -128,18 +128,18 @@ l'envoi n'est pas encore acquitte par le systeme — une duree, pas un nombre d'
 
 - au-dela de la tolerance de l'auditeur lui-meme (la cible de son profil de latence plus 1000 ms, la
   meme marge que celle du player avant de tout jeter — 1200 ms en Faible, 1400 en Equilibree,
-  1800 en Stable), les paquets suivants sont abandonnes au lieu d'etre empiles ; l'auditeur reprend
-  la diffusion des qu'il rattrape son retard ;
+  1800 en Stable, 2500 en Longue), les paquets suivants sont abandonnes au lieu d'etre empiles ;
+  l'auditeur reprend la diffusion des qu'il rattrape son retard ;
 - au-dela de 8000 ms, la connexion est coupee : elle ne rattrapera plus rien et sa file grandirait
   sans fin.
 
-Le premier seuil suit le profil de la session, pas une valeur fixe. Jusqu'au 6 aout 2026 il valait
-65536 octets (environ deux secondes en qualite Studio) quel que soit le profil choisi par
-l'auditeur — plus haut que la tolerance du player lui-meme pour Equilibree et Faible. Le relais
-continuait alors d'envoyer un backlog que l'auditeur allait de toute facon jeter a l'arrivee, ce qui
-gaspillait la bande passante et grossissait la rafale de rattrapage qui declenche le vidage cote
-player (voir `docs/validation/incident-meet-2026-08-06.md`, section 4). Un temps compare a un temps,
-aligne sur ce que l'auditeur tolere reellement, evite cette course que le relais perdait d'avance.
+Le premier seuil suit le profil de la session, pas une valeur fixe, et il est exprime en temps et non
+en octets. Un seuil en octets suppose un debit connu, ce qu'une session Opus VBR n'offre pas : le
+debit reel varie trame a trame. Un seuil qui ignorerait le profil serait pire encore — un relais plus
+tolerant que l'auditeur continue d'envoyer un backlog que celui-ci jette a l'arrivee, ce qui gaspille
+la bande passante et grossit la rafale de rattrapage qui declenche justement le vidage cote player.
+La mesure qui a fixe cette regle est dans
+`docs/validation/incidents/2026-08-06-incident-meet.md`, section 4.
 
 Abandonner avant de couper evite de deconnecter un auditeur pour un simple a-coup reseau. Ces
 abandons creent des trous de numero de sequence, que le player du bloc 8 traite comme une

@@ -1,6 +1,6 @@
 # Continuite du direct — chantier du 2026-08-06 (soiree)
 
-Ce document fait suite a `incident-meet-2026-08-06.md`. Il analyse deux journaux pris le soir du
+Ce document fait suite a `2026-08-06-incident-meet.md`. Il analyse deux journaux pris le soir du
 meme jour, apres les correctifs de la matinee, et decrit ce qui a ete change en consequence.
 
 ## 1. Les deux journaux

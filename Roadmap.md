@@ -14,7 +14,7 @@ Le système doit fonctionner sans application compagnon, sans abonnement supplé
 - Codec Opus stéréo uniquement.
 - Profil par défaut : **Studio, Opus 256 kbit/s**.
 - Trois profils qualité : Stable 128, Haute 192, Studio 256 kbit/s.
-- Trois profils de latence : Faible 200 ms, Équilibrée 400 ms, Stable 800 ms.
+- Quatre profils de latence : Faible 200 ms, Équilibrée 400 ms, Stable 800 ms, Longue 1500 ms.
 - Relais Node.js sur le VPS Sliplane existant.
 - Page Svelte 5 `/session` sur `vassi.click`.
 
@@ -34,7 +34,7 @@ Device Max for Live
     │
     ├── vassi.encoder~
     │     Objet MSP natif inclus dans le device.
-    │     Capture passive → queue bornée → 48 kHz → Opus 20 ms.
+    │     Capture passive → queue bornée → 48 kHz → Opus 40 ms.
     │
     └── node.script
           Paquets Opus → WSS → statut Max.
@@ -54,56 +54,25 @@ Page Svelte /session
 
 - Le callback audio MSP copie seulement les données dans une queue préallouée. Il ne fait ni réseau, ni encodage, ni attente, ni allocation.
 - Un worker de l’objet natif rééchantillonne vers 48 kHz et encode les frames Opus hors du thread audio.
-- Une frame contient 960 échantillons par canal, soit 20 ms à 48 kHz.
+- Une frame contient 1920 échantillons par canal, soit 40 ms à 48 kHz.
 - Le relais ne décode, ne réencode, ne remuxe et ne stocke jamais l’audio.
 - Une queue pleine abandonne l’audio le plus ancien afin de rester en direct ; elle ne doit jamais grandir sans limite.
 - La page ne lit pas les paquets avec `MediaSource`. Elle les décode dans un Worker puis les joue avec AudioWorklet.
 - Aucun token de publication ne doit être commité, affiché au navigateur ou écrit dans les logs.
 - Les fichiers de code restent courts, simples, commentés au présent et découpés par responsabilité.
 
-## Contrat de protocole v1
+## Contrat de protocole
 
-La spécification complète est créée pendant le bloc 1 dans `docs/protocol-v1.md`. Les règles suivantes sont déjà figées.
+**Le protocole n'est pas décrit ici.** Il l'est une seule fois, dans
+[`docs/protocol-v1.md`](docs/protocol-v1.md) : connexions, messages JSON, paquet audio binaire,
+profils de latence. Le device, le relais et la page web lisent ce document et lui seul. Recopier
+ses tables dans cette roadmap ne ferait que créer une seconde version qui dérive.
 
-### Connexions
+Ce que la roadmap fixe, et qui ne se lit pas dans la spécification :
 
-- Publisher : `wss://<domaine-relai>/publisher`.
-- Listener : `wss://<domaine-relai>/listener`.
-- Le publisher envoie un message JSON `publisher_auth` avec son token après ouverture de la connexion.
-- Après acceptation, il envoie `stream_start`, puis les paquets binaires.
-- À l’arrêt, il envoie `stream_stop`.
-- Le serveur envoie immédiatement l’état courant à chaque listener.
-- Le serveur envoie un ping WebSocket toutes les 20 secondes.
-
-### Messages JSON essentiels
-
-Tous contiennent `type` et `protocolVersion: 1`.
-
-- `publisher_auth` : token de publication.
-- `stream_start` : `sessionId`, codec, bitrate, sample rate, canaux, durée de frame, profil de latence.
-- `stream_stop` : `sessionId` et raison simple.
-- `stream_state` : indique `live: true` ou `live: false` aux listeners.
-- `auth_ok`, `auth_error`, `server_error` : réponses explicites.
-
-### Paquet audio binaire
-
-Les entiers sont big-endian.
-
-| Offset | Taille | Champ |
-|---:|---:|---|
-| 0 | 4 | magic ASCII `VSA1` |
-| 4 | 1 | version `1` |
-| 5 | 1 | codec Opus `1` |
-| 6 | 1 | flags, bit 0 = discontinuité |
-| 7 | 1 | canaux `2` |
-| 8 | 4 | `sessionId` |
-| 12 | 4 | `sequenceNumber` |
-| 16 | 8 | timestamp relatif en microsecondes |
-| 24 | 2 | nombre d’échantillons : `960` |
-| 26 | 2 | taille du payload |
-| 28 | N | paquet Opus brut |
-
-Le serveur valide la taille, le magic et la version puis diffuse les octets sans les modifier.
+- deux prises WebSocket, `/publisher` et `/listener`, une seule session à la fois ;
+- le relais valide la structure d'un paquet et rediffuse les mêmes octets, sans jamais décoder ;
+- un seul publisher en direct, le dernier authentifié prenant la place du précédent.
 
 ## Règle de validation allégée
 
@@ -306,7 +275,7 @@ La conception complète est dans `docs/publisher-node.md`.
 
 ### Terminé
 
-- [x] **Bloc 6 validé.** `npm.cmd run check` : 99 tests, 0 échec. Détail dans `docs/validation/phase-6.md`.
+- [x] **Bloc 6 validé.** `npm.cmd run check` : 99 tests, 0 échec. Détail dans `docs/validation/blocs/bloc-6.md`.
 
 ## Bloc 7 — Créer le relais Sliplane
 
@@ -331,7 +300,7 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 - [x] Garder seulement la configuration de session, jamais l’historique audio.
 - [x] Envoyer l’état actuel à chaque nouveau listener, avant tout paquet audio.
 - [x] Diffuser les frames valides sans transformation.
-- [x] Fermer les listeners très lents plutôt que créer un backlog infini : abandon des paquets au-delà de la tolérance du profil de latence de l'auditeur (cible + 1000 ms, comme le player avant de tout jeter), fermeture au-delà de 8000 ms de retard — un temps, pas un nombre d'octets (voir `docs/validation/incident-meet-2026-08-06.md`, section 4).
+- [x] Fermer les listeners très lents plutôt que créer un backlog infini : abandon des paquets au-delà de la tolérance du profil de latence de l'auditeur (cible + 1000 ms, comme le player avant de tout jeter), fermeture au-delà de 8000 ms de retard — un temps, pas un nombre d'octets (voir `docs/validation/incidents/2026-08-06-incident-meet.md`, section 4).
 - [x] Envoyer `live: false` quand le publisher disparaît, avec ou sans `stream_stop`.
 - [x] Ajouter une route `/health` et quelques compteurs simples : état live, listeners, dernier paquet reçu. Les compteurs avancent pendant le direct et pas seulement à la fermeture d'une connexion, parce que la santé se consulte pendant la panne. `listenerFramesDropped` distingue un son troué venu de la connexion de l'auditeur d'un son troué venu d'avant le relais.
 - [x] Faire porter la limite d'auditeurs par la liste elle-même, en plus du refus HTTP 503 prononcé avant l'ouverture de la connexion.
@@ -346,7 +315,7 @@ reprendre le live. Le token reste nécessaire pour prendre la place.
 
 ### Terminé
 
-- [x] **Bloc 7 validé.** `npm.cmd run check` : 207 tests, 0 échec après les corrections de revue. Le relais est déployé et vérifié sur `live.vassi.click` le 2026-08-05. Détail dans `docs/validation/phase-7.md`.
+- [x] **Bloc 7 validé.** `npm.cmd run check` : 207 tests, 0 échec après les corrections de revue. Le relais est déployé et vérifié sur `live.vassi.click` le 2026-08-05. Détail dans `docs/validation/blocs/bloc-7.md`.
 
 ## Bloc 8 — Créer le moteur audio navigateur
 
@@ -388,7 +357,7 @@ test et rejoue la fixture Opus produite par l'encodeur réel du device à traver
 
 ### Terminé
 
-- [x] **Bloc 8 validé.** Le code est écrit et testé : `npm.cmd run check` donne 207 tests, 0 échec, dont le décodage d'une vraie fixture Opus jusqu'aux échantillons et le socket listener branché sur le vrai relais. Reste l'écoute dans Firefox et dans Safari, à faire avec Vassi : `npm.cmd run player:fixture`. Détail dans `docs/validation/phase-8.md`.
+- [x] **Bloc 8 validé.** Le code est écrit et testé : `npm.cmd run check` donne 207 tests, 0 échec, dont le décodage d'une vraie fixture Opus jusqu'aux échantillons et le socket listener branché sur le vrai relais. Reste l'écoute dans Firefox et dans Safari, à faire avec Vassi : `npm.cmd run player:fixture`. Détail dans `docs/validation/blocs/bloc-8.md`.
 
 ## Bloc 8b — Durcir la robustesse du moteur audio navigateur
 
@@ -404,12 +373,12 @@ défauts, tous dans l'outil de test et aucun dans le moteur : le serveur s'arrê
 inconnue, le publisher de fixture envoyait 32 paquets par seconde au lieu de 50, et une coupure
 simulée lançait deux reconnexions concurrentes. Les trois donnaient au moteur l'apparence d'une
 panne. L'outil de test est donc tenu au même niveau d'exigence que le reste du code : corrigé,
-mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/validation/phase-8b.md`.
+mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/validation/blocs/bloc-8b.md`.
 
 ### À faire
 
 - [x] Vérifier le lancement et la reprise sur Firefox, y compris le premier clic, le buffer initial et la reprise après coupure. Les trois passages.
-- [x] Faire un essai de 15 à 30 minutes avec plusieurs pauses, reprises et reconnexions réseau courtes. Détail dans `docs/validation/phase-8b.md`.
+- [x] Faire un essai de 15 à 30 minutes avec plusieurs pauses, reprises et reconnexions réseau courtes. Détail dans `docs/validation/blocs/bloc-8b.md`.
 - [x] Tester le mode sans `SharedArrayBuffer` sous charge réelle et mesurer la stabilité du transport par `MessagePort`. La mesure existe : le compteur « Blocs abandonnés » monte quand un port ne suit plus et reste à zéro en mémoire partagée. Fait le 2026-08-05 : essai Google Meet à deux caméras avec partage d'écran (9 min 23 s, gels du thread principal jusqu'à 8,8 s) et essai écran fermé (8 min 30 s, un gel de 8 min) en mode messages — « Blocs abandonnés » reste à zéro dans les deux.
 - [x] Corriger l'outil de vérification : arrêt du serveur sur une adresse inconnue, débit du publisher de fixture, double reconnexion après une coupure demandée.
 - [x] Ajouter des diagnostics utiles côté moteur : paquets reçus, underruns, dernière erreur, dernière session et état du worker/worklet. `diagnostics()` rend les compteurs, `explainPlayer()` les range entre réseau, décodage et contexte audio.
@@ -427,7 +396,7 @@ mesuré et couvert par des tests. Le détail et les mesures sont dans `docs/vali
 
 ### Terminé
 
-- [x] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 312 tests, 0 échec. Le mode messages est vérifié sous charge réelle le 2026-08-05. Détail dans `docs/validation/phase-8b.md`.
+- [x] **Bloc 8b validé.** Le code est écrit et testé : `npm.cmd run check` donne 312 tests, 0 échec. Le mode messages est vérifié sous charge réelle le 2026-08-05. Détail dans `docs/validation/blocs/bloc-8b.md`.
 
 **Correction du 2026-08-05, après revue.** Trois points repris sans rouvrir le bloc, `npm.cmd test`
 donnant 331 tests et 0 échec :
@@ -436,7 +405,7 @@ donnant 331 tests et 0 échec :
   `cible + 2000 ms`, le plafond des deux tiers de la file ramenait les trois profils à 2000 ms, et
   personne ne pouvait deviner que la marge réelle de Stable valait 200 ms et non 1000. La borne est
   maintenant nommée (`NET_CEILING_MAX_MS`) et appliquée là où le plafond se calcule ; le tableau des
-  valeurs réelles est dans le code, dans `docs/validation/phase-8b.md`, et fixé par un test.
+  valeurs réelles est dans le code, dans `docs/validation/blocs/bloc-8b.md`, et fixé par un test.
 - Le message `limit` n'était vérifié nulle part — c'est là que vivait le défaut ci-dessus. Six tests
   l'entourent désormais : les trois profils, le suivi d'une nouvelle session, et le filet lui-même
   dans `process()`, qui n'était couvert que par sa file.
@@ -503,7 +472,7 @@ revanche vérifié : `npm.cmd run relay:check -- https://live.vassi.click` passe
 
 - [ ] **Bloc 9 validé.** Le code est écrit et vérifié : `npm.cmd run check` donne 321 tests, 0 échec,
       et le site donne `svelte-check` à 0 erreur puis un `npm run build` qui passe. Reste l'écoute
-      réelle dans un navigateur, à faire avec Vassi. Détail dans `docs/validation/phase-9.md`.
+      réelle dans un navigateur, à faire avec Vassi. Détail dans `docs/validation/blocs/bloc-9.md`.
 
 **Correction du 2026-08-05, après revue.** Le champ `commit` du manifeste enregistrait le commit
 **parent** de la copie, et personne ne pouvait le voir : `player:sync` tourne avant le commit qui
@@ -583,7 +552,7 @@ Ces quatre points demandent Ableton et le relais déployé.
 
 ### Terminé
 
-- [ ] **Bloc 10 validé.** Le code est écrit et testé : `npm.cmd run check` donne 303 tests, 0 échec. Reste la première ouverture dans Ableton, à faire avec Vassi. Détail dans `docs/validation/phase-10.md`.
+- [ ] **Bloc 10 validé.** Le code est écrit et testé : `npm.cmd run check` donne 303 tests, 0 échec. Reste la première ouverture dans Ableton, à faire avec Vassi. Détail dans `docs/validation/blocs/bloc-10.md`.
 
 ## Bloc 11 — Vérifier le parcours réel et livrer
 
@@ -634,6 +603,6 @@ dans `docs/Roadmap-v2.md`. Aucun de ses blocs ne rouvre une décision prise ici.
 
 ## Rappel pour l’agent qui implémente
 
-Avant un bloc, relire `Agents.md`, `Concept.md` et cette roadmap. Faire une recherche Internet ciblée avant d’ajouter une bibliothèque ou d’utiliser une API peu connue. Expliquer le choix avant de coder.
+Avant un bloc, relire `Agents.md`, le `README.md` et cette roadmap. Faire une recherche Internet ciblée avant d’ajouter une bibliothèque ou d’utiliser une API peu connue. Expliquer le choix avant de coder.
 
 Après un bloc, exécuter la vérification courte, relire le code ajouté et noter les éventuelles limites. Ne pas ajouter des fonctionnalités hors périmètre sans accord explicite de Vassi et mise à jour préalable de cette roadmap.

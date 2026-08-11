@@ -82,7 +82,7 @@ suffit de relancer `player:sync`.
 
 ## Ou les deux depots doivent se trouver
 
-Cote a cote dans le meme dossier parent :
+Par defaut, cote a cote dans le meme dossier parent, le site portant le nom de son adresse GitHub :
 
 ```
 un-dossier/
@@ -90,8 +90,20 @@ un-dossier/
   vassi.click/
 ```
 
+**Si le depot du site est ailleurs, ou porte un autre nom, il faut le designer par la variable
+d'environnement `VASSI_SITE`** — sinon les deux commandes ne trouvent rien :
+
+```powershell
+$env:VASSI_SITE = "A:\_VASSI\_2 Site web\Site-v2"
+npm.cmd run player:sync
+```
+
 `player:sync` s'arrete avec un message clair si le site n'est pas la, plutot que de creer un dossier
-au mauvais endroit.
+au mauvais endroit. `player:check`, lui, **reussit en silence** dans ce cas — c'est ce qui permet a
+`npm run check` de tourner sur une machine sans le site. La contrepartie est qu'un `VASSI_SITE` mal
+posee rend la verification inoperante sans rien signaler : sa ligne de sortie dit alors « Copie du
+moteur dans le site : absente, rien a verifier », et c'est cette ligne qu'il faut lire avant de
+conclure que les deux copies sont identiques.
 
 ## Pourquoi une copie, et pas une dependance npm ou un sous-module git
 

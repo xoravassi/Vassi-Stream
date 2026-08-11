@@ -382,13 +382,13 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
       this.ratio = 1;
       // Cette demande d'ebarbage est posee a chaque reprise de lecture et honoree au bloc suivant.
       //
-      // C'est le correctif du defaut le plus couteux du player. Une rebufferisation s'arrete des que
-      // la file atteint le seuil, mais elle ne s'arrete pas *au* seuil : TCP relache d'un coup ce
+      // Elle repond au poste de latence le plus couteux du player. Une rebufferisation s'arrete des
+      // que la file atteint le seuil, mais elle ne s'arrete pas *au* seuil : TCP relache d'un coup ce
       // qu'il retenait — le journal du 6 aout 2026 montre des pointes a 96 paquets par seconde pour
-      // une cadence nominale de 25 — et la lecture repartait sur tout ce qui etait arrive. Chaque
-      // manque de donnees ajoutait ainsi 150 a 530 ms de latence definitive, jusqu'a ce que le vidage
-      // de derive coupe le son. Ramener la file au seuil coute ici exactement zero : le son vient
-      // d'etre interrompu, l'oreille est deja au milieu d'une coupure.
+      // une cadence nominale de 25. Sans ebarbage, la lecture repartirait sur tout ce qui est arrive,
+      // et chaque manque de donnees ajouterait 150 a 530 ms de latence definitive jusqu'a ce que le
+      // vidage de derive coupe le son. Ramener la file au seuil coute ici exactement zero : le son
+      // vient d'etre interrompu, l'oreille est deja au milieu d'une coupure.
       this.trimPending = false;
 
       // Le thread principal pilote la lecture et l'arret par ce port.

@@ -339,10 +339,9 @@ test("ne confie a la socket que ce que la fenetre d'envoi autorise", async (t) =
 // Ce test verifie le choix qui justifie a lui seul l'existence de cette file : quand le lien ne suit
 // plus, c'est l'audio **le plus ancien** qui part.
 //
-// Le publisher faisait l'inverse jusqu'ici. Il jetait la frame qui venait d'etre encodee et gardait
-// celles d'avant, ce qui est le bon reflexe pour un fichier et le mauvais pour un direct : le son
-// garde etait deja perime au moment ou il partait. Le journal du 6 aout 2026 en montre le resultat,
-// un trou de 2920 ms d'un seul tenant.
+// Jeter la frame qui vient d'etre encodee en gardant les plus anciennes est le bon reflexe pour un
+// fichier et le mauvais pour un direct : le son garde serait deja perime au moment de partir, et
+// l'auditeur recevrait un trou d'un seul tenant de la taille de la file.
 test("jette l'audio le plus ancien, jamais le plus recent, quand le lien ne suit plus", async (t) => {
   const relay = new FakeRelay(GOOD_TOKEN);
   const url = await relay.listen();

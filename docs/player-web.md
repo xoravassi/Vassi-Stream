@@ -16,7 +16,7 @@ thread principal : ListenerSocket
                                                     ▼
                                         Worker : DecodeWorker
                                           ├── inspectAudioPacket : en-tete verifie
-                                          ├── OpusDecoder.decodeFrame : 960 x 2 flottants
+                                          ├── OpusDecoder.decodeFrame : 1920 x 2 flottants
                                           └── ecriture dans la file PCM
                                                     │
                                                     ▼
@@ -103,7 +103,7 @@ Raisons du choix :
 - elle fonctionne aussi sous Node, ce qui permet de tester le decodage reellement, sans navigateur.
 
 La sortie est `{ channelData: [Float32Array, Float32Array], samplesDecoded, sampleRate }`. Une frame
-de 20 ms donne `samplesDecoded === 960` et `sampleRate === 48000`.
+de 40 ms donne `samplesDecoded === 1920` et `sampleRate === 48000`.
 
 Le decodeur est cree avec `channels: 2`, `streamCount: 1`, `coupledStreamCount: 1` : c'est la
 description exacte d'un flux stereo couple, le seul que la v1 produit.
@@ -186,6 +186,7 @@ Le `latencyProfile` annonce par la session donne le **plancher** du seuil, comme
 | `low` | 200 ms |
 | `balanced` | 400 ms |
 | `stable` | 800 ms |
+| `long` | 1500 ms |
 
 Un profil inconnu est traite comme `balanced` : mieux vaut un direct un peu long a demarrer qu'un
 direct qui ne demarre pas.
@@ -446,7 +447,7 @@ Ce que cela couterait ici :
   par la pile native demanderait de passer l'Opus en MP3 ou en AAC, donc un decodage, un reencodage,
   et un cout processeur par auditeur.
 - **La latence passerait a plusieurs secondes.** Un flux HTTP continu ou HLS est bufferise par le
-  systeme, et cette avance n'est pas reglable depuis la page. Les profils de 200, 400 et 800 ms n'ont
+  systeme, et cette avance n'est pas reglable depuis la page. Les profils de 200 a 1500 ms n'ont
   aucun sens sur ce chemin.
 - **La qualite baisserait.** Un reencodage MP3 ou AAC a partir d'Opus est une seconde passe avec
   perte.

@@ -4,9 +4,9 @@ import test from "node:test";
 // Ce fichier verifie le filet du processeur audio : les trois lignes de `process()` qui jettent le
 // son le plus ancien quand la file a depasse son plafond.
 //
-// C'est la seule partie de `pcm-worklet.js` qui ne tourne que dans un AudioWorklet, et elle etait
-// jusqu'ici la seule non couverte : `dropOldest` avait ses tests, mais rien ne verifiait qui
-// l'appelle, ni quand. C'est pourtant la que le plafond calcule par `audio-player.ts` est consomme.
+// C'est la seule partie de `pcm-worklet.js` qui ne tourne que dans un AudioWorklet. `dropOldest` a
+// ses propres tests ; ce fichier couvre l'autre moitie de la question — qui l'appelle, et quand.
+// C'est la que le plafond calcule par `audio-player.ts` est consomme.
 //
 // Aucun harnais de navigateur n'est necessaire. Le module s'enregistre lui-meme au chargement en
 // appelant `registerProcessor`, donc il suffit de poser les deux globales d'un AudioWorklet avant de
@@ -151,7 +151,7 @@ test("ne saute jamais tant qu'aucun plafond n'est connu", () => {
   assert.equal(file.skips, 0);
 });
 
-// Ce test couvre le correctif du defaut le plus couteux du player, celui que le journal du 6 aout
+// Ce test couvre le poste de latence le plus couteux du player, celui que le journal du 6 aout
 // 2026 montre onze fois en vingt-neuf minutes.
 //
 // Une rebufferisation s'arrete des que la file atteint le seuil, mais elle ne s'arrete pas *au*
@@ -163,8 +163,8 @@ test("ramene la file au seuil a la reprise de lecture", () => {
   const { processeur, file } = monter();
 
   processeur.port.deliver({ type: "limit", ceilingFrames: 600, keepFrames: 200 });
-  // 500 frames : bien au-dessus du seuil, mais sous le plafond du filet. C'est exactement la zone ou
-  // rien n'agissait auparavant.
+  // 500 frames : bien au-dessus du seuil, mais sous le plafond du filet. C'est la zone que seul le
+  // filet couvre.
   remplir(file, 500);
   processeur.port.deliver({ type: "play" });
 

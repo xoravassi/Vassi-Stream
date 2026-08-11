@@ -136,7 +136,7 @@ relancer Node et de redemander le port sans recharger le device.
 ## Verification manuelle executee
 
 Test du 2026-08-03 dans Ableton Live 11, device sur la piste Master, procedure de
-`docs/validation/phase-5-test-manuel.md`.
+`docs/validation/procedures/test-pont-ableton.md`.
 
 Resultat rapporte par Vassi : `Etat` gauche `connected`, `Etat` droite `ready`, port annonce,
 `Encodees`, `Envoyees` et `Recues` en hausse ensemble, `Perdues` et `Trous` a zero, son du master

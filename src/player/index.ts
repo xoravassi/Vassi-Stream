@@ -1,4 +1,4 @@
-// Ce fichier est la seule surface publique du moteur audio. Le bloc 9 n'importe rien d'autre :
+// Ce fichier est la seule surface publique du moteur audio. Le site n'importe rien d'autre :
 // les composants Svelte restent ainsi separes du fonctionnement interne du player.
 
 export { AudioPlayer, DEFAULT_TITLE, type PlayerDeps, type PlayerSetup } from "./audio-player.ts";

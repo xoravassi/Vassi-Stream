@@ -176,7 +176,7 @@ if (!existsSync(DEVICE)) {
 	}
 }
 
-// Les depots laisses par une version precedente de l'installateur sont effaces. Ils sont pires
+// Les depots laisses par une installation mal placee sont effaces. Ils sont pires
 // qu'inutiles : ils donnent a croire que l'installation a reussi alors que rien ne les lit, et une
 // correction apportee au projet ne les atteint pas.
 for (const folder of targets.stale) {

@@ -333,10 +333,9 @@ test("le bouton Lancer ne peut pas se rallumer a l'ouverture d'un projet", () =>
 
 // Ce test verifie que le choix de la page tient dans un parametre.
 //
-// C'est le defaut de la premiere version : la bascule etait un `live.text` en interrupteur sans
-// parametre attache, donc sans valeur ou retenir sa position. Le meme 1 repartait a chaque clic,
-// et la page des reglages ne se refermait plus jamais. Un `live.tab` sort le numero de l'onglet
-// choisi, ce qui ne peut pas se bloquer.
+// Un `live.text` en interrupteur sans parametre attache n'a aucune valeur ou retenir sa position :
+// le meme 1 repartirait a chaque clic, et la page ouverte ne se refermerait jamais. Un `live.tab`
+// sort le numero de l'onglet choisi, ce qui ne peut pas se bloquer.
 test("les pages se choisissent par un onglet qui retient sa position", () => {
   const tabs = byId.get("page-tabs");
 

@@ -78,10 +78,11 @@ interrupteurs, et son texte dit ce qu'un clic va faire : **Lancer** quand rien n
 pendant un direct. Il garde la hauteur des deux menus : dans Live, un interrupteur ne depasse pas de
 sa bande, c'est son fond sombre qui le distingue.
 
-Max 8 n'a pas d'objet d'ecran qui suive le theme — `live.scope~` n'existe qu'a partir de Max 8.6 —
-donc la bande d'affichage est delimitee par deux traits plutot que par un cadre.
+La bande d'affichage est delimitee par deux traits plutot que par un cadre : le device n'emploie
+aucun objet d'ecran, donc rien ne dessine de fond qui suivrait le theme.
 
-Les deux reglages sont des menus deroulants a trois positions. C'est ce que Live pose devant un
+Les deux reglages sont des menus deroulants — trois positions pour la qualite, quatre pour la
+latence. C'est ce que Live pose devant un
 choix nomme ; un bouton rotatif sert a parcourir une plage, et « Équilibrée 400 ms » ne tient pas
 dans les 44 pixels d'un dial d'Ableton. Ils se grisent pendant un direct : changer la qualite en
 cours de route n'existe pas dans cette version, et un reglage qui ne repond pas doit se voir plutot
@@ -230,7 +231,7 @@ bien de cette palette.
 
 Ces six couleurs ne sont pas choisies a l'oeil. Ce sont celles qu'Ableton applique lui-meme dans
 son theme Sombre, relevees dans le fichier reel de l'application —
-`C:\ProgramData\Ableton\Live 11 Suite\Resources\Themes\03Dark.ask`.
+`C:\ProgramData\Ableton\<version de Live>\Resources\Themes\03Dark.ask`.
 
 | Role dans le device | Cle Ableton (`03Dark.ask`) | Valeur |
 |---|---|---|
@@ -444,72 +445,52 @@ Ces points ne se verifient pas sans Max. Ils sont classes du plus probable au mo
    « N lignes copiees » dans le journal, et le contenu doit se coller tel quel dans un editeur. Si la
    ligne dit « copie impossible », **Exporter** reste la voie sure.
 
-## Les deux defauts trouves a la premiere ouverture
+## Deux regles que Max impose, et qui ne se voient pas
 
-Ils se ressemblaient a l'ecran — un clic sans effet — et n'avaient rien a voir. Le premier empechait
-les boutons d'emettre quoi que ce soit ; le second empechait le script Node de demarrer, donc rendait
-le device entier muet. Le premier cachait le second : tant qu'aucun bang ne partait, rien ne
-montrait que personne n'ecoutait a l'autre bout.
+Les enfreindre donne le meme symptome : un clic sans effet, sans message ni erreur dans la fenetre
+Max. Elles n'ont pourtant rien a voir l'une avec l'autre, et la premiere masque la seconde — tant
+qu'aucun bang ne part, rien ne montre que personne n'ecoute a l'autre bout.
 
 ### 1. Un bouton sans parametre n'emet rien
 
-**Les deux boutons de la page de reglages ne faisaient rien.** Aucun message, aucune erreur dans la
-fenetre Max : un clic partait dans le vide.
-
-Ils etaient poses avec `parameter_enable: 0`, c'est-a-dire sans parametre Live. Or un `live.text` en
-mode bouton ne fabrique pas son bang tout seul : il le tire de la transition 0 vers 1 de son
-parametre. C'est la page de reference de Max qui le dit, a l'attribut `transition` — *« The
-parameter automation of live.text stores 0 and 1 values. The transition attribute specifies when a
-bang will be sent to the outlet. »* Sans parametre, pas de transition, donc pas de bang.
+Un `live.text` en mode bouton ne fabrique pas son bang tout seul : il le tire de la transition 0
+vers 1 de son parametre Live. C'est la page de reference de Max qui le dit, a l'attribut
+`transition` — *« The parameter automation of live.text stores 0 and 1 values. The transition
+attribute specifies when a bang will be sent to the outlet. »* Avec `parameter_enable: 0`, il n'y a
+pas de parametre, donc pas de transition, donc pas de bang.
 
 Le releve des devices livres avec Live dit la meme chose autrement : sur leurs **411 objets
 `live.*`, aucun** n'a `parameter_enable` a 0, et les 138 boutons `live.text` portent tous un
 parametre, cache dans deux cas sur trois.
 
-Les deux boutons sont donc devenus des parametres caches. Deux autres reglages sont tombes avec :
-`outputmode` a disparu des boutons, ou il n'agit pas, et `lcdcolor` est desormais pose, sans quoi
-les deux libelles prenaient l'orange par defaut de Max au milieu d'un device gris — la maquette ne
-le montrait pas, parce qu'elle dessinait le texte avec `textcolor`. Les deux corrections sont
-decrites plus haut, dans « Le mode LCD ».
+Les deux boutons de la page de reglages sont donc des parametres caches. Deux consequences suivent :
+`outputmode` n'est pas pose sur un bouton, ou il n'agit pas ; et `lcdcolor` l'est, sans quoi les deux
+libelles prendraient l'orange par defaut de Max au milieu d'un device gris. La maquette ne montre pas
+ce dernier point, parce qu'elle dessine le texte avec `textcolor`. Les deux sont decrits plus haut,
+dans « Le mode LCD ».
 
-Ce defaut ne pouvait pas etre attrape par les tests de cablage : les cables etaient justes, les
-messages existaient, le script Node avait ses handlers. Il manquait la question qu'aucun test ne
-posait — **est-ce que cette commande peut seulement emettre quelque chose ?** C'est maintenant un
-test, sur les trois commandes du fichier livre.
+Les tests de cablage ne peuvent pas attraper ce defaut : les cables sont justes, les messages
+existent, le script Node a ses handlers. La question qui manque est ailleurs — **est-ce que cette
+commande peut seulement emettre quelque chose ?** Un test la pose, sur les trois commandes du
+fichier livre.
 
-### 2. Max ne voyait pas le script Node
+### 2. Max ne trouve un script que dans sa propre bibliotheque
 
-Les boutons corriges, plus rien ne se passait toujours : ni **Enregistrer**, ni **Tester le
-relais**, ni **LANCER**. Un seul soupcon explique les trois d'un coup — le script Node ne tournait
-pas — et il se verifie sans Max : Live lance un gestionnaire de processus Node for Max des qu'un
-objet `node.script` existe, et ce gestionnaire tournait bien, **sans aucun processus enfant**.
-L'objet existait donc, et son script n'avait jamais demarre.
+Un `node.script` designe son fichier par un nom, que Max resout dans sa base de recherche : un index
+SQLite construit au demarrage de Max, sous `%APPDATA%\Cycling '74\Max <N>\Database\`. Cet index
+couvre la bibliotheque de Max et **pas** la bibliotheque d'Ableton : un `node/` pose a cote du
+`.amxd` y est invisible, l'objet ne demarre rien, et le device reste muet — ni **Enregistrer**, ni
+**Tester le relais**, ni **LANCER**.
 
-Le patcher demandait `node/index.js`. Max resout ce genre de nom dans sa base de recherche, un index
-de fichiers qu'il construit a son demarrage. Cette base se lit — c'est une base SQLite dans
-`%APPDATA%\Cycling '74\Max 8\Database\` — et elle repond sans ambiguite :
+Deux regles en decoulent, une par moitie du probleme :
 
-| Question posee a la base | Reponse |
-|---|---|
-| fichiers indexes sous `Documents\Ableton\User Library` | **0** |
-| fichiers indexes sous `Documents\Max 8` | dont `vassi.encoder~.mxe64`, trouve par la depuis le bloc 5 |
-| fichiers nommes `index.js` dans toute la base | **un seul**, un exemple livre avec Node for Max |
-
-Le dossier `node/` etait pose a cote du `.amxd`, dans la bibliotheque d'Ableton : un endroit ou Max
-ne regarde pas. Le script etait invisible, l'objet ne demarrait rien, et le device restait muet.
-
-Deux corrections, pour les deux moities du probleme :
-
-- **Le script est installe dans la bibliotheque de Max**, `Documents\Max 8\Library\Vassi Stream\`,
+- **Le script est installe dans la bibliotheque de Max**, `<Documents>\Max <N>\Library\Vassi Stream\`,
   a cote de l'external. C'est un dossier indexe, et c'est deja par la que `vassi.encoder~` est
-  trouve depuis le bloc 5 — le mecanisme etait donc deja prouve sur cette machine.
-  Les chemins de ce recit datent du bloc 10, ou la machine portait Max 8 et un `Documents` sous
-  `%USERPROFILE%`. Le mecanisme n'a pas change, mais les deux valeurs, si : Live 12.4 embarque Max 9,
-  et `Documents` est passe sous OneDrive. C'est pourquoi elles sont desormais deduites de la machine
-  et non ecrites — voir « Installer sur un nouvel ordinateur » plus haut.
-- **Le point d'entree s'appelle `vassi-stream-device.js`**, plus `index.js`. Un nom unique dans la
-  base ne peut pas designer le fichier d'un autre : l'exemple de Node for Max porte deja ce nom, et
-  il a d'ailleurs ete ecrase par accident pendant le bloc 5.
+  trouve. `<Documents>` et `<N>` sont deduits de la machine, jamais ecrits en dur — voir « Installer
+  sur un nouvel ordinateur » plus haut.
+- **Le point d'entree s'appelle `vassi-stream-device.js`**, et non `index.js`. Un nom unique dans
+  l'index ne peut pas designer le fichier d'un autre ; `index.js` est deja porte par un exemple livre
+  avec Node for Max.
 
 Un test garde les trois conditions du nom : pas de chemin absolu, qui ne survivrait pas a un
 changement de machine ; pas de dossier, que Max ne resout pas ici ; et le meme nom que le fichier du

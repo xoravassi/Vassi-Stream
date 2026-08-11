@@ -186,7 +186,7 @@ test("rebufferise apres une discontinuite", () => {
   assert.equal(machine.status().state, "REBUFFERING");
 });
 
-// Ce test verifie qu'une discontinuite isolee repart aussi vite qu'avant ce correctif : deux
+// Ce test verifie qu'une discontinuite isolee repart au plus vite : deux
 // rapports propres, pas plus. La rafale de discontinuites ne doit pas ralentir le cas ordinaire.
 test("repart en deux rapports apres une discontinuite isolee", () => {
   const { machine } = makeMachine();
@@ -278,9 +278,8 @@ test("un vidage de derive oublie la rafale de discontinuites en cours", () => {
   // Un vidage de derive survient pendant la rafale de discontinuites.
   machine.reportLevel(3000, 0);
 
-  // La rafale de discontinuites est oubliee : deux rapports propres suffisent desormais, pas
-  // quatre. Seule la confirmation de derive (elle aussi a deux rapports pour un vidage isole)
-  // reste a satisfaire.
+  // La rafale de discontinuites est oubliee : deux rapports propres suffisent, pas quatre. Seule
+  // la confirmation de derive (elle aussi a deux rapports pour un vidage isole) reste a satisfaire.
   machine.reportLevel(400, 0);
   assert.equal(machine.status().state, "REBUFFERING", "un seul rapport propre ne suffit pas encore");
 
@@ -628,7 +627,7 @@ test("une coupure du direct oublie les vidages de la rafale precedente", () => {
   machine.play();
   machine.reportLevel(400, 0);
 
-  // Quatre vidages d'affilee : la confirmation demanderait desormais huit rapports propres.
+  // Quatre vidages d'affilee : la confirmation demande alors huit rapports propres.
   for (let vidage = 0; vidage < 4; vidage += 1) {
     machine.reportLevel(3000, 0);
   }

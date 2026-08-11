@@ -177,7 +177,7 @@ function journalPosition() {
 	return `${first}-${last} / ${journal.count}`;
 }
 
-// Cette fonction publie l'etat du pont loopback, lu par le device depuis le bloc 5.
+// Cette fonction publie l'etat du pont loopback, que le device affiche.
 // Chaque changement d'etat ouvre ou ferme une connexion, et l'encodeur repart alors de la
 // sequence zero : le suivi de continuite repart de zero lui aussi pour ne pas compter un faux trou.
 function publishBridgeStatus(state, detail) {

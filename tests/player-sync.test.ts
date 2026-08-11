@@ -138,7 +138,7 @@ test("une copie resynchronisee apres le commit corrige le commit enregistre", ()
     const avant = JSON.parse(readFileSync(join(destination, "manifest.json"), "utf8"));
     assert.equal(avant.commit, "aaa1111+modifie");
 
-    // Le moteur est commite : rien n'a change dans les fichiers, seul le commit existe maintenant.
+    // Le moteur est commite : les fichiers sont identiques, seul le commit change.
     sansBruit(() => synchroniser(source, destination, "bbb2222"));
 
     const apres = JSON.parse(readFileSync(join(destination, "manifest.json"), "utf8"));

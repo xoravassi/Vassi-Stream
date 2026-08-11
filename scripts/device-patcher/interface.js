@@ -91,13 +91,13 @@ export function buildInterface() {
 	const boxes = [
 		// --- Bandeau du haut, visible sur les trois pages -----------------------------------
 		//
-		// Les onglets remplacent le bouton unique de la premiere version. Un bouton qui change
-		// de texte demande de deviner ou il mene ; les onglets montrent toutes les pages et celle
-		// qui est ouverte. C'est aussi la facon dont Live presente ses propres sections.
+		// La bascule entre pages est un jeu d'onglets, pas un bouton qui change de texte : un
+		// bouton demande de deviner ou il mene, alors que les onglets montrent toutes les pages
+		// et celle qui est ouverte. C'est aussi la facon dont Live presente ses propres sections.
 		//
-		// La barre est passee de 120 a 180 pixels avec l'arrivee du troisieme onglet : `live.tab`
-		// partage sa largeur a parts egales, et soixante pixels par onglet tiennent « Réglages »,
-		// le libelle le plus long, avec la meme marge que les deux autres.
+		// La barre fait 180 pixels pour trois onglets : `live.tab` partage sa largeur a parts
+		// egales, et soixante pixels par onglet tiennent « Réglages », le libelle le plus long,
+		// avec la meme marge que les deux autres.
 		//
 		// `livemode` cale les marges internes sur celles de Live : sans lui, les onglets sont
 		// legerement plus larges que ceux des devices d'Ableton poses juste a cote.
@@ -148,12 +148,12 @@ export function buildInterface() {
 		//
 		// Wavetable et EQ Eight sont batis pareil : un ecran occupe le haut du device, une bande
 		// de commandes serrees tient le bas. L'ecran porte ce qu'on regarde, la bande porte ce
-		// qu'on touche. La version precedente melangeait les deux dans trois colonnes de meme
-		// poids, et rien n'y attirait l'oeil en premier.
+		// qu'on touche. Melanger les deux dans des colonnes de meme poids ne laisserait rien
+		// attirer l'oeil en premier.
 		//
-		// Faute d'un objet d'ecran dans Max 8 — `live.scope~` n'y existe pas — la bande est
-		// delimitee par deux traits et contient ce qu'un direct donne a lire : l'etat en gros, son
-		// detail, et le niveau qui part vraiment.
+		// Le device n'emploie aucun objet d'ecran de Max : la bande est delimitee par deux traits
+		// et contient ce qu'un direct donne a lire — l'etat en gros, son detail, et le niveau qui
+		// part vraiment.
 		label("state-label", "Arrêté", [340, 20, 200, 24], [MARGIN, 44, 200, textBox(STATE_SIZE)], STATE_SIZE, false),
 		label("state-detail", "device prêt", [340, 50, 250, 18], [MARGIN, 72, 250, textBox(LABEL_SIZE)], LABEL_SIZE),
 		// Les deux vumetres ne servent aucun reglage : ils repondent a la seule question qu'on se
@@ -215,9 +215,8 @@ export function buildInterface() {
 		// Les deux reglages sont des menus, pas des boutons rotatifs.
 		//
 		// C'est ce que Live pose devant un choix nomme : un bouton rotatif sert a parcourir une
-		// plage, pas a designer une position parmi trois. La premiere version en avait deux, et
-		// « Équilibrée 400 ms » ne tenait pas dans les 44 pixels d'un dial d'Ableton : le reglage
-		// le plus long etait aussi le seul illisible.
+		// plage, pas a designer une position parmi trois ou quatre. « Équilibrée 400 ms » ne
+		// tiendrait d'ailleurs pas dans les 44 pixels d'un dial d'Ableton.
 		choice("quality-menu", [440, 132, 88, 15], [100, 124, 88, 15], {
 			shortName: "Qualite",
 			longName: "Qualite",
@@ -260,8 +259,9 @@ export function buildInterface() {
 		// --- Page du journal --------------------------------------------------------------------
 		//
 		// Cette page repond a la question qu'on se pose quand le direct s'est mal passe : qu'est-ce
-		// qui a lache, et a quelle heure. Jusqu'ici la reponse n'existait que dans la fenetre Max,
-		// qui n'est pas ouverte pendant un direct et ne survit pas a la fermeture de Live.
+		// qui a lache, et a quelle heure. Elle existe parce que la fenetre Max ne repond pas a
+		// cette question : elle n'est pas ouverte pendant un direct et ne survit pas a la
+		// fermeture de Live.
 		//
 		// Les lignes sont des libelles ordinaires, un par ligne, et non un champ de texte a plusieurs
 		// lignes : Max n'a pas d'objet de texte defilant qui suive le theme de Live, et un `textedit`
@@ -391,8 +391,8 @@ function title(id, text, at, shows) {
 
 // Cette fonction cree un menu deroulant a positions nommees, enregistre avec le morceau.
 //
-// Le nom long identifie le reglage dans le fichier `.als` : il reste celui de la premiere version
-// pour que les projets deja enregistres retrouvent leur valeur. Le mode LCD (`appearance: 1`) est
+// Le nom long identifie le reglage dans le fichier `.als` : le changer ferait perdre sa valeur a
+// tout projet deja enregistre, donc il est fixe une fois pour toutes. Le mode LCD (`appearance: 1`) est
 // celui du patch d'aide officiel de Max ; sans lui, le menu se dessine dans son style par defaut,
 // qui detonne a cote du reste de l'ecran.
 function choice(id, at, shows, parameter) {

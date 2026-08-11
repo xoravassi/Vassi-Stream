@@ -85,9 +85,9 @@ test("ne s'alarme pas d'un silence plus court que le seuil", () => {
   assert.equal(explainPlayer(etat({ sincePacketMs: SILENT_NETWORK_MS - 100 })).area, "ok");
 });
 
-// Panne de decodage : les paquets arrivent et sont acceptes, mais aucune frame n'en sort. C'est
-// exactement ce que produisait le defaut de session du bloc 8, et la page restait muette sans rien
-// dire.
+// Panne de decodage : les paquets arrivent et sont acceptes, mais aucune frame n'en sort. Sans ce
+// classement, la page reste muette sans rien dire — le reseau va bien, donc rien ne signale la
+// panne.
 test("range des paquets acceptes sans frame decodee dans le decodage", () => {
   const verdict = explainPlayer(
     etat({

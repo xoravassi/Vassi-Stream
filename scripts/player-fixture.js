@@ -14,8 +14,8 @@ import { startFixturePublisher } from "./fixture-publisher.js";
 // sert les fichiers du projet au navigateur. Il existe pour la seule verification que Node ne peut
 // pas faire : entendre le son.
 //
-// Ce serveur n'est pas le site. Il remplace le bundler que le bloc 9 apportera : il efface les
-// annotations de type des fichiers `.ts` et remplace les noms de paquets par des chemins servis.
+// Ce serveur n'est pas le site : il tient le role du bundler, en effacant les annotations de type
+// des fichiers `.ts` et en remplacant les noms de paquets par des chemins servis.
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PAGE = join(ROOT, "tests", "browser", "player-fixture.html");

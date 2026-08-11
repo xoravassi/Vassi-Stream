@@ -322,7 +322,7 @@ La page affiche des compteurs faits pour cela.
 
 Le bloc 8b ajoute a cette page un verdict et un journal horodate, qui rangent la panne d'eux-memes
 entre reseau, decodage et contexte audio. La marche a suivre complete de l'essai long est dans
-`docs/validation/phase-8b.md`.
+`docs/validation/blocs/bloc-8b.md`.
 
 ## Bloc precedent
 

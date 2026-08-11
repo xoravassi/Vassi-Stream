@@ -204,9 +204,8 @@ valeurs par défaut ou des exemples, au lieu d'être écrites en dur.
 - [ ] Vérifier qu'aucun token, aucune adresse IP et aucun identifiant ne se trouve dans
       l'historique Git. Un secret déjà commité n'est pas effacé par une suppression : il faut le
       révoquer, pas le cacher.
-- [ ] Déplacer `Agents.md` et `Concept.md` : ce sont des documents de travail personnels, adressés
-      à un agent et à Vassi. Soit ils partent dans `docs/` réécrits pour un lecteur inconnu, soit
-      ils sortent du dépôt public.
+- [ ] Déplacer `Agents.md` : c'est un document de travail personnel, adressé à un agent. Soit il
+      part dans `docs/` réécrit pour un lecteur inconnu, soit il sort du dépôt public.
 
 ### Vérification courte
 
@@ -636,8 +635,8 @@ avec un jeton, l'adresse elle-même est le secret.
 **But :** pouvoir répondre « combien d'auditeurs ? » avec un chiffre mesuré.
 
 Le relais accepte 50 auditeurs par défaut. Ce nombre est une précaution, pas une mesure. À chaque
-frame de 20 ms, le relais fait un envoi par auditeur : c'est 50 envois toutes les 20 ms, soit
-2 500 par seconde. Personne n'a vérifié où ce chiffre casse, ni combien de mémoire et de bande
+frame de 40 ms, le relais fait un envoi par auditeur : c'est 50 envois toutes les 40 ms, soit
+1 250 par seconde. Personne n'a vérifié où ce chiffre casse, ni combien de mémoire et de bande
 passante il demande.
 
 Un projet public a besoin de cette réponse, parce que c'est la première question qu'on lui posera,

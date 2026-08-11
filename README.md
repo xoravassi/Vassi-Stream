@@ -128,7 +128,11 @@ token, et l'inverse. Le champ du token se vide dès que l'enregistrement réussi
 
 Une fois configuré, l'onglet **Direct** sert au quotidien : bouton **Lancer** / **Arrêter**, choix de
 la qualité (Stable 128 / Haute 192 / Studio 256) et de la latence (Faible 200 ms / Équilibrée 400 ms
-/ Stable 800 ms). Ces deux réglages se verrouillent pendant un direct.
+/ Stable 800 ms / Longue 1500 ms). Ces deux réglages se verrouillent pendant un direct.
+
+L'onglet **Journal** garde 400 lignes datées de ce qui s'est passé pendant un direct. Trois boutons :
+**Copier**, **Exporter** vers `%APPDATA%\Vassi Stream\journaux\`, et **Vider**. C'est ce qu'il faut
+envoyer quand un direct s'est mal passé ; il ne contient aucun secret.
 
 Détail complet, y compris ce qui est enregistré avec le projet Ableton et ce qui ne l'est jamais :
 [docs/device-max.md](docs/device-max.md).
@@ -154,6 +158,7 @@ Détail complet, y compris ce qui est enregistré avec le projet Ableton et ce q
 - **État actuel du projet** (voir [Roadmap.md](Roadmap.md)) : la chaîne complète fonctionne de bout
   en bout — Ableton, relais déployé, page `/session` — et `npm.cmd run check` passe. Reste la série
   de tests précis sur les cas limites (direct long, coupure réseau, écran de téléphone éteint,
-  second auditeur), puis le gel du device : c'est l'objet du bloc 11 de la roadmap. La suite,
-  c'est-à-dire ce qu'il faudrait pour publier ce projet en open source, est décrite dans
+  second auditeur), puis le gel du device : c'est l'objet du bloc 11 de la roadmap. Deux chantiers
+  distincts sont décrits à part : partager le device avec le professeur, dans
+  [docs/partage-device.md](docs/partage-device.md), et publier le projet en open source, dans
   [docs/Roadmap-v2.md](docs/Roadmap-v2.md).

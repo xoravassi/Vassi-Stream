@@ -360,10 +360,10 @@ function buildLines(pageList) {
 		// Bascule entre la page du direct et la page des reglages.
 		//
 		// L'onglet sort le numero de la page choisie : il n'y a pas d'etat a deviner ni de sens de
-		// lecture a retenir, et les deux directions passent par le meme cable. La premiere version
-		// posait ici un `live.text` en interrupteur sans parametre attache, donc sans valeur ou
-		// retenir sa position : le meme 1 repartait a chaque clic et la page des reglages ne se
-		// refermait jamais.
+		// lecture a retenir, et les deux directions passent par le meme cable. Un `live.text` en
+		// interrupteur ne conviendrait pas ici : sans parametre attache, il n'a aucune valeur ou
+		// retenir sa position, renvoie le meme 1 a chaque clic, et la page ouverte ne se refermerait
+		// jamais.
 		connect("page-tabs", 0, "page-select", 0),
 		...pageList.map((_, index) => connect("page-select", index, `show-page-${index}`, 0)),
 		...pageList.map((_, index) => connect(`show-page-${index}`, 0, "pages", 0)),

@@ -2,25 +2,26 @@
 
 ## But
 
-Ce document fixe le format commun entre le device Max for Live, le relais Node.js et la page `/live`.
+Ce document fixe le format commun entre le device Max for Live, le relais Node.js et la page `/session`.
 
-## Ce que la v1.1 change, et pourquoi
+## Constantes de la v1.1
 
-**La trame passe de 20 ms a 40 ms.** Le numero de version du protocole reste `1` dans l'en-tete
-binaire : la structure ne change pas, seules trois constantes changent de valeur. Mais le format de
-fil, lui, n'est pas compatible avec la v1 — un device v1 et un player v1.1 ne s'entendent pas, et le
-relais refuse un `stream_start` qui annonce encore 20 ms. **Device, relais et site se deploient
-ensemble.**
+| Constante | Valeur |
+|---|---:|
+| `frameDurationMs` | 40 |
+| echantillons par canal et par trame | 1920 |
+| payload maximal | 2560 octets |
+| paquets par seconde | 25 |
 
-| | v1 | v1.1 |
-|---|---:|---:|
-| `frameDurationMs` | 20 | **40** |
-| echantillons par canal | 960 | **1920** |
-| payload maximal | 1276 | **2560** |
-| paquets par seconde | 50 | **25** |
+Le numero de version porte par l'en-tete binaire reste `1` : la structure du paquet ne change pas
+entre v1 et v1.1, seules ces valeurs changent. Le format de fil, lui, n'est pas compatible entre les
+deux — le relais refuse un `stream_start` qui annonce 20 ms. **Device, relais et site se deploient
+donc ensemble.**
+
+### Pourquoi 40 ms et non 20
 
 Le gain n'est pas dans le codec : a debit egal, Opus rend a peu pres la meme chose en 20 et en 40 ms.
-Il est ailleurs, et il est double.
+Il est double, et il est ailleurs.
 
 D'abord l'encapsulation. Chaque paquet traine environ 110 octets fixes — 28 d'en-tete VSA1, 8 de
 cadre WebSocket masque, une vingtaine de TLS, une quarantaine de TCP/IP — soit pres de 44 kbit/s a
@@ -31,8 +32,10 @@ Ensuite la cadence. Sur un lien mobile, l'ordonnancement se fait par paquet et n
 diviser le nombre de paquets par deux agit la ou le debit adaptatif ne peut rien, puisque celui-ci
 allege chaque paquet sans jamais en reduire le nombre.
 
-Le cout est de 20 ms de latence supplementaire, et le plancher de payload passe de 1276 a 2560
-octets : a 256 kbit/s, 40 ms d'audio font deja 1280 octets en moyenne.
+Le prix est de 20 ms de latence supplementaire et un plancher de payload a 2560 octets : a
+256 kbit/s, 40 ms d'audio font deja 1280 octets en moyenne.
+
+## Deux types de messages
 
 Le protocole separe deux types de messages :
 - messages JSON pour l'etat, l'authentification et le controle du live ;
@@ -63,7 +66,7 @@ Le relais accepte les paquets audio seulement apres un `stream_start` valide. Il
 
 ### Listener
 
-La page `/live` ouvre une connexion WebSocket vers :
+La page `/session` ouvre une connexion WebSocket vers :
 
 ```text
 wss://<domaine-relai>/listener
@@ -320,7 +323,7 @@ Les entiers multi-octets sont stockes en big-endian.
 
 Le payload est la sortie directe de `opus_encode()` ou `opus_encode_float()` appele avec `frame_size = 1920`. Une trame de 40 ms depasse la duree maximale d'une frame CELT : libopus produit donc un paquet de code 3 portant deux frames de 20 ms, ce qui reste un seul appel et un seul paquet Opus du point de vue du protocole. La v1.1 n'ajoute aucun padding et n'utilise aucun repacketizer. L'encodeur recoit un buffer de sortie de 2560 octets et toute erreur d'encodage empeche la creation du paquet Vassi Stream.
 
-La borne de 2560 octets remplace les 1276 de la v1, et ce n'est pas une precaution : a 256 kbit/s, 40 ms d'audio font 1280 octets en moyenne, avant les pointes du VBR. La fixture de test le confirme, 1279 octets de payload moyen sur dix secondes.
+La borne de 2560 octets n'est pas une precaution large : a 256 kbit/s, 40 ms d'audio font 1280 octets en moyenne, avant les pointes du VBR. La fixture de test le confirme, 1279 octets de payload moyen sur dix secondes.
 
 Taille totale minimale : 29 octets. Taille totale maximale : 2588 octets.
 

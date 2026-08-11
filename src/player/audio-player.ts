@@ -400,13 +400,14 @@ export class AudioPlayer {
     //   plancher Faible 200 ms      vidage a 1200 ms, filet a 2200 ms
     //   plancher Equilibree 400 ms  vidage a 1400 ms, filet a 2400 ms
     //   plancher Stable 800 ms      vidage a 1800 ms, filet a 2800 ms
+    //   plancher Longue 1500 ms     vidage a 2500 ms, filet a 3500 ms
     //   seuil adaptatif max 2000 ms vidage a 3000 ms, filet a 4000 ms
     //
     // L'ordre voulu tient sur toute la plage — le filet reste mille millisecondes au-dessus du
-    // vidage — et c'est ce qui a impose de porter la file a six secondes. Avec quatre secondes le
-    // filet plafonnait a 2666 ms : des que le seuil adaptatif depassait 1666 ms, le vidage se
-    // retrouvait au-dessus de lui et devenait inatteignable. Le journal du 6 aout 2026 a 23h18 le
-    // montre, trois sauts du filet et pas un seul vidage.
+    // vidage — et c'est ce qui impose une file de six secondes. Une file de quatre secondes
+    // plafonnerait le filet a 2666 ms : des que le seuil adaptatif depasse 1666 ms, le vidage passe
+    // au-dessus du filet et devient inatteignable, ce que le journal du 6 aout 2026 a 23h18 montre
+    // — trois sauts du filet et pas un seul vidage.
     const target = this.machine.targetBufferMs();
     this.audio.setLimit(Math.min(target + 2 * LATE_MARGIN_MS, NET_CEILING_MAX_MS), target);
 

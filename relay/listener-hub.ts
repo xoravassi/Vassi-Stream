@@ -7,14 +7,12 @@ import type { LogFields } from "./log.ts";
 // Il ne lit jamais le contenu des paquets : il rediffuse les memes octets.
 
 // Ces valeurs recopient le mapping de `LATENCY_TARGET_MS` dans `src/player/player-protocol.ts`. Le
-// relais ne peut pas l'importer — il ne connait rien du navigateur, et ce module tourne sous Node
-// seul — mais un seuil de rejet qui ignore le profil choisi par l'auditeur reproduit exactement le
-// defaut mesure le 6 aout 2026 (`docs/validation/incident-meet-2026-08-06.md`, section 4) : le
-// relais gardait un backlog plus genereux (1,95 s, `DROP_BYTES` a l'ancienne valeur en octets) que
-// ce que l'auditeur tolere lui-meme avant de tout jeter (1,4 s pour Equilibree). Une rafale liberee
-// par le relais apres une congestion poussait alors mecaniquement le player au-dessus de son propre
-// seuil de vidage : les deux mecanismes travaillaient l'un contre l'autre.
-const LATENCY_TARGET_MS: Record<string, number> = { low: 200, balanced: 400, stable: 800 };
+// relais ne peut pas l'importer : il ne connait rien du navigateur et ce module tourne sous Node
+// seul. La copie doit rester exacte, profil par profil. Un relais plus tolerant que l'auditeur
+// continue d'envoyer un backlog que celui-ci jette a l'arrivee : la rafale liberee apres une
+// congestion pousse alors le player au-dessus de son propre seuil de vidage, et les deux mecanismes
+// travaillent l'un contre l'autre.
+const LATENCY_TARGET_MS: Record<string, number> = { low: 200, balanced: 400, stable: 800, long: 1500 };
 // Meme valeur que `LATENCY_TARGET_MS.balanced`, ecrite a part : un acces par cle sur un `Record`
 // reste `number | undefined` pour le compilateur, y compris pour une cle connue a l'ecriture.
 const DEFAULT_TARGET_MS = 400;

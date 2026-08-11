@@ -1,8 +1,8 @@
 // Ce module trouve les trois dossiers ou le device doit atterrir. Il existe parce que les deviner
-// ne marche pas : la premiere version de l'installateur ecrivait dans
-// `%USERPROFILE%\Documents\Max 8\Library`, et rien de ce qu'elle posait n'etait jamais lu.
+// ne marche pas : un chemin ecrit en dur comme `%USERPROFILE%\Documents\Max 8\Library` designe un
+// dossier que rien ne lit sur beaucoup de machines.
 //
-// Deux erreurs se cumulaient, chacune suffisante a rendre le device muet :
+// Deux pieges se cumulent, chacun suffisant a rendre le device muet :
 //
 //   1. `Documents` n'est pas toujours sous `%USERPROFILE%`. Quand OneDrive reprend le dossier, le
 //      vrai `Documents` devient `%USERPROFILE%\OneDrive\Documents`, et `%USERPROFILE%\Documents`
@@ -200,7 +200,7 @@ export function maxMajorVersions(documents, installs) {
 //
 // Live la place par defaut dans `Documents\Ableton\User Library`. Un dossier deja rempli est le
 // signe qu'on tient le bon : la presence de `Presets` distingue la vraie bibliotheque d'un dossier
-// vide cree par erreur par une ancienne version de ce script.
+// vide portant le meme nom au mauvais endroit.
 export function abletonUserLibrary(documents) {
 	const candidates = [documents];
 
@@ -246,8 +246,8 @@ export function resolveTargets() {
 	return { documents, installs, liveDevices, maxPackages, stale: stalePackages(documents, majors, liveDevices) };
 }
 
-// Cette fonction liste les depots laisses par une version precedente de l'installateur, aux
-// endroits que ni Max ni Live ne lisent. Ils sont trompeurs : leur presence donne a croire que
+// Cette fonction liste les depots poses aux endroits que ni Max ni Live ne lisent, laisses sur la
+// machine par une installation mal placee. Ils sont trompeurs : leur presence donne a croire que
 // l'installation a reussi alors que le device ne trouvera rien.
 //
 // Seul un dossier `Vassi Stream` est signale, jamais son parent : `Documents\Max 8\Library` peut

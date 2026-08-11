@@ -20,19 +20,19 @@ const MIN_BITRATE = 32000;
 // directement au budget de latence, et elle ne depend ni du debit ni de la taille des tampons du
 // systeme.
 //
-// Depuis que le publisher tient sa propre file d'envoi, cette mesure vaut bien mieux qu'avant. Elle
-// commence a croitre des que la fenetre d'envoi se ferme, c'est-a-dire des les premieres dizaines de
-// millisecondes de retard, la ou l'ancienne ne voyait rien tant que le tampon du noyau n'etait pas
-// plein — et sautait alors d'un coup a plusieurs centaines de millisecondes.
+// Elle est precise parce que le publisher tient sa propre file d'envoi : elle commence a croitre
+// des que la fenetre d'envoi se ferme, c'est-a-dire des les premieres dizaines de millisecondes de
+// retard. Une mesure prise sur le seul tampon du noyau ne verrait rien tant que celui-ci n'est pas
+// plein, puis sauterait d'un coup a plusieurs centaines de millisecondes.
 const PRESSURE_MS = 150;
 
 // Duree de calme exigee avant de remonter.
 //
-// Elle etait de quinze secondes, et le journal du 6 aout 2026 en montre le cout : apres une
-// reconnexion a 21:14, le device a mis quatre-vingt-quinze secondes a remonter de 44 a 109 kbit/s
-// sous un plafond de 128, sur un lien qui allait deja tres bien. Dix secondes de lien propre restent
-// un signal solide, et ce n'est de toute facon pas cette duree qui empeche l'oscillation : c'est
-// l'attente de `HOLD_MS` apres chaque decision, pendant laquelle plus rien n'est decide.
+// Dix secondes de lien propre sont un signal solide, et cette duree n'a pas a etre plus longue :
+// ce n'est pas elle qui empeche l'oscillation, c'est l'attente de `HOLD_MS` apres chaque decision,
+// pendant laquelle plus rien n'est decide. La rallonger coute cher a la remontee — a quinze
+// secondes, le journal du 6 aout 2026 montre quatre-vingt-quinze secondes pour remonter de 44 a
+// 109 kbit/s sous un plafond de 128, sur un lien qui allait deja tres bien.
 const CALM_MS = 10000;
 
 // Facteur applique a chaque decision de baisse. Une baisse multiplicative rattrape une congestion

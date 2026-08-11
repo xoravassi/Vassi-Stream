@@ -1,0 +1,600 @@
+09:47:55    +0.1s  ETAT     état BUFFERING
+09:47:55    +0.4s  ETAT     état PLAYING
+09:48:00    +4.8s  PAGE     thread principal bloqué pendant 7 s alors que la page était visible : processeur saturé
+09:48:00    +0.0s  RESEAU   débit reçu 18 paquets/s au lieu de 25, 5 kbit/s
+09:48:00    +0.0s  AUDIO    moteur audio RUNNING
+09:48:00    +0.0s  AUDIO    contexte audio en marche
+09:48:00    +0.0s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 400 ms
+09:48:00    +0.0s  AUDIO    tampon 387 ms pour un seuil de 400 ms, vitesse nominale
+09:48:00    +0.0s  VERDICT  ok : rien a signaler
+09:48:00    +0.0s  REPERE   PLAYING, tampon 387/400 ms, 18 paquets/s, 5 kbit/s, comblé 0 ms, manques 0, sauts 0, ébarbages 1, besoin 60 ms, contexte running
+09:48:02    +2.0s  RESEAU   le device a baissé son débit à 130 kbit/s pour un plafond de 256 kbit/s, flux complet à 24 paquets/s
+09:48:05    +2.8s  SETUP    sortie audio : 44100 Hz alors que le moteur impose 48000 Hz — le navigateur rééchantillonne en permanence
+09:48:05    +0.0s  SETUP    latence de base du navigateur : 0.0 ms (profil « playback », tampon large)
+09:48:05    +0.0s  SETUP    moteur audio : commit 6b612bc, copié le 2026-08-10
+09:48:23   +17.8s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+09:48:23    +0.0s  ETAT     état REBUFFERING
+09:48:23    +0.3s  AUDIO    manque de données (+1) : 240 ms en attente pour un seuil de 750 ms
+09:48:23    +0.0s  AUDIO    seuil de bufferisation relevé à 750 ms : besoin estimé 499 ms
+09:48:23    +0.0s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+09:48:23    +0.3s  AUDIO    tampon 560 ms pour un seuil de 750 ms, vitesse nominale
+09:48:23    +0.1s  ETAT     état PLAYING
+09:48:24    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 750 ms
+09:48:28    +4.5s  PAGE     onglet revenu au premier plan après 5 s
+09:48:30    +2.2s  REPERE   PLAYING, tampon 691/700 ms, 25 paquets/s, 258 kbit/s, comblé 0 ms, manques 1, sauts 0, ébarbages 2, besoin 463 ms, contexte running
+09:48:37    +6.5s  AUDIO    tampon 819 ms pour un seuil de 650 ms, vitesse +1142 ppm
+09:48:51   +14.7s  AUDIO    seuil de bufferisation abaissé à 550 ms : besoin estimé 382 ms
+09:49:00    +9.0s  REPERE   PLAYING, tampon 313/500 ms, 24 paquets/s, 250 kbit/s, comblé 0 ms, manques 1, sauts 0, ébarbages 2, besoin 337 ms, contexte running
+09:49:03    +3.0s  ETAT     état REBUFFERING
+09:49:03    +0.1s  AUDIO    manque de données (+1) : 0 ms en attente pour un seuil de 900 ms
+09:49:03    +0.0s  AUDIO    seuil de bufferisation relevé à 900 ms : besoin estimé 604 ms
+09:49:04    +0.3s  AUDIO    tampon 200 ms pour un seuil de 900 ms, vitesse nominale
+09:49:04    +0.3s  AUDIO    tampon 440 ms pour un seuil de 900 ms, vitesse nominale
+09:49:04    +0.3s  AUDIO    tampon 640 ms pour un seuil de 900 ms, vitesse nominale
+09:49:05    +0.3s  AUDIO    tampon 880 ms pour un seuil de 900 ms, vitesse nominale
+09:49:05    +0.1s  ETAT     état PLAYING
+09:49:05    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 900 ms
+09:49:05    +0.3s  RESEAU   le device a baissé son débit à 212 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:49:07    +2.4s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+09:49:08    +0.2s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+09:49:09    +1.4s  PAGE     onglet revenu au premier plan après 1 s
+09:49:09    +0.0s  PAGE     fenêtre revenue au premier plan
+09:49:21   +12.0s  AUDIO    seuil de bufferisation abaissé à 750 ms : besoin estimé 516 ms
+09:49:27    +5.6s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+09:49:27    +0.3s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+09:49:30    +3.2s  ETAT     état REBUFFERING
+09:49:30    +0.2s  AUDIO    manque de données (+1) : 171 ms en attente pour un seuil de 1300 ms
+09:49:30    +0.0s  AUDIO    seuil de bufferisation relevé à 1300 ms : besoin estimé 881 ms
+09:49:31    +0.3s  AUDIO    tampon 451 ms pour un seuil de 1300 ms, vitesse nominale
+09:49:31    +0.0s  REPERE   REBUFFERING, tampon 451/1300 ms, 24 paquets/s, 250 kbit/s, comblé 0 ms, manques 3, sauts 0, ébarbages 3, besoin 880 ms, contexte running
+09:49:31    +0.3s  AUDIO    tampon 731 ms pour un seuil de 1300 ms, vitesse nominale
+09:49:31    +0.5s  AUDIO    tampon 1211 ms pour un seuil de 1300 ms, vitesse nominale
+09:49:32    +0.1s  ETAT     état PLAYING
+09:49:32    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 1300 ms
+09:49:50   +18.4s  AUDIO    seuil de bufferisation abaissé à 1150 ms : besoin estimé 783 ms
+09:49:52    +1.7s  PAGE     onglet revenu au premier plan après 25 s
+09:49:52    +0.1s  PAGE     fenêtre revenue au premier plan
+09:50:01    +9.0s  REPERE   PLAYING, tampon 301/1100 ms, 25 paquets/s, 264 kbit/s, comblé 0 ms, manques 3, sauts 0, ébarbages 4, besoin 729 ms, contexte running
+09:50:17   +16.0s  AUDIO    seuil de bufferisation abaissé à 950 ms : besoin estimé 649 ms
+09:50:31   +14.0s  REPERE   PLAYING, tampon 327/850 ms, 25 paquets/s, 266 kbit/s, comblé 0 ms, manques 3, sauts 0, ébarbages 4, besoin 579 ms, contexte running
+09:50:43   +12.5s  AUDIO    seuil de bufferisation abaissé à 750 ms : besoin estimé 516 ms
+09:50:49    +5.3s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+09:50:49    +0.1s  ETAT     état REBUFFERING
+09:50:49    +0.1s  AUDIO    manque de données (+1) : 101 ms en attente pour un seuil de 1400 ms
+09:50:49    +0.0s  AUDIO    seuil de bufferisation relevé à 1400 ms : besoin estimé 918 ms
+09:50:49    +0.1s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+09:50:49    +0.2s  AUDIO    seuil de bufferisation abaissé à 1350 ms : besoin estimé 916 ms
+09:50:49    +0.0s  AUDIO    tampon 341 ms pour un seuil de 1350 ms, vitesse nominale
+09:50:49    +0.3s  AUDIO    tampon 661 ms pour un seuil de 1350 ms, vitesse nominale
+09:50:50    +0.3s  AUDIO    tampon 861 ms pour un seuil de 1350 ms, vitesse nominale
+09:50:50    +0.2s  AUDIO    tampon 1101 ms pour un seuil de 1350 ms, vitesse nominale
+09:50:50    +0.3s  ETAT     état PLAYING
+09:50:50    +0.0s  AUDIO    tampon 1381 ms pour un seuil de 1350 ms, vitesse nominale
+09:50:50    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 1350 ms
+09:51:01   +10.5s  REPERE   PLAYING, tampon 965/1300 ms, 24 paquets/s, 246 kbit/s, comblé 0 ms, manques 4, sauts 0, ébarbages 5, besoin 857 ms, contexte running
+09:51:04    +3.4s  RESEAU   le device a baissé son débit à 194 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+09:51:07    +2.9s  ETAT     état REBUFFERING
+09:51:07    +0.0s  AUDIO    manque de données (+1) : 37 ms en attente pour un seuil de 2000 ms
+09:51:07    +0.0s  AUDIO    seuil de bufferisation relevé à 2000 ms : besoin estimé 1548 ms
+09:51:07    +0.3s  AUDIO    tampon 269 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:08    +0.3s  AUDIO    tampon 549 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:08    +0.3s  AUDIO    tampon 789 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:08    +0.3s  AUDIO    tampon 1029 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:08    +0.3s  AUDIO    tampon 1269 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:09    +0.3s  AUDIO    tampon 1549 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:09    +0.3s  AUDIO    tampon 1789 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:09    +0.3s  AUDIO    tampon 1989 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:09    +0.1s  ETAT     état PLAYING
+09:51:10    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:51:29   +19.7s  RESEAU   le device a baissé son débit à 214 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:51:29    +0.3s  ETAT     état REBUFFERING
+09:51:30    +0.2s  AUDIO    manque de données (+1) : 200 ms en attente pour un seuil de 2000 ms
+09:51:30    +0.3s  AUDIO    tampon 480 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:30    +0.3s  AUDIO    tampon 680 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:31    +0.3s  AUDIO    tampon 880 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:31    +0.3s  AUDIO    tampon 1120 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:31    +0.2s  REPERE   REBUFFERING, tampon 1280/2000 ms, 20 paquets/s, 214 kbit/s, comblé 0 ms, manques 6, sauts 0, ébarbages 6, besoin 1992 ms, contexte running
+09:51:31    +0.3s  AUDIO    tampon 1560 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:32    +0.3s  AUDIO    tampon 1760 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:32    +0.2s  ETAT     état PLAYING
+09:51:32    +0.0s  AUDIO    tampon 2000 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:32    +0.1s  PAGE     onglet revenu au premier plan après 43 s
+09:51:32    +0.0s  PAGE     fenêtre revenue au premier plan
+09:51:32    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:51:33    +1.3s  RESEAU   le device a baissé son débit à 202 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+09:51:35    +2.0s  RESEAU   le device a baissé son débit à 207 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:51:47   +11.6s  ETAT     état REBUFFERING
+09:51:47    +0.2s  AUDIO    manque de données (+1) : 240 ms en attente pour un seuil de 2000 ms
+09:51:47    +0.0s  AUDIO    tampon 240 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:47    +0.3s  AUDIO    tampon 480 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:48    +0.3s  AUDIO    tampon 760 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:48    +0.3s  AUDIO    tampon 1000 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:49    +0.5s  AUDIO    tampon 1400 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:49    +0.3s  AUDIO    tampon 1640 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:49    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+09:51:49    +0.1s  ETAT     état PLAYING
+09:51:52    +2.7s  RESEAU   le device a baissé son débit à 206 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:51:55    +3.0s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+09:51:55    +0.2s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+09:51:58    +2.9s  RESEAU   débit reçu 18 paquets/s au lieu de 25, 184 kbit/s
+09:52:00    +1.6s  ETAT     état REBUFFERING
+09:52:00    +0.1s  AUDIO    manque de données (+1) : 72 ms en attente pour un seuil de 2000 ms
+09:52:00    +0.3s  RESEAU   débit reçu 18 paquets/s au lieu de 25, 187 kbit/s
+09:52:00    +0.0s  AUDIO    tampon 272 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:00    +0.3s  AUDIO    tampon 512 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:00    +0.3s  AUDIO    tampon 792 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:01    +0.3s  AUDIO    tampon 992 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:01    +0.3s  AUDIO    tampon 1272 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:01    +0.2s  AUDIO    tampon 1512 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:01    +0.0s  REPERE   REBUFFERING, tampon 1512/2000 ms, 18 paquets/s, 187 kbit/s, comblé 0 ms, manques 8, sauts 0, ébarbages 7, besoin 1992 ms, contexte running
+09:52:01    +0.3s  AUDIO    tampon 1792 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:02    +0.3s  ETAT     état PLAYING
+09:52:02    +0.0s  AUDIO    tampon 2072 ms pour un seuil de 2000 ms, vitesse nominale
+09:52:02    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:52:31   +29.4s  REPERE   PLAYING, tampon 1997/2000 ms, 26 paquets/s, 268 kbit/s, comblé 0 ms, manques 8, sauts 0, ébarbages 8, besoin 1841 ms, contexte running
+09:52:55   +23.7s  RESEAU   le device a baissé son débit à 188 kbit/s pour un plafond de 256 kbit/s, flux complet à 18 paquets/s
+09:52:57    +2.1s  RESEAU   le device a baissé son débit à 207 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:52:59    +2.4s  ETAT     état REBUFFERING
+09:53:00    +0.2s  AUDIO    manque de données (+1) : 120 ms en attente pour un seuil de 2000 ms
+09:53:00    +0.8s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:01    +0.2s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:01    +0.3s  AUDIO    tampon 1080 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:01    +0.3s  RESEAU   le device a baissé son débit à 202 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+09:53:01    +0.0s  AUDIO    tampon 1320 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:01    +0.3s  AUDIO    tampon 1600 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:01    +0.0s  REPERE   REBUFFERING, tampon 1600/2000 ms, 19 paquets/s, 202 kbit/s, comblé 0 ms, manques 9, sauts 0, ébarbages 8, besoin 1990 ms, contexte running
+09:53:02    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+09:53:02    +0.1s  ETAT     état PLAYING
+09:53:02    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:53:31   +29.5s  REPERE   PLAYING, tampon 1669/2000 ms, 25 paquets/s, 259 kbit/s, comblé 0 ms, manques 9, sauts 0, ébarbages 9, besoin 1840 ms, contexte running
+09:54:02   +30.1s  REPERE   PLAYING, tampon 794/2000 ms, 23 paquets/s, 236 kbit/s, comblé 0 ms, manques 9, sauts 0, ébarbages 9, besoin 1690 ms, contexte running
+09:54:32   +30.2s  REPERE   PLAYING, tampon 214/2000 ms, 25 paquets/s, 261 kbit/s, comblé 0 ms, manques 9, sauts 0, ébarbages 9, besoin 1539 ms, contexte running
+09:54:39    +7.1s  ETAT     état REBUFFERING
+09:54:39    +0.0s  AUDIO    manque de données (+1) : 13 ms en attente pour un seuil de 2000 ms
+09:54:39    +0.3s  AUDIO    tampon 251 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:39    +0.3s  AUDIO    tampon 491 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:40    +0.3s  AUDIO    tampon 811 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:40    +0.3s  AUDIO    tampon 1051 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:40    +0.3s  AUDIO    tampon 1291 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:41    +0.3s  AUDIO    tampon 1571 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:41    +0.3s  AUDIO    tampon 1811 ms pour un seuil de 2000 ms, vitesse nominale
+09:54:41    +0.1s  ETAT     état PLAYING
+09:54:41    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:55:02   +20.8s  REPERE   PLAYING, tampon 1701/2000 ms, 25 paquets/s, 259 kbit/s, comblé 0 ms, manques 10, sauts 0, ébarbages 10, besoin 1885 ms, contexte running
+09:55:32   +30.2s  REPERE   PLAYING, tampon 912/2000 ms, 24 paquets/s, 252 kbit/s, comblé 0 ms, manques 10, sauts 0, ébarbages 10, besoin 1734 ms, contexte running
+09:55:53   +21.1s  ETAT     état REBUFFERING
+09:55:53    +0.1s  AUDIO    manque de données (+1) : 13 ms en attente pour un seuil de 2000 ms
+09:55:54    +0.3s  AUDIO    tampon 291 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:54    +0.3s  AUDIO    tampon 491 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:54    +0.3s  AUDIO    tampon 731 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:54    +0.3s  AUDIO    tampon 1011 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:55    +0.5s  AUDIO    tampon 1411 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:55    +0.3s  AUDIO    tampon 1651 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:55    +0.2s  AUDIO    tampon 1891 ms pour un seuil de 2000 ms, vitesse nominale
+09:55:55    +0.1s  ETAT     état PLAYING
+09:55:56    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:56:02    +6.7s  REPERE   PLAYING, tampon 1533/2000 ms, 23 paquets/s, 241 kbit/s, comblé 0 ms, manques 11, sauts 0, ébarbages 11, besoin 1955 ms, contexte running
+09:56:32   +30.2s  REPERE   PLAYING, tampon 1225/2000 ms, 25 paquets/s, 256 kbit/s, comblé 0 ms, manques 11, sauts 0, ébarbages 11, besoin 1804 ms, contexte running
+09:57:03   +30.1s  REPERE   PLAYING, tampon 1221/2000 ms, 25 paquets/s, 265 kbit/s, comblé 0 ms, manques 11, sauts 0, ébarbages 11, besoin 1653 ms, contexte running
+09:57:33   +30.2s  REPERE   PLAYING, tampon 1020/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 11, sauts 0, ébarbages 11, besoin 1502 ms, contexte running
+09:58:00   +27.0s  ETAT     état REBUFFERING
+09:58:00    +0.1s  AUDIO    manque de données (+1) : 80 ms en attente pour un seuil de 2000 ms
+09:58:00    +0.2s  AUDIO    tampon 320 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:00    +0.3s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:01    +0.5s  AUDIO    tampon 1080 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:01    +0.3s  AUDIO    tampon 1280 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:01    +0.3s  AUDIO    tampon 1520 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:02    +0.2s  AUDIO    tampon 1800 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:02    +0.2s  ETAT     état PLAYING
+09:58:02    +0.1s  AUDIO    tampon 2003 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:03    +1.0s  REPERE   PLAYING, tampon 1979/2000 ms, 24 paquets/s, 255 kbit/s, comblé 0 ms, manques 12, sauts 0, ébarbages 11, besoin 1984 ms, contexte running
+09:58:27   +24.3s  ETAT     état REBUFFERING
+09:58:27    +0.2s  AUDIO    manque de données (+1) : 149 ms en attente pour un seuil de 2000 ms
+09:58:28    +0.3s  AUDIO    tampon 389 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:28    +0.3s  AUDIO    tampon 629 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:28    +0.3s  AUDIO    tampon 909 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:28    +0.3s  AUDIO    tampon 1189 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:29    +0.3s  AUDIO    tampon 1389 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:29    +0.2s  AUDIO    tampon 1629 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:29    +0.3s  AUDIO    tampon 1909 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:29    +0.1s  ETAT     état PLAYING
+09:58:29    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:58:33    +3.5s  REPERE   PLAYING, tampon 1859/2000 ms, 24 paquets/s, 252 kbit/s, comblé 0 ms, manques 13, sauts 0, ébarbages 12, besoin 1971 ms, contexte running
+09:58:43    +9.7s  RESEAU   le device a baissé son débit à 206 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:58:45    +2.0s  RESEAU   débit reçu 16 paquets/s au lieu de 25, 163 kbit/s
+09:58:45    +0.6s  ETAT     état REBUFFERING
+09:58:45    +0.2s  AUDIO    manque de données (+1) : 120 ms en attente pour un seuil de 2000 ms
+09:58:46    +0.3s  AUDIO    tampon 320 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:46    +0.5s  AUDIO    tampon 680 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:46    +0.3s  AUDIO    tampon 880 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:47    +0.3s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 175 kbit/s
+09:58:48    +1.5s  AUDIO    tampon 1880 ms pour un seuil de 2000 ms, vitesse nominale
+09:58:48    +0.1s  ETAT     état PLAYING
+09:58:49    +0.4s  RESEAU   débit reçu 16 paquets/s au lieu de 25, 166 kbit/s
+09:58:51    +2.1s  RESEAU   débit reçu 15 paquets/s au lieu de 25, 162 kbit/s
+09:58:53    +2.0s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 175 kbit/s
+09:59:03   +10.3s  REPERE   PLAYING, tampon 348/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 14, sauts 0, ébarbages 12, besoin 1911 ms, contexte running
+09:59:33   +30.3s  REPERE   PLAYING, tampon 211/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 14, sauts 0, ébarbages 12, besoin 1760 ms, contexte running
+09:59:44   +10.5s  AUDIO    tampon 59 ms pour un seuil de 2000 ms, vitesse -5000 ppm
+09:59:45    +0.7s  ETAT     état REBUFFERING
+09:59:45    +0.3s  RESEAU   le device a baissé son débit à 213 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+09:59:45    +0.0s  AUDIO    manque de données (+1) : 0 ms en attente pour un seuil de 2000 ms
+09:59:45    +0.4s  AUDIO    tampon 1500 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:45    +0.3s  AUDIO    tampon 1780 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:46    +0.2s  ETAT     état PLAYING
+09:59:46    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+09:59:46    +0.0s  AUDIO    tampon 2040 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:48    +2.2s  VERDICT  audio : le thread audio ne rend plus la main depuis 0.7 s
+09:59:49    +1.2s  ETAT     état REBUFFERING
+09:59:49    +0.1s  AUDIO    manque de données (+1) : 80 ms en attente pour un seuil de 2000 ms
+09:59:49    +0.0s  AUDIO    tampon 80 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:49    +0.0s  VERDICT  ok : rien a signaler
+09:59:49    +0.3s  AUDIO    tampon 320 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:50    +0.3s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:50    +0.2s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:50    +0.3s  AUDIO    tampon 1160 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:51    +0.3s  AUDIO    tampon 1400 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:51    +0.3s  AUDIO    tampon 1640 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:51    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+09:59:51    +0.1s  ETAT     état PLAYING
+10:00:04   +12.4s  REPERE   PLAYING, tampon 1829/2000 ms, 24 paquets/s, 252 kbit/s, comblé 0 ms, manques 16, sauts 0, ébarbages 13, besoin 1928 ms, contexte running
+10:00:26   +22.1s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 176 kbit/s
+10:00:26    +0.4s  ETAT     état REBUFFERING
+10:00:26    +0.1s  AUDIO    manque de données (+1) : 141 ms en attente pour un seuil de 2000 ms
+10:00:27    +0.5s  AUDIO    tampon 501 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:27    +0.3s  AUDIO    tampon 741 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:27    +0.3s  AUDIO    tampon 981 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:27    +0.3s  AUDIO    tampon 1181 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:28    +0.3s  AUDIO    tampon 1421 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:28    +0.2s  AUDIO    tampon 1661 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:28    +0.3s  AUDIO    tampon 1861 ms pour un seuil de 2000 ms, vitesse nominale
+10:00:28    +0.1s  ETAT     état PLAYING
+10:00:28    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:00:34    +5.1s  REPERE   PLAYING, tampon 1752/2000 ms, 23 paquets/s, 245 kbit/s, comblé 0 ms, manques 17, sauts 0, ébarbages 14, besoin 1963 ms, contexte running
+10:00:48   +14.5s  RESEAU   le device a baissé son débit à 214 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:01:04   +15.6s  REPERE   PLAYING, tampon 221/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 17, sauts 0, ébarbages 14, besoin 1812 ms, contexte running
+10:01:34   +30.2s  REPERE   PLAYING, tampon 327/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 17, sauts 0, ébarbages 14, besoin 1661 ms, contexte running
+10:02:04   +30.2s  REPERE   PLAYING, tampon 30/2000 ms, 25 paquets/s, 265 kbit/s, comblé 0 ms, manques 17, sauts 0, ébarbages 14, besoin 1510 ms, contexte running
+10:02:04    +0.0s  ETAT     état REBUFFERING
+10:02:04    +0.2s  AUDIO    manque de données (+1) : 240 ms en attente pour un seuil de 2000 ms
+10:02:04    +0.0s  AUDIO    tampon 240 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:05    +0.3s  AUDIO    tampon 520 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:05    +0.3s  AUDIO    tampon 760 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:05    +0.3s  AUDIO    tampon 1080 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:05    +0.3s  AUDIO    tampon 1320 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:06    +0.3s  AUDIO    tampon 1560 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:06    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+10:02:06    +0.1s  ETAT     état PLAYING
+10:02:34   +28.3s  REPERE   PLAYING, tampon 1562/2000 ms, 25 paquets/s, 261 kbit/s, comblé 0 ms, manques 18, sauts 0, ébarbages 14, besoin 1849 ms, contexte running
+10:03:05   +30.2s  REPERE   PLAYING, tampon 1024/2000 ms, 25 paquets/s, 258 kbit/s, comblé 0 ms, manques 18, sauts 0, ébarbages 14, besoin 1698 ms, contexte running
+10:03:35   +30.2s  REPERE   PLAYING, tampon 669/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 18, sauts 0, ébarbages 14, besoin 1547 ms, contexte running
+10:03:59   +24.1s  ETAT     état REBUFFERING
+10:03:59    +0.1s  AUDIO    manque de données (+1) : 48 ms en attente pour un seuil de 2000 ms
+10:03:59    +0.3s  AUDIO    tampon 248 ms pour un seuil de 2000 ms, vitesse nominale
+10:03:59    +0.3s  AUDIO    tampon 448 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:00    +0.6s  AUDIO    tampon 848 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:00    +0.2s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:04:00    +0.0s  AUDIO    tampon 1128 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:01    +0.3s  AUDIO    tampon 1368 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:01    +0.3s  AUDIO    tampon 1568 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:01    +0.3s  AUDIO    tampon 1808 ms pour un seuil de 2000 ms, vitesse nominale
+10:04:01    +0.2s  ETAT     état PLAYING
+10:04:01    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:04:05    +3.6s  REPERE   PLAYING, tampon 1901/2000 ms, 25 paquets/s, 261 kbit/s, comblé 0 ms, manques 19, sauts 0, ébarbages 15, besoin 1971 ms, contexte running
+10:04:17   +11.7s  RESEAU   le device a baissé son débit à 213 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:04:35   +18.4s  REPERE   PLAYING, tampon 997/2000 ms, 25 paquets/s, 257 kbit/s, comblé 0 ms, manques 19, sauts 0, ébarbages 15, besoin 1820 ms, contexte running
+10:05:05   +30.1s  REPERE   PLAYING, tampon 298/2000 ms, 24 paquets/s, 252 kbit/s, comblé 0 ms, manques 19, sauts 0, ébarbages 15, besoin 1670 ms, contexte running
+10:05:35   +30.3s  REPERE   PLAYING, tampon 358/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 19, sauts 0, ébarbages 15, besoin 1519 ms, contexte running
+10:06:05   +30.2s  REPERE   PLAYING, tampon 104/2000 ms, 24 paquets/s, 250 kbit/s, comblé 0 ms, manques 19, sauts 0, ébarbages 15, besoin 1368 ms, contexte running
+10:06:16   +10.3s  AUDIO    seuil de bufferisation abaissé à 1950 ms : besoin estimé 1316 ms
+10:06:18    +2.1s  ETAT     état REBUFFERING
+10:06:18    +0.0s  AUDIO    manque de données (+1) : 0 ms en attente pour un seuil de 2000 ms
+10:06:18    +0.0s  AUDIO    seuil de bufferisation relevé à 2000 ms : besoin estimé 2000 ms
+10:06:18    +0.4s  AUDIO    manque de données (+1) : 440 ms en attente pour un seuil de 2000 ms
+10:06:18    +0.0s  AUDIO    tampon 440 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:18    +0.2s  PAGE     onglet revenu au premier plan après 14 min 23 s
+10:06:18    +0.0s  PAGE     fenêtre revenue au premier plan
+10:06:19    +0.3s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:19    +0.3s  AUDIO    tampon 1160 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:19    +0.3s  AUDIO    tampon 1440 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:19    +0.3s  AUDIO    tampon 1680 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:20    +0.3s  AUDIO    tampon 1880 ms pour un seuil de 2000 ms, vitesse nominale
+10:06:20    +0.3s  PAGE     fenêtre au second plan, onglet toujours visible : aucun ralentissement
+10:06:20    +0.1s  ETAT     état PLAYING
+10:06:20    +0.3s  PAGE     onglet caché : le son continue, mais le navigateur ralentit les minuteurs de la page
+10:06:20    +0.0s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:06:35   +15.0s  REPERE   PLAYING, tampon 1696/2000 ms, 25 paquets/s, 257 kbit/s, comblé 0 ms, manques 21, sauts 0, ébarbages 16, besoin 1912 ms, contexte running
+10:07:05   +29.3s  ETAT     état REBUFFERING
+10:07:05    +0.1s  AUDIO    manque de données (+1) : 80 ms en attente pour un seuil de 2000 ms
+10:07:05    +0.3s  AUDIO    tampon 280 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:05    +0.2s  AUDIO    tampon 480 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:06    +0.3s  AUDIO    tampon 680 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:06    +0.0s  REPERE   REBUFFERING, tampon 680/2000 ms, 21 paquets/s, 223 kbit/s, comblé 0 ms, manques 22, sauts 0, ébarbages 16, besoin 1996 ms, contexte running
+10:07:06    +0.5s  RESEAU   le device a baissé son débit à 200 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+10:07:06    +0.0s  AUDIO    tampon 1040 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:06    +0.3s  AUDIO    tampon 1280 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:07    +0.3s  AUDIO    tampon 1480 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:07    +0.7s  ETAT     état PLAYING
+10:07:07    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:07:08    +0.8s  RESEAU   le device a baissé son débit à 214 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:07:27   +18.4s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:07:33    +6.5s  ETAT     état REBUFFERING
+10:07:33    +0.1s  AUDIO    manque de données (+1) : 160 ms en attente pour un seuil de 2000 ms
+10:07:33    +0.3s  AUDIO    tampon 400 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:34    +0.3s  AUDIO    tampon 640 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:34    +0.3s  AUDIO    tampon 880 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:34    +0.3s  AUDIO    tampon 1120 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:34    +0.3s  AUDIO    tampon 1360 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:35    +0.3s  AUDIO    tampon 1600 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:35    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+10:07:35    +0.1s  ETAT     état PLAYING
+10:07:35    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:07:36    +0.5s  REPERE   PLAYING, tampon 2003/2000 ms, 24 paquets/s, 249 kbit/s, comblé 0 ms, manques 23, sauts 0, ébarbages 18, besoin 1987 ms, contexte running
+10:08:06   +30.0s  REPERE   PLAYING, tampon 1725/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 23, sauts 0, ébarbages 18, besoin 1837 ms, contexte running
+10:08:34   +28.0s  RESEAU   le device a baissé son débit à 207 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:08:36    +2.0s  REPERE   PLAYING, tampon 1143/2000 ms, 24 paquets/s, 250 kbit/s, comblé 0 ms, manques 23, sauts 0, ébarbages 18, besoin 1686 ms, contexte running
+10:08:40    +4.1s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:08:46    +6.5s  ETAT     état REBUFFERING
+10:08:46    +0.1s  AUDIO    manque de données (+1) : 91 ms en attente pour un seuil de 2000 ms
+10:08:47    +0.3s  AUDIO    tampon 411 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:47    +0.2s  AUDIO    tampon 611 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:47    +0.3s  AUDIO    tampon 851 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:48    +0.3s  AUDIO    tampon 1131 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:48    +0.2s  AUDIO    tampon 1411 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:48    +0.3s  AUDIO    tampon 1611 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:48    +0.3s  AUDIO    tampon 1891 ms pour un seuil de 2000 ms, vitesse nominale
+10:08:48    +0.1s  ETAT     état PLAYING
+10:08:48    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:09:04   +15.8s  RESEAU   le device a baissé son débit à 188 kbit/s pour un plafond de 256 kbit/s, flux complet à 18 paquets/s
+10:09:06    +1.5s  REPERE   PLAYING, tampon 458/2000 ms, 18 paquets/s, 188 kbit/s, comblé 0 ms, manques 24, sauts 0, ébarbages 19, besoin 1902 ms, contexte running
+10:09:10    +3.7s  ETAT     état REBUFFERING
+10:09:10    +0.1s  AUDIO    manque de données (+1) : 131 ms en attente pour un seuil de 2000 ms
+10:09:10    +0.3s  AUDIO    tampon 371 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:10    +0.2s  AUDIO    tampon 571 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:10    +0.3s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:09:10    +0.0s  AUDIO    tampon 771 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:11    +0.3s  AUDIO    tampon 1051 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:11    +0.3s  AUDIO    tampon 1251 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:11    +0.3s  AUDIO    tampon 1531 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:11    +0.3s  AUDIO    tampon 1771 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:12    +0.2s  ETAT     état PLAYING
+10:09:12    +0.0s  AUDIO    tampon 2011 ms pour un seuil de 2000 ms, vitesse nominale
+10:09:12    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:09:36   +24.1s  REPERE   PLAYING, tampon 1494/2000 ms, 25 paquets/s, 263 kbit/s, comblé 0 ms, manques 25, sauts 0, ébarbages 20, besoin 1867 ms, contexte running
+10:10:06   +30.1s  REPERE   PLAYING, tampon 1486/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 25, sauts 0, ébarbages 20, besoin 1717 ms, contexte running
+10:10:36   +30.1s  REPERE   PLAYING, tampon 1163/2000 ms, 22 paquets/s, 233 kbit/s, comblé 0 ms, manques 25, sauts 0, ébarbages 20, besoin 1566 ms, contexte running
+10:11:06   +30.1s  REPERE   PLAYING, tampon 477/2000 ms, 24 paquets/s, 250 kbit/s, comblé 0 ms, manques 25, sauts 0, ébarbages 20, besoin 1416 ms, contexte running
+10:11:11    +4.9s  ETAT     état REBUFFERING
+10:11:11    +0.1s  AUDIO    manque de données (+1) : 120 ms en attente pour un seuil de 2000 ms
+10:11:12    +0.3s  AUDIO    tampon 360 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:12    +0.2s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:12    +0.3s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:12    +0.3s  AUDIO    tampon 1080 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:13    +0.3s  AUDIO    tampon 1320 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:13    +0.3s  AUDIO    tampon 1560 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:13    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+10:11:13    +0.2s  ETAT     état PLAYING
+10:11:13    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:11:37   +23.1s  REPERE   PLAYING, tampon 1223/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 26, sauts 0, ébarbages 21, besoin 1874 ms, contexte running
+10:12:07   +30.1s  REPERE   PLAYING, tampon 997/2000 ms, 25 paquets/s, 257 kbit/s, comblé 0 ms, manques 26, sauts 0, ébarbages 21, besoin 1724 ms, contexte running
+10:12:37   +30.1s  REPERE   PLAYING, tampon 407/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 26, sauts 0, ébarbages 21, besoin 1573 ms, contexte running
+10:13:07   +30.1s  REPERE   PLAYING, tampon 118/2000 ms, 24 paquets/s, 256 kbit/s, comblé 0 ms, manques 26, sauts 0, ébarbages 21, besoin 1423 ms, contexte running
+10:13:19   +12.0s  ETAT     état REBUFFERING
+10:13:19    +0.2s  AUDIO    manque de données (+1) : 221 ms en attente pour un seuil de 2000 ms
+10:13:19    +0.3s  AUDIO    tampon 461 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:19    +0.3s  AUDIO    tampon 741 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:20    +0.3s  AUDIO    tampon 1021 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:20    +0.2s  AUDIO    tampon 1221 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:20    +0.3s  AUDIO    tampon 1501 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:21    +0.3s  AUDIO    tampon 1741 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:21    +0.3s  AUDIO    tampon 1981 ms pour un seuil de 2000 ms, vitesse nominale
+10:13:21    +0.0s  ETAT     état PLAYING
+10:13:21    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:13:37   +15.8s  REPERE   PLAYING, tampon 1292/2000 ms, 25 paquets/s, 258 kbit/s, comblé 0 ms, manques 27, sauts 0, ébarbages 22, besoin 1910 ms, contexte running
+10:14:07   +30.2s  REPERE   PLAYING, tampon 944/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 27, sauts 0, ébarbages 22, besoin 1759 ms, contexte running
+10:14:37   +30.1s  REPERE   PLAYING, tampon 1007/2000 ms, 25 paquets/s, 259 kbit/s, comblé 0 ms, manques 27, sauts 0, ébarbages 22, besoin 1608 ms, contexte running
+10:15:07   +30.0s  REPERE   PLAYING, tampon 919/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 27, sauts 0, ébarbages 22, besoin 1458 ms, contexte running
+10:15:36   +28.4s  AUDIO    seuil de bufferisation abaissé à 1950 ms : besoin estimé 1316 ms
+10:15:37    +1.8s  REPERE   PLAYING, tampon 367/1950 ms, 24 paquets/s, 254 kbit/s, comblé 0 ms, manques 27, sauts 0, ébarbages 22, besoin 1307 ms, contexte running
+10:15:46    +8.1s  ETAT     état REBUFFERING
+10:15:46    +0.2s  AUDIO    manque de données (+1) : 219 ms en attente pour un seuil de 2000 ms
+10:15:46    +0.0s  AUDIO    seuil de bufferisation relevé à 2000 ms : besoin estimé 1999 ms
+10:15:46    +0.2s  AUDIO    tampon 459 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:47    +0.5s  AUDIO    tampon 899 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:47    +0.3s  AUDIO    tampon 1139 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:47    +0.3s  AUDIO    tampon 1379 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:47    +0.3s  AUDIO    tampon 1579 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:48    +0.2s  AUDIO    tampon 1819 ms pour un seuil de 2000 ms, vitesse nominale
+10:15:48    +0.2s  ETAT     état PLAYING
+10:15:48    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:16:07   +19.7s  REPERE   PLAYING, tampon 1348/2000 ms, 25 paquets/s, 258 kbit/s, comblé 0 ms, manques 28, sauts 0, ébarbages 23, besoin 1890 ms, contexte running
+10:16:37   +30.0s  REPERE   PLAYING, tampon 1295/2000 ms, 24 paquets/s, 256 kbit/s, comblé 0 ms, manques 28, sauts 0, ébarbages 23, besoin 1740 ms, contexte running
+10:17:08   +30.0s  REPERE   PLAYING, tampon 1098/2000 ms, 25 paquets/s, 257 kbit/s, comblé 0 ms, manques 28, sauts 0, ébarbages 23, besoin 1590 ms, contexte running
+10:17:38   +30.2s  REPERE   PLAYING, tampon 409/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 28, sauts 0, ébarbages 23, besoin 1439 ms, contexte running
+10:17:42    +4.6s  ETAT     état REBUFFERING
+10:17:42    +0.1s  AUDIO    manque de données (+1) : 112 ms en attente pour un seuil de 2000 ms
+10:17:43    +0.5s  AUDIO    tampon 512 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:43    +0.3s  AUDIO    tampon 712 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:43    +0.3s  AUDIO    tampon 1032 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:44    +0.3s  AUDIO    tampon 1232 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:44    +0.8s  RESEAU   le device a baissé son débit à 214 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:17:44    +0.0s  AUDIO    tampon 1752 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:45    +0.2s  ETAT     état PLAYING
+10:17:45    +0.0s  AUDIO    tampon 2032 ms pour un seuil de 2000 ms, vitesse nominale
+10:17:45    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:17:46    +1.6s  RESEAU   le device a baissé son débit à 218 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s  (x2 sur 2.1 s)
+10:18:08   +21.4s  REPERE   PLAYING, tampon 39/2000 ms, 22 paquets/s, 231 kbit/s, comblé 0 ms, manques 29, sauts 0, ébarbages 24, besoin 1872 ms, contexte running
+10:18:08    +0.1s  ETAT     état REBUFFERING
+10:18:08    +0.1s  AUDIO    manque de données (+1) : 200 ms en attente pour un seuil de 2000 ms
+10:18:08    +0.3s  AUDIO    tampon 480 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:09    +0.3s  AUDIO    tampon 760 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:09    +0.3s  AUDIO    tampon 960 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:09    +0.2s  AUDIO    tampon 1200 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:09    +0.3s  AUDIO    tampon 1440 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:10    +0.2s  AUDIO    tampon 1680 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:10    +0.3s  AUDIO    tampon 1920 ms pour un seuil de 2000 ms, vitesse nominale
+10:18:10    +0.1s  ETAT     état PLAYING
+10:18:10    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:18:38   +27.8s  REPERE   PLAYING, tampon 1973/2000 ms, 25 paquets/s, 266 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1850 ms, contexte running
+10:19:08   +30.1s  REPERE   PLAYING, tampon 1813/2000 ms, 24 paquets/s, 252 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1700 ms, contexte running
+10:19:38   +30.1s  REPERE   PLAYING, tampon 1578/2000 ms, 25 paquets/s, 257 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1549 ms, contexte running
+10:20:08   +30.1s  REPERE   PLAYING, tampon 533/2000 ms, 22 paquets/s, 231 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1399 ms, contexte running
+10:20:24   +15.9s  PAGE     onglet revenu au premier plan après 14 min 04 s
+10:20:24    +0.1s  PAGE     fenêtre revenue au premier plan
+10:20:25    +0.7s  AUDIO    seuil de bufferisation abaissé à 1950 ms : besoin estimé 1316 ms
+10:20:38   +13.4s  REPERE   PLAYING, tampon 606/1850 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1249 ms, contexte running
+10:20:51   +13.1s  AUDIO    seuil de bufferisation abaissé à 1750 ms : besoin estimé 1183 ms
+10:21:08   +16.9s  REPERE   PLAYING, tampon 711/1650 ms, 25 paquets/s, 258 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 1099 ms, contexte running
+10:21:18    +9.7s  AUDIO    seuil de bufferisation abaissé à 1550 ms : besoin estimé 1050 ms
+10:21:38   +20.5s  REPERE   PLAYING, tampon 230/1400 ms, 21 paquets/s, 224 kbit/s, comblé 0 ms, manques 30, sauts 0, ébarbages 25, besoin 948 ms, contexte running
+10:21:45    +6.4s  AUDIO    seuil de bufferisation abaissé à 1350 ms : besoin estimé 916 ms
+10:21:46    +1.1s  ETAT     état REBUFFERING
+10:21:46    +0.1s  AUDIO    manque de données (+1) : 120 ms en attente pour un seuil de 2000 ms
+10:21:46    +0.0s  AUDIO    seuil de bufferisation relevé à 2000 ms : besoin estimé 1706 ms
+10:21:46    +0.3s  AUDIO    tampon 360 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:47    +0.3s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:47    +0.3s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:47    +0.3s  AUDIO    tampon 1040 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:47    +0.3s  AUDIO    tampon 1280 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:48    +0.3s  AUDIO    tampon 1480 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:48    +0.5s  AUDIO    tampon 1880 ms pour un seuil de 2000 ms, vitesse nominale
+10:21:48    +0.1s  ETAT     état PLAYING
+10:22:06   +17.8s  RESEAU   le device a baissé son débit à 202 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+10:22:07    +1.4s  ETAT     état REBUFFERING
+10:22:07    +0.2s  AUDIO    manque de données (+1) : 109 ms en attente pour un seuil de 2000 ms
+10:22:08    +0.5s  RESEAU   débit reçu 14 paquets/s au lieu de 25, 144 kbit/s
+10:22:08    +0.5s  REPERE   REBUFFERING, tampon 549/2000 ms, 14 paquets/s, 144 kbit/s, comblé 0 ms, manques 32, sauts 0, ébarbages 25, besoin 1994 ms, contexte running
+10:22:10    +1.6s  RESEAU   débit reçu 10 paquets/s au lieu de 25, 105 kbit/s
+10:22:11    +1.3s  AUDIO    tampon 1909 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:11    +0.1s  ETAT     état PLAYING
+10:22:12    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:22:12    +0.5s  RESEAU   débit reçu 16 paquets/s au lieu de 25, 167 kbit/s
+10:22:20    +8.2s  RESEAU   le device a baissé son débit à 204 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:22:26    +5.3s  ETAT     état REBUFFERING
+10:22:26    +0.0s  AUDIO    manque de données (+1) : 6 ms en attente pour un seuil de 2000 ms
+10:22:26    +0.8s  RESEAU   le device a baissé son débit à 207 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:22:26    +0.0s  AUDIO    tampon 520 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:27    +0.3s  AUDIO    tampon 760 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:27    +0.3s  AUDIO    tampon 1040 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:27    +0.3s  AUDIO    tampon 1280 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:27    +0.3s  AUDIO    tampon 1480 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:28    +0.3s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+10:22:28    +0.2s  ETAT     état PLAYING
+10:22:28    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:22:39   +10.8s  REPERE   PLAYING, tampon 1971/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 33, sauts 0, ébarbages 27, besoin 1935 ms, contexte running
+10:23:09   +30.1s  REPERE   PLAYING, tampon 1768/2000 ms, 24 paquets/s, 255 kbit/s, comblé 0 ms, manques 33, sauts 0, ébarbages 27, besoin 1784 ms, contexte running
+10:23:20   +10.7s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:23:20    +0.3s  AUDIO    tampon 851 ms pour un seuil de 2000 ms, vitesse -4232 ppm
+10:23:22    +1.8s  RESEAU   le device a baissé son débit à 192 kbit/s pour un plafond de 256 kbit/s, flux complet à 18 paquets/s
+10:23:26    +4.0s  ETAT     état REBUFFERING
+10:23:26    +0.1s  AUDIO    manque de données (+1) : 40 ms en attente pour un seuil de 2000 ms
+10:23:26    +0.3s  AUDIO    tampon 240 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:26    +0.5s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:28    +1.3s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 173 kbit/s
+10:23:28    +0.0s  AUDIO    tampon 1400 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:28    +0.5s  AUDIO    tampon 1840 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:28    +0.3s  ETAT     état PLAYING
+10:23:28    +0.0s  AUDIO    tampon 2040 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:29    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:23:30    +1.1s  RESEAU   le device a baissé son débit à 216 kbit/s pour un plafond de 256 kbit/s, flux complet à 21 paquets/s
+10:23:32    +2.0s  RESEAU   débit reçu 16 paquets/s au lieu de 25, 170 kbit/s
+10:23:34    +2.0s  RESEAU   le device a baissé son débit à 211 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:23:39    +5.0s  ETAT     état REBUFFERING
+10:23:39    +0.1s  AUDIO    manque de données (+1) : 80 ms en attente pour un seuil de 2000 ms
+10:23:39    +0.0s  REPERE   REBUFFERING, tampon 80/2000 ms, 23 paquets/s, 240 kbit/s, comblé 0 ms, manques 35, sauts 0, ébarbages 28, besoin 1999 ms, contexte running
+10:23:40    +1.0s  RESEAU   débit reçu 16 paquets/s au lieu de 25, 170 kbit/s
+10:23:41    +1.3s  AUDIO    tampon 1400 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:41    +0.3s  AUDIO    tampon 1600 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:42    +0.3s  AUDIO    tampon 1800 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:42    +0.2s  ETAT     état PLAYING
+10:23:42    +0.0s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 179 kbit/s
+10:23:42    +0.0s  AUDIO    tampon 2040 ms pour un seuil de 2000 ms, vitesse nominale
+10:23:42    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:23:44    +1.8s  RESEAU   le device a baissé son débit à 209 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:23:46    +2.0s  RESEAU   débit reçu 18 paquets/s au lieu de 25, 184 kbit/s
+10:23:48    +2.0s  RESEAU   le device a baissé son débit à 211 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:24:08   +19.7s  ETAT     état REBUFFERING
+10:24:08    +0.0s  AUDIO    manque de données (+1) : 27 ms en attente pour un seuil de 2000 ms
+10:24:08    +0.5s  AUDIO    tampon 499 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:09    +0.3s  AUDIO    tampon 739 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:09    +0.3s  AUDIO    tampon 979 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:09    +0.3s  REPERE   REBUFFERING, tampon 1139/2000 ms, 22 paquets/s, 228 kbit/s, comblé 0 ms, manques 36, sauts 0, ébarbages 29, besoin 1994 ms, contexte running
+10:24:09    +0.3s  AUDIO    tampon 1379 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:10    +0.2s  AUDIO    tampon 1579 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:10    +0.3s  AUDIO    tampon 1779 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:10    +0.2s  ETAT     état PLAYING
+10:24:10    +0.0s  AUDIO    tampon 2019 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:10    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:24:19    +8.5s  RESEAU   débit reçu 17 paquets/s au lieu de 25, 173 kbit/s
+10:24:20    +1.4s  ETAT     état REBUFFERING
+10:24:21    +0.2s  AUDIO    manque de données (+1) : 69 ms en attente pour un seuil de 2000 ms
+10:24:21    +0.5s  RESEAU   débit reçu 12 paquets/s au lieu de 25, 129 kbit/s
+10:24:21    +0.3s  AUDIO    tampon 549 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:22    +0.5s  AUDIO    tampon 909 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:22    +0.3s  AUDIO    tampon 1149 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:23    +0.5s  AUDIO    tampon 1509 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:23    +0.5s  RESEAU   le device a baissé son débit à 201 kbit/s pour un plafond de 256 kbit/s, flux complet à 19 paquets/s
+10:24:23    +0.0s  AUDIO    tampon 1869 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:23    +0.1s  ETAT     état PLAYING
+10:24:23    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:24:39   +15.9s  REPERE   PLAYING, tampon 834/2000 ms, 22 paquets/s, 233 kbit/s, comblé 0 ms, manques 37, sauts 0, ébarbages 31, besoin 1906 ms, contexte running
+10:24:49   +10.2s  ETAT     état REBUFFERING
+10:24:49    +0.0s  AUDIO    manque de données (+1) : 19 ms en attente pour un seuil de 2000 ms
+10:24:50    +0.3s  AUDIO    tampon 259 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:50    +0.3s  AUDIO    tampon 499 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:50    +0.3s  AUDIO    tampon 739 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:50    +0.3s  AUDIO    tampon 1059 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:51    +0.3s  AUDIO    tampon 1299 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:51    +0.3s  AUDIO    tampon 1499 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:51    +0.3s  AUDIO    tampon 1739 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:52    +0.3s  AUDIO    tampon 1979 ms pour un seuil de 2000 ms, vitesse nominale
+10:24:52    +0.0s  ETAT     état PLAYING
+10:24:52    +0.2s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:25:09   +17.4s  REPERE   PLAYING, tampon 967/2000 ms, 25 paquets/s, 261 kbit/s, comblé 0 ms, manques 38, sauts 0, ébarbages 32, besoin 1901 ms, contexte running
+10:25:39   +30.1s  REPERE   PLAYING, tampon 805/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 38, sauts 0, ébarbages 32, besoin 1751 ms, contexte running
+10:26:09   +30.1s  REPERE   PLAYING, tampon 668/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 38, sauts 0, ébarbages 32, besoin 1600 ms, contexte running
+10:26:16    +7.0s  ETAT     état REBUFFERING
+10:26:17    +0.2s  AUDIO    manque de données (+1) : 189 ms en attente pour un seuil de 2000 ms
+10:26:17    +0.3s  AUDIO    tampon 429 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:17    +0.3s  AUDIO    tampon 629 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:17    +0.3s  AUDIO    tampon 909 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:18    +0.3s  AUDIO    tampon 1149 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:18    +0.3s  AUDIO    tampon 1389 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:18    +0.3s  AUDIO    tampon 1629 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:18    +0.3s  AUDIO    tampon 1869 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:19    +0.2s  ETAT     état PLAYING
+10:26:19    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:26:39   +20.7s  REPERE   PLAYING, tampon 587/2000 ms, 21 paquets/s, 224 kbit/s, comblé 0 ms, manques 39, sauts 0, ébarbages 33, besoin 1885 ms, contexte running
+10:26:44    +4.4s  ETAT     état REBUFFERING
+10:26:44    +0.2s  AUDIO    manque de données (+1) : 211 ms en attente pour un seuil de 2000 ms
+10:26:45    +0.5s  AUDIO    tampon 611 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:45    +0.3s  AUDIO    tampon 811 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:45    +0.3s  AUDIO    tampon 1011 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:45    +0.3s  AUDIO    tampon 1251 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:46    +0.3s  AUDIO    tampon 1491 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:46    +0.3s  AUDIO    tampon 1771 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:46    +0.3s  AUDIO    tampon 1971 ms pour un seuil de 2000 ms, vitesse nominale
+10:26:46    +0.0s  ETAT     état PLAYING
+10:26:46    +0.3s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:27:10   +23.2s  REPERE   PLAYING, tampon 1321/2000 ms, 25 paquets/s, 262 kbit/s, comblé 0 ms, manques 40, sauts 0, ébarbages 34, besoin 1871 ms, contexte running
+10:27:40   +30.1s  REPERE   PLAYING, tampon 1370/2000 ms, 25 paquets/s, 260 kbit/s, comblé 0 ms, manques 40, sauts 0, ébarbages 34, besoin 1721 ms, contexte running
+10:28:10   +30.1s  REPERE   PLAYING, tampon 1039/2000 ms, 24 paquets/s, 255 kbit/s, comblé 0 ms, manques 40, sauts 0, ébarbages 34, besoin 1570 ms, contexte running
+10:28:35   +25.1s  RESEAU   le device a baissé son débit à 206 kbit/s pour un plafond de 256 kbit/s, flux complet à 20 paquets/s
+10:28:40    +5.1s  REPERE   PLAYING, tampon 235/2000 ms, 23 paquets/s, 245 kbit/s, comblé 0 ms, manques 40, sauts 0, ébarbages 34, besoin 1419 ms, contexte running
+10:28:58   +17.9s  ETAT     état REBUFFERING
+10:28:58    +0.2s  AUDIO    manque de données (+1) : 120 ms en attente pour un seuil de 2000 ms
+10:28:58    +0.2s  AUDIO    tampon 400 ms pour un seuil de 2000 ms, vitesse nominale
+10:28:59    +0.3s  AUDIO    tampon 600 ms pour un seuil de 2000 ms, vitesse nominale
+10:28:59    +0.2s  AUDIO    tampon 840 ms pour un seuil de 2000 ms, vitesse nominale
+10:28:59    +0.3s  AUDIO    tampon 1080 ms pour un seuil de 2000 ms, vitesse nominale
+10:28:59    +0.3s  AUDIO    tampon 1360 ms pour un seuil de 2000 ms, vitesse nominale
+10:29:00    +0.2s  AUDIO    tampon 1560 ms pour un seuil de 2000 ms, vitesse nominale
+10:29:00    +0.3s  AUDIO    tampon 1800 ms pour un seuil de 2000 ms, vitesse nominale
+10:29:00    +0.2s  ETAT     état PLAYING
+10:29:00    +0.1s  AUDIO    reprise ébarbée (+1) : la file est repartie du seuil de 2000 ms
+10:29:03    +2.6s  RESEAU   plus aucun direct annoncé par le relais
+10:29:03    +0.0s  ETAT     état OFFLINE
+10:29:03    +0.0s  AUDIO    seuil de bufferisation abaissé à 400 ms : besoin estimé 0 ms
+10:29:03    +0.0s  AUDIO    tampon 1640 ms pour un seuil de 400 ms, vitesse -287 ppm
+10:29:03    +0.0s  VERDICT  idle : le relais est joignable mais aucun direct n'est en cours
+10:29:03    +0.3s  AUDIO    tampon 0 ms pour un seuil de 400 ms, vitesse nominale

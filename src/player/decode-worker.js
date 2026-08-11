@@ -247,8 +247,8 @@ export class FrameDecoder {
         reason,
         missingMs: Number(missingMicros / 1000n),
         // Ce drapeau dit a la machine d'etats si elle doit rebufferiser. Un trou comble ne
-        // l'interesse pas : la lecture continue, et l'interrompre serait exactement le rattrapage
-        // brutal que ce correctif supprime.
+        // l'interesse pas : la lecture continue, et l'interrompre produirait exactement le
+        // rattrapage brutal que la file cherche a eviter.
         recovered: !long,
       });
     }

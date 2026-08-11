@@ -224,7 +224,7 @@ test("l'ecran verrouille suit l'etat reel de la lecture", () => {
   assert.equal(kit.media.playbackState, "paused");
 });
 
-// Ce test verifie le coeur du correctif : le son revient au retour au premier plan.
+// Ce test verifie le coeur du comportement : le son revient au retour au premier plan.
 //
 // Une reprise demandee pendant que la page est cachee est refusee par le navigateur ; celle qui
 // compte est celle du retour. Sans elle, l'auditeur qui rallume son telephone trouve une page muette
