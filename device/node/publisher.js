@@ -60,6 +60,22 @@ const SOCKET_OPEN = 1;
 // traversent.
 const BITRATE_STEP_BYTES = 1000;
 
+// Cette fonction rend une duree en millisecondes qui n'avance qu'avec le temps qui passe.
+//
+// `Date.now` ne convient a rien de ce que le publisher mesure. Toutes ses durees sont des ecarts —
+// age de la plus vieille trame en vol, temps passe en direct, retard de l'horloge de source — et une
+// horloge murale saute quand le systeme se remet a l'heure. Le recul est deja traite
+// (`source-clock.js`), **l'avance ne l'etait pas** : une resynchronisation NTP de +1 s se lisait
+// comme une seconde de son jamais produite, et comme elle depasse les 500 ms que le player sait
+// combler, elle faisait vider sa file. Une coupure pour rien, invisible a tous les compteurs.
+//
+// `process.hrtime.bigint()` supprime la classe entiere : il compte depuis un point arbitraire et ne
+// recule ni ne saute jamais. L'origine arbitraire n'a aucune importance ici, puisque rien ne compare
+// ces valeurs a une date.
+function monotonicNow() {
+	return Number(process.hrtime.bigint() / 1000n) / 1000;
+}
+
 // Cette classe tient la connexion WebSocket vers le relais et l'etat visible par le device.
 // Elle ne connait ni Max ni le socket loopback : elle recoit des frames deja pretes.
 class Publisher {
@@ -69,7 +85,8 @@ class Publisher {
 		this.loadConfig = handlers.loadConfig ?? readConfig;
 		this.delayFor = handlers.delayFor ?? backoffDelayMs;
 		this.SocketClass = handlers.SocketClass ?? WebSocket;
-		this.now = handlers.now ?? Date.now;
+		// Les tests injectent la leur ; le device garde l'horloge monotone. Voir `monotonicNow`.
+		this.now = handlers.now ?? monotonicNow;
 		// Ces durees sont raccourcies par les tests, qui ne peuvent pas attendre des dizaines de
 		// secondes. Le device n'en fournit aucune : il garde les valeurs du protocole.
 		this.timings = {

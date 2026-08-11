@@ -14,6 +14,17 @@ import { CollectingSink, frequencyOf, levelOf, readFixturePackets, SAMPLE_RATE }
 // La fixture porte cette session, fixee par l'outil qui la produit.
 const FIXTURE_SESSION_ID = 1;
 
+// Duree de son que le decodeur retient en permanence, en echantillons.
+//
+// Le decodeur n'ecrit jamais la toute fin du dernier bloc decode : il la garde pour pouvoir encore la
+// mettre en fondu si un trou survient juste apres (`FADE_MS` dans `decode-worker.js`). Trois
+// millisecondes a 48 kHz font 144 echantillons.
+//
+// Ce n'est pas du son perdu, c'est du son en attente : il part des que le bloc suivant arrive, ou en
+// fondu si un trou le precede. La chronologie reste donc exacte, simplement decalee d'un bloc de
+// fondu. Les comptes ci-dessous portent sur ce qui est **ecrit**, d'ou ce retrait constant.
+const QUEUE_RETENUE = 144;
+
 // Cette capacite est celle du player : trois secondes a 48 kHz.
 const CAPACITY_FRAMES = 48000 * 3;
 
@@ -51,7 +62,7 @@ test("decode la fixture en stereo avec les deux canaux a leur place", async (t) 
     await decoder.push(packet);
   }
 
-  assert.equal(sink.left.length, 250 * 1920);
+  assert.equal(sink.left.length, 250 * 1920 - QUEUE_RETENUE);
   assert.equal(sink.right.length, sink.left.length);
 
   // Les cent premieres millisecondes sont ignorees : l'encodeur Opus a besoin de quelques frames
@@ -101,7 +112,7 @@ test("refuse un paquet abime et continue de decoder les suivants", async (t) => 
 
   await decoder.push(premier);
   await decoder.push(second);
-  assert.equal(sink.left.length, 2 * 1920);
+  assert.equal(sink.left.length, 2 * 1920 - QUEUE_RETENUE);
 });
 
 // Ce test verifie qu'un trou dans les numeros de sequence est traite comme une discontinuite. Le
@@ -115,7 +126,7 @@ test("traite un trou de sequence comme une discontinuite", async (t) => {
 
   await decoder.push(packets[0] as Uint8Array);
   await decoder.push(packets[1] as Uint8Array);
-  assert.equal(sink.left.length, 2 * 1920);
+  assert.equal(sink.left.length, 2 * 1920 - QUEUE_RETENUE);
   assert.equal(notes.length, 0);
 
   // Ce paquet saute deux numeros. Le trou vient donc du reseau, apres l'envoi : seul le relais jette
@@ -129,8 +140,63 @@ test("traite un trou de sequence comme une discontinuite", async (t) => {
   // pas du direct.
   assert.equal(sink.clears, 0);
   // Deux frames decodees, plus les 80 ms du trou ecrites en silence, plus la frame de ce paquet.
-  assert.equal(sink.left.length, 5 * 1920);
+  assert.equal(sink.left.length, 5 * 1920 - QUEUE_RETENUE);
   assert.equal(decoder.stats().concealedMs, 80);
+});
+
+// Ce test couvre le fondu aux bords d'un trou, qui est la moitie audible du probleme.
+//
+// Un trou comble par du silence ne commence pas en silence : il commence par une **marche**. Le
+// signal passe de sa valeur courante a zero en un echantillon, puis de zero a la valeur suivante en
+// sortant. Une marche a un spectre plat, donc elle claque. Mesure au banc
+// (`scripts/bench-continuite.mjs`, section `clic`), un trou de 40 ms sans fondu fabrique 37 dB de
+// bruit large bande a son bord d'entree et 47 dB a son bord de sortie.
+//
+// Ce que le fondu garantit, et que ce test verifie : **les deux bords du silence sont eux-memes du
+// silence**, alors que le signal autour est bien present. C'est la propriete qui supprime la marche.
+test("eteint le son aux deux bords d'un trou au lieu de le couper net", async (t) => {
+  const { decoder, sink } = await makeDecoder();
+  t.after(() => decoder.stop());
+
+  const packets = readFixturePackets();
+
+  await decoder.push(packets[0] as Uint8Array);
+  await decoder.push(packets[1] as Uint8Array);
+
+  // Ce paquet saute deux numeros : 80 ms de trou, comble sur place.
+  await decoder.push(packets[4] as Uint8Array);
+
+  // Le silence occupe exactement les 80 ms du trou, entre le son d'avant et le son d'apres.
+  const debutTrou = 2 * 1920;
+  const finTrou = debutTrou + 80 * 48;
+
+  assert.equal(sink.left.length, 5 * 1920 - QUEUE_RETENUE);
+  assert.ok(
+    sink.left.slice(debutTrou, finTrou).every((sample) => sample === 0),
+    "le trou lui-meme doit rester du silence exact",
+  );
+
+  // Le son est bien la de part et d'autre : sans cela le test passerait sur un flux muet.
+  const avant = sink.left.slice(debutTrou - 1920, debutTrou - QUEUE_RETENUE);
+  const apres = sink.left.slice(finTrou + QUEUE_RETENUE, finTrou + 1920);
+  assert.ok(levelOf(avant) > 0.05, `niveau avant le trou : ${levelOf(avant)}`);
+  assert.ok(levelOf(apres) > 0.05, `niveau apres le trou : ${levelOf(apres)}`);
+
+  // Et les deux bords sont eteints. C'est tout le fondu : sans lui, ces deux echantillons valent une
+  // valeur quelconque du signal, et l'ecart avec le zero voisin est la marche qu'on entend.
+  assert.ok(
+    Math.abs(sink.left[debutTrou - 1] as number) < 0.001,
+    `bord d'entree a ${sink.left[debutTrou - 1]}, attendu eteint`,
+  );
+  assert.ok(
+    Math.abs(sink.left[finTrou] as number) < 0.001,
+    `bord de sortie a ${sink.left[finTrou]}, attendu eteint`,
+  );
+
+  // Le fondu porte sur les deux canaux avec le meme gain : un gain different les decalerait l'un par
+  // rapport a l'autre et deplacerait l'image stereo.
+  assert.ok(Math.abs(sink.right[debutTrou - 1] as number) < 0.001);
+  assert.ok(Math.abs(sink.right[finTrou] as number) < 0.001);
 });
 
 // Ce test couvre le seul cas ou vider la file est le bon choix : un trou trop grand pour etre
@@ -144,7 +210,7 @@ test("jette la file quand le trou depasse le plafond de comblement", async (t) =
   assert.ok(source !== undefined);
 
   await decoder.push(source);
-  assert.equal(sink.left.length, 1920);
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE);
 
   // Ce paquet arrive une seconde plus tard sur la chronologie : 960 ms manquent, bien au-dela des
   // 500 ms comblables.
@@ -162,8 +228,11 @@ test("jette la file quand le trou depasse le plafond de comblement", async (t) =
     { type: "discontinuity", reason: "relay_drop", missingMs: 960, recovered: false },
   ]);
   assert.equal(sink.clears, 1);
-  assert.equal(sink.left.length, 1920);
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE);
   assert.equal(decoder.stats().concealedMs, 0);
+  // Le vidage est desormais compte a part des trous combles : c'est lui, et lui seul, qui coupe.
+  assert.equal(decoder.stats().flushes, 1);
+  assert.equal(decoder.stats().discontinuities, 1);
 });
 
 // Ce test decrit un lien degrade qui ne laisse passer qu'un tiers des paquets : un trou toutes les
@@ -207,7 +276,7 @@ test("garde la file et la chronologie sur un lien qui perd deux paquets sur troi
   // Le PCM produit couvre exactement la duree audio du premier au dernier paquet : chaque frame
   // recue, plus chaque trou comble.
   const framesCouvertes = (recus - 1) * pas + 1;
-  assert.equal(sink.left.length, framesCouvertes * 1920);
+  assert.equal(sink.left.length, framesCouvertes * 1920 - QUEUE_RETENUE);
 
   // Chaque trou vaut deux frames manquantes, et il y en a un par paquet sauf le premier.
   assert.equal(decoder.stats().concealedMs, (recus - 1) * 80);
@@ -246,7 +315,7 @@ test("reconnait une perte survenue dans l'encodeur, sans trou de sequence", asyn
     { type: "discontinuity", reason: "encoder_loss", missingMs: 80, recovered: true },
   ]);
   assert.equal(sink.clears, 0);
-  assert.equal(sink.left.length, 4 * 1920);
+  assert.equal(sink.left.length, 4 * 1920 - QUEUE_RETENUE);
 });
 
 // Ce test verifie que le bit de discontinuite pose par le device produit le meme traitement, sans
@@ -281,7 +350,7 @@ test("traite le bit de discontinuite du device", async (t) => {
   // Le bit remet le decodeur a zero, comme l'encodeur l'a fait de son cote. Aucune duree ne manque :
   // il n'y a donc rien a combler, et rien a jeter.
   assert.equal(sink.clears, 0);
-  assert.equal(sink.left.length, 2 * 1920);
+  assert.equal(sink.left.length, 2 * 1920 - QUEUE_RETENUE);
 });
 
 // Ce test verifie que les paquets recus pendant une pause sont jetes. Reprendre doit repartir du
@@ -299,7 +368,7 @@ test("jette les paquets recus pendant une pause", async (t) => {
 
   decoder.setAccepting(true);
   await decoder.push(packets[2] as Uint8Array);
-  assert.equal(sink.left.length, 1920);
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE);
 });
 
 // Ce test traverse la chaine complete du mode partage : paquets du relais, decodage, ecriture dans
@@ -322,7 +391,7 @@ test("rend le son attendu de bout en bout par la file partagee", async (t) => {
     await decoder.push(packet);
   }
 
-  assert.equal(reader.available, 50 * 1920);
+  assert.equal(reader.available, 50 * 1920 - QUEUE_RETENUE);
 
   const left = new Float32Array(reader.available);
   const right = new Float32Array(left.length);
@@ -364,7 +433,7 @@ test("abandonne une frame dont la session a change pendant la remise a zero", as
   assert.ok(source !== undefined);
 
   await decoder.push(source);
-  assert.equal(sink.left.length, 1920);
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE);
 
   // Cette frame porte le bit de discontinuite : son traitement passe donc par la remise a zero.
   const marque = encodeAudioPacket({
@@ -402,7 +471,7 @@ test("vide le PCM et le decodeur a chaque nouvelle session", async (t) => {
 
   const packets = readFixturePackets();
   await decoder.push(packets[0] as Uint8Array);
-  assert.equal(sink.left.length, 1920);
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE);
 
   decoder.setSession(2);
   assert.equal(sink.left.length, 0);
@@ -447,7 +516,7 @@ test("abandonne une frame en vol quand un vidage la depasse", async (t) => {
 
   // Le decodeur reste utilisable : les paquets arrives apres le vidage passent normalement.
   await decoder.push(packets[2] as Uint8Array);
-  assert.equal(sink.left.length, 1920, "un paquet posterieur au vidage est decode comme avant");
+  assert.equal(sink.left.length, 1920 - QUEUE_RETENUE, "un paquet posterieur au vidage est decode comme avant");
 });
 
 // Ce test verifie que la frame abandonnee n'est comptee ni acceptee ni refusee. Le compteur de

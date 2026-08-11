@@ -47,6 +47,13 @@ export type PlayerDiagnostics = {
   refused: number;
   lastRefusal: string | null;
   discontinuities: number;
+  // Nombre de trous trop longs pour etre combles, qui ont donc fait vider la file et rebufferiser.
+  //
+  // C'est le compteur a lire en premier, et il est separe de `discontinuities` depuis le 11 aout
+  // 2026 : celui-la melange les trous encaisses — la lecture continue, personne n'entend de blanc —
+  // et ceux qui coupent le son. Un compteur qui melange les deux affiche zero probleme pendant qu'un
+  // mecanisme non mesure fabrique les coupures, ce qui est exactement ce qui s'est passe ce jour-la.
+  flushes: number;
   // Duree totale comblee par du silence, en millisecondes. C'est la mesure de ce que le lien a
   // perdu, independante de tout seuil et jamais remise a zero pendant une session.
   concealedMs: number;

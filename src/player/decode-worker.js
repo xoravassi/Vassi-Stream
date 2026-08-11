@@ -26,6 +26,36 @@ export const MAX_CONCEAL_MICROS = 500000n;
 // protocole, mais rien n'en depend : `fillGap` le repete autant de fois qu'il faut.
 const SILENCE = new Float32Array(1920);
 
+// Duree du fondu applique de part et d'autre d'un trou, en millisecondes.
+//
+// Un trou comble par du silence ne commence pas en silence : il commence par une **marche**. Le
+// signal passe de sa valeur courante a zero en un echantillon, puis de zero a la valeur suivante en
+// sortant. Une marche a un spectre plat, donc elle s'entend — c'est la definition d'un clic.
+//
+// La mesure est dans `scripts/bench-continuite.mjs`, section `clic` : sur un signal qui n'a rien
+// au-dessus de 880 Hz, l'energie fabriquee au-dessus de 2 kHz par un trou de 40 ms vaut -27,7 dB au
+// bord d'entree et -17,1 dB au bord de sortie, contre -64,3 dB pour le meme signal sans trou. Le
+// bord de sortie est le plus bruyant des deux, de dix decibels.
+//
+// Trois millisecondes ramenent ces deux bords a -57,1 et -63,7 dB, soit un bord de sortie
+// indistinguable du signal intact. Cette valeur n'est pas un compromis prudent, c'est un optimum
+// mesure : en dessous d'une milliseconde le fondu ne sert a rien, au-dela de trois il retire du
+// signal utile et le chiffre se degrade a nouveau.
+const FADE_MS = 3;
+const FADE_SAMPLES = Math.round((FADE_MS * 48000) / 1000);
+
+// Cette table tient le gain du fondu, calcule une fois.
+//
+// La forme est une cosinus surelevee et non une rampe droite : une rampe droite laisse une
+// discontinuite de *pente* a chacune de ses extremites, et une discontinuite de pente s'entend
+// encore, plus faiblement. La cosinus surelevee arrive a plat aux deux bouts.
+const FADE_GAIN = new Float32Array(FADE_SAMPLES);
+
+for (let i = 0; i < FADE_SAMPLES; i += 1) {
+  // De 1 vers 0. Le fondu d'entree lit cette table a l'envers.
+  FADE_GAIN[i] = 0.5 + 0.5 * Math.cos((Math.PI * i) / FADE_SAMPLES);
+}
+
 // Ce type de message decrit ce que le decodeur rend a son appelant.
 // - `discontinuity` : le son a saute, le thread principal doit rebufferiser ;
 // - `refused` : un paquet n'a pas pu etre utilise, avec sa raison.
@@ -66,10 +96,31 @@ export class FrameDecoder {
     this.decoded = 0;
     this.refused = 0;
     this.discontinuities = 0;
+    // Ce compteur separe les trous que le player encaisse de ceux qui le coupent, et cette
+    // distinction est desormais la premiere a lire. `discontinuities` les comptait ensemble : un
+    // compteur qui melange un trou comble — la lecture continue, personne n'entend de blanc — et un
+    // vidage de file — rebufferisation, silence, reprise — ne peut pas dire si le direct va bien.
+    // C'est exactement la forme d'aveuglement qui a produit l'erreur d'analyse du 11 aout 2026.
+    this.flushes = 0;
     // Duree totale comblee par du silence depuis le debut, en millisecondes. C'est la mesure directe
     // de ce que le lien a perdu : elle ne depend d'aucun seuil et ne se remet pas a zero.
     this.concealedMs = 0;
     this.lastRefusal = null;
+    // Ces trois champs portent le fondu aux bords des trous. Voir `FADE_MS`.
+    //
+    // La fin de chaque bloc decode est **retenue** au lieu d'etre ecrite tout de suite : c'est la
+    // seule facon de pouvoir encore la mettre en fondu si un trou survient juste apres. Une fois
+    // ecrite dans la file partagee, elle est hors de portee — le processeur audio peut la lire a tout
+    // instant, et la reprendre serait une course.
+    //
+    // Le prix est de trois millisecondes de latence constante, sur un seuil qui vaut entre 200 et
+    // 2000 ms. La chronologie, elle, ne bouge pas : les memes echantillons sortent dans le meme
+    // ordre, simplement decales d'un bloc de fondu.
+    this.tailLeft = new Float32Array(FADE_SAMPLES);
+    this.tailRight = new Float32Array(FADE_SAMPLES);
+    this.tailCount = 0;
+    // Ce drapeau dit que le prochain bloc decode sort d'un trou, et doit donc entrer en fondu.
+    this.fadeInPending = false;
   }
 
   // Cette methode rend les compteurs du decodeur.
@@ -79,9 +130,21 @@ export class FrameDecoder {
       decoded: this.decoded,
       refused: this.refused,
       discontinuities: this.discontinuities,
+      flushes: this.flushes,
       concealedMs: this.concealedMs,
       lastRefusal: this.lastRefusal,
     };
+  }
+
+  // Cette methode vide la file et abandonne ce que le fondu retenait.
+  //
+  // Elle remplace tout appel direct a `sink.clear()`. La queue en attente appartient au son qu'on
+  // vient de jeter : l'ecrire apres coup deposerait trois millisecondes de son perime en tete d'une
+  // file qu'on vient de vider, et le fondu d'entree s'appliquerait a un bloc qui ne suit plus rien.
+  clearSink() {
+    this.sink.clear();
+    this.tailCount = 0;
+    this.fadeInPending = false;
   }
 
   // Cette methode jette le son en attente sans changer de session ni de decodeur.
@@ -90,7 +153,7 @@ export class FrameDecoder {
   // direct. Le numero de sequence est oublie, sinon la frame suivante passerait pour un trou et
   // ferait rebufferiser une deuxieme fois.
   flush() {
-    this.sink.clear();
+    this.clearSink();
     this.forgetPosition();
     this.epoch += 1;
   }
@@ -124,7 +187,7 @@ export class FrameDecoder {
   setSession(sessionId) {
     this.sessionId = sessionId;
     this.forgetPosition();
-    this.sink.clear();
+    this.clearSink();
     this.epoch += 1;
 
     if (sessionId !== 0) {
@@ -218,7 +281,8 @@ export class FrameDecoder {
         // Un trou de cette taille depasse le seuil de tous les profils : le combler ferait entendre
         // plus de silence que la rebufferisation qu'il evite. La file part, et la lecture reprend au
         // direct. C'est le seul cas ou vider gagne quelque chose.
-        this.sink.clear();
+        this.clearSink();
+        this.flushes += 1;
         await this.resetDecoder();
       } else {
         // La duree manquante entre dans la file, et c'est ce qui garde la chronologie juste. Sans
@@ -277,18 +341,25 @@ export class FrameDecoder {
     return advance > FRAME_MICROS ? advance - FRAME_MICROS : 0n;
   }
 
-  // Cette methode ecrit dans la file la duree exacte du trou, sous forme de silence.
+  // Cette methode ecrit dans la file la duree exacte du trou, sous forme de silence, entre deux
+  // fondus.
   //
-  // Le silence tient ce role parce qu'il est le seul remplissage disponible ici. Une frame de
-  // dissimulation produite par le decodeur prolongerait le son au lieu de le couper, mais
-  // `opus-decoder` fige sa taille de frame a 120 ms a la construction alors qu'un trou ordinaire en
-  // vaut 20 ou 40 : elle rendrait six fois trop d'echantillons. Ce que le silence garantit — une
-  // chronologie exacte a l'echantillon pres — ne depend pas de ce choix, et une dissimulation le
-  // remplacerait sans rien changer autour.
+  // Le silence tient ce role parce qu'il est le seul remplissage disponible ici : `opus-decoder`
+  // n'expose aucun chemin pour un paquet nul, donc la dissimulation integree de libopus — qui
+  // prolongerait le son au lieu de le couper — reste hors de portee tant que ce paquet n'est pas
+  // remplace. Ce que le silence garantit, une chronologie exacte a l'echantillon pres, ne depend pas
+  // de ce choix, et une dissimulation le remplacerait sans rien changer autour.
+  //
+  // Les fondus, eux, ne dependent d'aucun decodeur. Ils suppriment les deux marches qui bordent le
+  // silence, et c'est la moitie audible du probleme : mesure au banc, un trou de 40 ms comble sans
+  // fondu fabrique 37 dB de bruit large bande a son bord d'entree et 47 dB a son bord de sortie.
   fillGap(missingMicros) {
     if (missingMicros <= 0n) {
       return;
     }
+
+    // Le son retenu part en fondu : c'est le bord d'entree du trou.
+    this.writeTail(true);
 
     const frames = Number((missingMicros * 48n) / 1000n);
     let written = 0;
@@ -300,6 +371,70 @@ export class FrameDecoder {
     }
 
     this.concealedMs += Number(missingMicros / 1000n);
+    // Le bloc suivant sortira du trou : il entrera en fondu.
+    this.fadeInPending = true;
+  }
+
+  // Cette methode ecrit la fin de bloc retenue, en fondu ou telle quelle.
+  //
+  // Elle est appelee de deux endroits, et l'ordre est le meme dans les deux : ce qui est retenu
+  // precede toujours ce qui vient. `fillGap` l'appelle en fondu parce qu'un trou suit ; `emit`
+  // l'appelle sans fondu parce que le bloc suivant est arrive et que le son est continu.
+  writeTail(fade) {
+    if (this.tailCount === 0) {
+      return;
+    }
+
+    if (fade) {
+      for (let i = 0; i < this.tailCount; i += 1) {
+        const gain = FADE_GAIN[i];
+        this.tailLeft[i] *= gain;
+        this.tailRight[i] *= gain;
+      }
+    }
+
+    this.sink.write(this.tailLeft, this.tailRight, this.tailCount);
+    this.tailCount = 0;
+  }
+
+  // Cette methode ecrit un bloc decode en retenant sa fin, et en le faisant entrer en fondu quand il
+  // sort d'un trou.
+  //
+  // Elle est le seul chemin par lequel du son decode entre dans la file. La retenue vaut toujours la
+  // meme duree, donc elle ne decale rien : elle ajoute un retard constant de trois millisecondes, une
+  // fois, au premier bloc.
+  emit(left, right, count) {
+    if (this.fadeInPending) {
+      this.fadeInPending = false;
+      const fade = Math.min(FADE_SAMPLES, count);
+
+      for (let i = 0; i < fade; i += 1) {
+        // La table descend de 1 vers 0 : lue a l'envers, elle monte de 0 vers 1.
+        const gain = FADE_GAIN[fade - 1 - i];
+        left[i] *= gain;
+        // Un flux mono force en stereo rend deux fois le meme tableau. Appliquer le gain deux fois
+        // l'eleverait au carre, ce qui creuserait le fondu au lieu de le suivre.
+        if (right !== left) {
+          right[i] *= gain;
+        }
+      }
+    }
+
+    this.writeTail(false);
+
+    // Un bloc plus court que le fondu ne peut rien retenir : il part en entier, et le bloc suivant
+    // fournira la fin a mettre en fondu. Aucune frame du protocole v1 n'est dans ce cas — elles
+    // valent 40 ms contre 3 — mais rien ici n'a besoin de le supposer.
+    if (count <= FADE_SAMPLES) {
+      this.sink.write(left, right, count);
+      return;
+    }
+
+    const body = count - FADE_SAMPLES;
+    this.sink.write(left, right, body);
+    this.tailLeft.set(left.subarray(body, count));
+    this.tailRight.set(right.subarray(body, count));
+    this.tailCount = FADE_SAMPLES;
   }
 
   // Cette methode compte un paquet inutilisable et le signale une fois.
@@ -325,7 +460,7 @@ export class FrameDecoder {
     const left = result.channelData[0];
     const right = result.channelData[1] ?? left;
     this.decoded += 1;
-    this.sink.write(left, right, result.samplesDecoded);
+    this.emit(left, right, result.samplesDecoded);
   }
 
   // Cette methode applique `OPUS_RESET_STATE` : le decodeur retrouve l'etat d'un decodeur neuf.

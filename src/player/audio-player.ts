@@ -65,6 +65,7 @@ export class AudioPlayer {
     decoded: 0,
     refused: 0,
     discontinuities: 0,
+    flushes: 0,
     concealedMs: 0,
     underruns: 0,
     overflows: 0,
@@ -121,6 +122,7 @@ export class AudioPlayer {
         this.counters.decoded = stats.decoded;
         this.counters.refused = stats.refused;
         this.counters.discontinuities = stats.discontinuities;
+        this.counters.flushes = stats.flushes;
         this.counters.concealedMs = stats.concealedMs;
         this.lastRefusal = stats.lastRefusal;
       },
@@ -199,6 +201,7 @@ export class AudioPlayer {
       refused: this.counters.refused,
       lastRefusal: this.lastRefusal,
       discontinuities: this.counters.discontinuities,
+      flushes: this.counters.flushes,
       concealedMs: this.counters.concealedMs,
       lastGapReason: this.lastGap === null ? null : this.lastGap.reason,
       lastGapMs: this.lastGap === null ? null : this.lastGap.missingMs,
@@ -271,6 +274,15 @@ export class AudioPlayer {
   // Cette methode traite le clic sur Pause.
   pause(): void {
     this.machine.pause();
+  }
+
+  // Cette methode regle le volume de sortie, de 0 (silence) a 1 (niveau d'origine).
+  //
+  // Le volume ne passe pas par la machine d'etats : il ne change ni l'etat du direct, ni ce que le
+  // decodeur ou le relais font. Il n'agit que sur le dernier maillon, entre le processeur audio et
+  // la sortie. Il peut donc etre regle a tout moment, y compris avant le premier clic sur Ecouter.
+  setVolume(volume: number): void {
+    this.audio.setVolume(volume);
   }
 
   // Cette methode enregistre le niveau annonce par le processeur audio et le remet a la machine.

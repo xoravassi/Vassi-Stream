@@ -23,6 +23,10 @@ export type DecoderStats = {
   decoded: number;
   refused: number;
   discontinuities: number;
+  // Nombre de trous trop longs pour etre combles, qui ont donc fait vider la file. C'est le compteur
+  // a lire en premier : `discontinuities` melange les trous encaisses — la lecture continue, personne
+  // n'entend de blanc — et ceux qui coupent le son. Seul celui-ci compte des coupures.
+  flushes: number;
   // Duree totale ecrite en silence pour combler des trous, en millisecondes. C'est la mesure de ce
   // que le lien a reellement perdu, independante de tout seuil.
   concealedMs: number;

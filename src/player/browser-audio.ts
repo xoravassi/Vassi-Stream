@@ -29,6 +29,11 @@ export type AudioSetup = {
   workletUrl: URL | string;
 };
 
+// Cette duree est celle sur laquelle un changement de volume est etale, en secondes. Quinze
+// millisecondes est la valeur d'usage : plus court, la rupture de la forme d'onde s'entend comme un
+// clic ; plus long, le curseur donne l'impression de trainer sous le doigt.
+const VOLUME_RAMP_SECONDS = 0.015;
+
 // Ce type decrit ce que le processeur audio rapporte a chaque releve, environ toutes les quarante
 // millisecondes. C'est la seule vue que le thread principal ait sur la file PCM.
 export type PcmLevel = {
@@ -49,7 +54,15 @@ export type BrowserAudioEvents = {
   onLevel: (level: PcmLevel) => void;
   onDiscontinuity: (note: { reason: string; missingMs: number; recovered: boolean }) => void;
   onRefusal: (reason: string) => void;
-  onStats: (stats: { accepted: number; decoded: number; refused: number; discontinuities: number; concealedMs: number; lastRefusal: string | null }) => void;
+  onStats: (stats: {
+    accepted: number;
+    decoded: number;
+    refused: number;
+    discontinuities: number;
+    flushes: number;
+    concealedMs: number;
+    lastRefusal: string | null;
+  }) => void;
   onFailure: (area: DiagnosticArea, reason: string) => void;
 };
 
@@ -60,6 +73,14 @@ export class BrowserAudio {
   private decoder: DecodeWorkerHost;
   private context: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
+  // Ce reglage de volume est place entre le processeur audio et la sortie. Le processeur rend
+  // toujours les echantillons a leur niveau d'origine : c'est ce noeud, et lui seul, qui les
+  // attenue.
+  private gain: GainNode | null = null;
+  // Ce volume va de 0 (silence) a 1 (niveau d'origine). Il est retenu ici et non dans le noeud,
+  // parce que le noeud est detruit avec le contexte audio a chaque arret : sans cette valeur, une
+  // reprise apres une panne repartirait au niveau maximum.
+  private volume = 1;
   private starting: Promise<void> | null = null;
   private closed = false;
   private lastPlaying = false;
@@ -234,6 +255,31 @@ export class BrowserAudio {
     this.node.port.postMessage({ type: playing ? "play" : "pause" });
   }
 
+  // Cette methode regle le volume de sortie. `volume` va de 0 (silence) a 1 (niveau d'origine) ;
+  // toute valeur hors de ces bornes y est ramenee, et une valeur qui n'est pas un nombre est
+  // ignoree.
+  //
+  // La valeur est retenue meme sans contexte audio : l'auditeur peut deplacer le curseur avant
+  // d'avoir clique sur Ecouter, et le niveau choisi doit s'appliquer au premier son.
+  //
+  // Le changement est etale sur quinze millisecondes au lieu d'etre pose d'un coup. Un saut de
+  // niveau instantane coupe la forme d'onde en plein milieu, et cette rupture s'entend comme un
+  // clic. Quinze millisecondes sont assez courtes pour que le geste paraisse immediat, et assez
+  // longues pour que la rupture disparaisse.
+  setVolume(volume: number): void {
+    if (!Number.isFinite(volume)) {
+      return;
+    }
+
+    this.volume = Math.min(1, Math.max(0, volume));
+
+    if (this.gain === null || this.context === null) {
+      return;
+    }
+
+    this.gain.gain.setTargetAtTime(this.volume, this.context.currentTime, VOLUME_RAMP_SECONDS);
+  }
+
   private async build(): Promise<void> {
     this.stage = "STARTING";
     this.buildingArea = "audio";
@@ -287,7 +333,15 @@ export class BrowserAudio {
     }
 
     node.port.onmessage = (event: MessageEvent) => this.handleLevel(event);
-    node.connect(context.destination);
+
+    // Le son passe par le reglage de volume avant d'atteindre la sortie. Le noeud est cree au
+    // niveau deja demande : le contexte vient de naitre, aucun echantillon n'a encore ete rendu,
+    // donc aucune transition n'est necessaire ici.
+    const gain = new GainNode(context, { gain: this.volume });
+    node.connect(gain);
+    gain.connect(context.destination);
+
+    this.gain = gain;
     this.node = node;
 
     this.buildingArea = "decode";
@@ -359,6 +413,11 @@ export class BrowserAudio {
     this.node?.port.postMessage({ type: "stop" });
     this.node?.disconnect();
     this.node = null;
+
+    // Le noeud de volume est debranche, mais le niveau choisi par l'auditeur reste en memoire : une
+    // reprise apres une panne rend le son au niveau ou il l'avait laisse.
+    this.gain?.disconnect();
+    this.gain = null;
     this.lastPlaying = false;
     this.lastCeilingFrames = 0;
     this.lastKeepFrames = 0;

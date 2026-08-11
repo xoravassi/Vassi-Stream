@@ -106,6 +106,7 @@ export class DecodeWorkerHost {
       decoded: 0,
       refused: 0,
       discontinuities: 0,
+      flushes: 0,
       concealedMs: 0,
       lastRefusal: null,
     });
@@ -184,6 +185,7 @@ export class DecodeWorkerHost {
         decoded: message.decoded ?? 0,
         refused: message.refused ?? 0,
         discontinuities: message.discontinuities ?? 0,
+        flushes: message.flushes ?? 0,
         concealedMs: message.concealedMs ?? 0,
         lastRefusal: message.lastRefusal ?? null,
       });

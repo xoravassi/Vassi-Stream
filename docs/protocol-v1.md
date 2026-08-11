@@ -291,7 +291,15 @@ Il ne vide pas le PCM en attente. La regle v1 le demandait, et la mesure du 2026
 
 Au-dela de 500 millisecondes manquantes, le comblement s'arrete d'avoir un sens : le silence s'entendrait plus longtemps que la rebufferisation qu'il evite. Le player reprend alors l'ancien traitement — file videe, decodeur remis a zero, bufferisation jusqu'au seuil du profil actif.
 
-La duree manquante est comblee par du silence. Une frame de dissimulation produite par le decodeur s'entendrait mieux, et rien dans ce protocole ne l'interdit : le choix appartient au player.
+**Cette limite de 500 millisecondes est un contrat, et il engage l'emetteur autant que le player :**
+
+> Un trou annonce jusqu'a 500 millisecondes est comble sans interrompre la lecture. **Un emetteur qui declare davantage en un seul pas demande une resynchronisation**, et l'obtient : file videe, coupure du son, reprise au direct.
+
+Un emetteur qui mesure un retard superieur doit donc choisir. S'il veut que l'auditeur n'entende rien, il etale sa correction sur plusieurs paquets, chacun sous la limite. S'il sait que le son est definitivement perdu — une sortie de veille, une reprise apres plusieurs minutes — il declare tout en une fois et assume la coupure, qui vaut mieux que des minutes de silence comble.
+
+Ce que cette regle interdit, c'est le troisieme cas : etaler la correction par pas superieurs a la limite. Chaque pas produit alors sa propre resynchronisation, et l'auditeur recoit un train de coupures la ou une seule suffisait. Le device implemente ce contrat dans `device/node/source-clock.js` — pas ordinaire borne a 400 ms, saut unique au-dela de cinq secondes.
+
+La duree manquante est comblee par du silence, avec un fondu de quelques millisecondes de part et d'autre. Le fondu n'est pas un ornement : sans lui, le silence commence et finit sur une discontinuite d'echantillon, qui a un spectre plat et s'entend comme un clic. Une frame de dissimulation produite par le decodeur s'entendrait mieux encore, et rien dans ce protocole ne l'interdit : le choix appartient au player.
 
 Un trou dans les numeros de sequence, sans bit de discontinuite, recoit le meme traitement a une exception pres : **le decodeur n'est pas remis a zero.** L'encodeur, lui, n'a rien remis a zero dans ce cas — il ignore que le relais a jete ces paquets — et effacer un etat encore aligne sur le sien allongerait l'artefact au lieu de l'ecourter.
 

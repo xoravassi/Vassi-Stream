@@ -4,7 +4,8 @@ import test from "node:test";
 
 // Le code du device reste en CommonJS parce que Node for Max expose max-api par NODE_PATH.
 const require = createRequire(import.meta.url);
-const { SourceClock, FRAME_MICROS, WINDOW_MS, MAX_STEP_MICROS } = require("../device/node/source-clock.js");
+const { SourceClock, FRAME_MICROS, WINDOW_MS, MAX_STEP_MICROS, RESYNC_MICROS } =
+  require("../device/node/source-clock.js");
 
 // Ce fichier verifie l'horloge de source. Elle est pure — elle recoit des timestamps et des dates,
 // elle rend un decalage — donc chaque scenario se joue ici en quelques microsecondes au lieu de
@@ -102,17 +103,111 @@ test("traverse une rafale de trames sans rien declarer ni reculer", () => {
   assert.equal(shift, 0n);
 });
 
-// Ce test verifie le cas de la mise en veille. L'ecart se compte alors en minutes, et le declarer
-// tel quel ferait sauter la chronologie de la session d'un bloc.
-test("borne une seule correction, meme apres une mise en veille", () => {
+// Ce test verifie le cas de la mise en veille, et il a change de reponse le 11 aout 2026.
+//
+// L'ecart se compte alors en minutes. Il etait borne comme les autres, a cinq secondes — mais le
+// reliquat redeclarait a la trame suivante, et le player recevait un **train** de trous trop longs :
+// douze vidages de file pour une veille d'une minute, trente-six pour trois, cent-vingt pour dix.
+// Chacun est un vidage suivi d'une remise a zero du decodeur, tires en rafale sur une seconde et
+// demie.
+//
+// Au-dela du seuil de resynchronisation, l'ecart part donc **en une fois**. Le player vide une fois,
+// et repart du direct.
+test("declare une veille en un seul saut, pour que le player ne vide qu'une fois", () => {
   const horloge = new SourceClock();
 
   tourner(horloge, { secondes: 10 });
 
-  // La machine se reveille une minute plus tard : l'audio n'a pas avance, le temps si.
-  const shift = horloge.note(BigInt(251 * 40000), 1000 + 10_040 + 60_000);
+  // La machine se reveille trois minutes plus tard : l'audio n'a pas avance, le temps si.
+  const veilleMs = 180_000;
+  const shift = horloge.note(BigInt(251 * 40000), 1000 + 10_040 + veilleMs);
 
-  assert.equal(shift, MAX_STEP_MICROS);
+  assert.ok(shift > RESYNC_MICROS, "le saut doit valoir toute la veille, pas le plafond d'un pas");
+  assert.ok(
+    Number(shift) > (veilleMs - 100) * 1000 && Number(shift) < (veilleMs + 100) * 1000,
+    `saut de ${Number(shift) / 1000} ms, attendu autour de ${veilleMs} ms`
+  );
+
+  // Une seule declaration, et elle est comptee comme une resynchronisation et non comme un trou a
+  // combler : c'est ce que le journal du device doit pouvoir distinguer.
+  assert.equal(horloge.report().resyncs, 1);
+  assert.equal(horloge.report().gaps, 1);
+});
+
+// Ce test fixe la borne du regime ordinaire, et c'est un contrat avec le player.
+//
+// `MAX_CONCEAL_MICROS` vaut 500 ms cote player : au-dela, un trou annonce fait vider la file au lieu
+// d'etre comble. Un pas ordinaire doit donc rester en dessous, sans quoi le device demande une
+// coupure a chaque arret franc du moteur audio.
+test("ne declare jamais plus que ce que le player sait combler", () => {
+  assert.ok(MAX_STEP_MICROS < 500_000n, "le pas doit tenir sous MAX_CONCEAL_MICROS du player");
+
+  const horloge = new SourceClock();
+
+  tourner(horloge, { secondes: 10 });
+
+  // Le moteur audio s'arrete net pendant deux secondes, puis repart. C'est le cas qui produisait un
+  // vidage : un seul pas de deux secondes, quatre fois ce que le player comble.
+  const arretMs = 2000;
+  let at = 1000 + 10_040 + arretMs;
+  let shift = horloge.note(BigInt(251 * 40000), at);
+
+  assert.equal(shift, MAX_STEP_MICROS, "le premier pas est borne");
+
+  // Le reliquat s'ecoule aux trames suivantes, sans qu'aucune ne depasse la borne.
+  let precedent = shift;
+
+  for (let index = 252; index < 300; index += 1) {
+    at += 40;
+    shift = horloge.note(BigInt(index * 40000), at);
+    assert.ok(shift - precedent <= MAX_STEP_MICROS, `pas de ${Number(shift - precedent) / 1000} ms`);
+    precedent = shift;
+  }
+
+  // Tout l'arret finit par etre declare, et aucune resynchronisation n'a ete demandee.
+  assert.ok(
+    Number(shift) > (arretMs - 100) * 1000,
+    `${Number(shift) / 1000} ms declares pour un arret de ${arretMs} ms`
+  );
+  assert.equal(horloge.report().resyncs, 0);
+});
+
+// Ce test verifie le compteur qui separe les deux formes de deficit.
+//
+// Le journal du device etait ecrit toutes les dix secondes, et a cette granularite une source qui
+// **ralentit** et une source qui **s'arrete net** sont indistinguables — alors qu'elles valent
+// respectivement zero coupure et une coupure par arret. Une source qui ralentit ne peut produire que
+// des pas d'une trame, parce que `lag` retranche le decalage deja applique.
+test("distingue une source qui ralentit d'une source qui s'arrete", () => {
+  const lente = new SourceClock();
+  tourner(lente, { secondes: 60, ratio: 0.963 });
+
+  assert.ok(lente.report().gaps > 0, "le deficit doit bien etre declare");
+  assert.equal(lente.report().stalls, 0, "un ralentissement ne leve aucun arret franc");
+  assert.equal(lente.report().largestStallMs, 0);
+
+  const arretee = new SourceClock();
+  tourner(arretee, { secondes: 10 });
+
+  // Le moteur s'arrete 600 ms, puis repart a la cadence nominale. La declaration ne tombe pas tout de
+  // suite : le minimum de la fenetre ne bouge qu'une fois les echantillons d'avant l'arret sortis,
+  // donc `WINDOW_MS` plus tard. Ce retard est voulu — c'est lui qui empeche un tour de boucle de Node
+  // de passer pour un decrochage — et la file du player l'absorbe sans rien entendre.
+  let at = 1000 + 10_040 + 600;
+
+  for (let index = 251; index < 251 + 100; index += 1) {
+    arretee.note(BigInt(index * 40000), at);
+    at += 40;
+  }
+
+  // Un arret compte pour un, quelle que soit sa taille : le reliquat s'ecoule sur les trames
+  // suivantes et ne doit pas se lire comme autant d'arrets.
+  assert.equal(arretee.report().stalls, 1, "un arret franc compte pour un, et un seul");
+  assert.ok(
+    arretee.report().largestStallMs >= 560 && arretee.report().largestStallMs <= 640,
+    `arret mesure a ${arretee.report().largestStallMs} ms, attendu autour de 600`
+  );
+  assert.equal(arretee.report().resyncs, 0);
 });
 
 // Ce test verifie qu'une horloge murale remise a l'heure ne produit rien. Elle recule alors d'un

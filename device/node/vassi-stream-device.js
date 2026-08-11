@@ -488,7 +488,10 @@ const watch = {
 	// le debut : un decrochage de trois minutes disparaitrait dans une moyenne de quarante.
 	sourceAudio: 0n,
 	sourceElapsed: 0n,
-	sourceDeclared: 0
+	sourceDeclared: 0,
+	// Ces deux-la separent une source qui ralentit d'une source qui s'arrete net. Voir `stallLine`.
+	sourceStalls: 0,
+	sourceResyncs: 0
 };
 
 // Cette fonction releve le point de depart au debut de chaque direct.
@@ -506,6 +509,8 @@ function startWatch(at) {
 	watch.sourceAudio = source.audioMicros;
 	watch.sourceElapsed = source.elapsedMicros;
 	watch.sourceDeclared = source.declaredMs;
+	watch.sourceStalls = source.stalls;
+	watch.sourceResyncs = source.resyncs;
 }
 
 // Cette fonction ecrit le bilan de fin de direct : ce qu'on relit en premier apres coup.
@@ -550,6 +555,12 @@ function reportWatch(at) {
 		`${Math.round(applied / 1000)} sur ${kbits(ceiling)}, retard ${Math.round(publisher.oldestPendingMs())} ms`
 	);
 	journal.record("source", sourceLine());
+
+	const stalls = stallLine();
+	if (stalls !== null) {
+		journal.record("arrets", stalls);
+	}
+
 	journal.record("systeme", machineLine(at));
 }
 
@@ -562,6 +573,17 @@ function reportWatch(at) {
 //
 // Le rapport est rendu sur l'intervalle, comme les autres lignes, et le seuil est bas a dessein :
 // un pour cent de deficit vaut deja 36 ms de tampon perdues par seconde chez l'auditeur.
+//
+// La deuxieme ligne — `arrets` — separe deux choses que ce taux confond, et cette confusion a une
+// consequence directe sur l'auditeur. Une source qui **ralentit** ne fait declarer que des pas d'une
+// trame, que le player comble sans jamais interrompre la lecture. Une source qui **s'arrete net**
+// fait declarer un pas de la taille de l'arret, et au-dela d'une demi-seconde le player vide sa file
+// et rebufferise. Au banc de rejeu, le meme deficit de 3,7 % vaut zero coupure dans le premier cas et
+// quatre-vingt-neuf vidages dans le second.
+//
+// Le journal du 11 aout 2026 ne permettait pas de trancher : ses lignes etaient espacees de dix
+// secondes, et son pire intervalle — 3440 ms manquants a 10:22:15 — peut etre l'un ou l'autre. Cette
+// ligne-ci est ce qui rendra la question decidable au prochain essai.
 function sourceLine() {
 	const source = publisher.sourceClock.report();
 	const audio = Number(source.audioMicros - watch.sourceAudio);
@@ -587,6 +609,30 @@ function sourceLine() {
 		`${rate} trames/s au lieu de 25 : le moteur audio ne fournit que ${Math.round(ratio * 100)} % ` +
 		`du temps reel, ${(declared / 1000).toFixed(1)} s annoncees comme trou`
 	);
+}
+
+// Cette fonction rend la ligne des arrets francs, ou `null` quand il n'y en a pas eu.
+//
+// Elle se tait dans le cas ordinaire, et c'est voulu : une ligne ecrite a chaque battement pour dire
+// « rien » noierait celle qui compte. Elle parle exactement quand la source a cesse de produire au
+// lieu de ralentir, ce qui est la seule forme de deficit qui coupe encore le son.
+function stallLine() {
+	const source = publisher.sourceClock.report();
+	const stalls = source.stalls - watch.sourceStalls;
+	const resyncs = source.resyncs - watch.sourceResyncs;
+
+	watch.sourceStalls = source.stalls;
+	watch.sourceResyncs = source.resyncs;
+
+	if (stalls === 0 && resyncs === 0) {
+		return null;
+	}
+
+	if (resyncs > 0) {
+		return `${resyncs} resynchronisation(s) : la source a repris apres un arret long`;
+	}
+
+	return `${stalls} arret(s) franc(s) du moteur audio, le pire de ${source.largestStallMs} ms`;
 }
 
 // --- La charge de la machine ---------------------------------------------------------------------

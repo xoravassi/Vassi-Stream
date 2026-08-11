@@ -115,6 +115,44 @@ export class FakeAudioWorkletNode {
   }
 }
 
+// Cette classe imite le reglage de volume place entre le noeud audio et la sortie.
+//
+// Elle retient les niveaux demandes plutot que de les appliquer : c'est la seule facon de verifier,
+// sous Node, que le volume part bien vers la sortie et qu'il est etale au lieu d'etre pose d'un
+// coup.
+export class FakeGainNode {
+  static last: FakeGainNode | null = null;
+
+  readonly gain: {
+    value: number;
+    setTargetAtTime: (value: number, startTime: number, timeConstant: number) => void;
+  };
+
+  // Chaque changement demande, dans l'ordre.
+  readonly cibles: Array<{ value: number; timeConstant: number }> = [];
+  connected = false;
+
+  constructor(_context: unknown, options: { gain?: number } = {}) {
+    this.gain = {
+      value: options.gain ?? 1,
+      setTargetAtTime: (value: number, _startTime: number, timeConstant: number) => {
+        this.gain.value = value;
+        this.cibles.push({ value, timeConstant });
+      },
+    };
+
+    FakeGainNode.last = this;
+  }
+
+  connect(): void {
+    this.connected = true;
+  }
+
+  disconnect(): void {
+    this.connected = false;
+  }
+}
+
 // Cette classe imite le contexte audio et son chargement de module.
 export class FakeAudioContext {
   static last: FakeAudioContext | null = null;
@@ -129,6 +167,8 @@ export class FakeAudioContext {
   readonly destination = {};
   readonly settings: Record<string, unknown>;
   state = "running";
+  // L'horloge du contexte, lue au moment de programmer un changement de volume.
+  currentTime = 0;
   resumes = 0;
   onstatechange: (() => void) | null = null;
   // Un vrai navigateur les rend toujours en secondes, jamais `undefined`. Une valeur nulle imite un
@@ -180,7 +220,7 @@ type Saved = Record<string, unknown>;
 // fonction qui remet tout en place.
 export function installBrowserFakes(options: { isolated: boolean }): () => void {
   const target = globalThis as unknown as Saved;
-  const keys = ["AudioContext", "AudioWorkletNode", "Worker", "MessageChannel", "crossOriginIsolated"];
+  const keys = ["AudioContext", "AudioWorkletNode", "GainNode", "Worker", "MessageChannel", "crossOriginIsolated"];
   const saved: Saved = {};
 
   for (const key of keys) {
@@ -189,6 +229,7 @@ export function installBrowserFakes(options: { isolated: boolean }): () => void 
 
   target.AudioContext = FakeAudioContext;
   target.AudioWorkletNode = FakeAudioWorkletNode;
+  target.GainNode = FakeGainNode;
   target.Worker = FakeWorker;
   target.MessageChannel = FakeMessageChannel;
   target.crossOriginIsolated = options.isolated;
@@ -197,6 +238,7 @@ export function installBrowserFakes(options: { isolated: boolean }): () => void 
   FakeWorker.created = [];
   FakeWorker.failOnConfigure = false;
   FakeAudioWorkletNode.last = null;
+  FakeGainNode.last = null;
   FakeAudioContext.last = null;
   FakeAudioContext.created = [];
   FakeAudioContext.moduleGate = null;
